@@ -1,6 +1,5 @@
-import { ReactNode, useEffect, useState, useMemo } from "react";
+import { ReactNode, useEffect, useState } from "react";
 import { useGameStore } from "@/utils/store";
-import { useUser } from "@stackframe/react";
 import { useDebounce } from "@/utils/useDebounce";
 
 function FullScreenLoader({ message }: { message: string }) {
@@ -18,52 +17,41 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
     saveQuizToDB,
     isLoading,
     isSaving,
-    error,
     categories,
     teams,
-    gameTitle,
-    gameDescription,
+    quizTitle,
+    quizDescription,
     adjustmentLog,
   } = useGameStore();
 
-  const user = useUser();
-  const isSignedIn = !!user;
   const [isInitialized, setIsInitialized] = useState(false);
 
-  // 1. Last inn data ved oppstart for innloggede brukere
+  // 1. Last inn data ved oppstart
   useEffect(() => {
-    if (isSignedIn) {
-      loadQuizFromDB().finally(() => setIsInitialized(true));
-    } else {
-      setIsInitialized(true); // For uinnloggede, bare fortsett
-    }
-  }, [isSignedIn, loadQuizFromDB]);
+    loadQuizFromDB().finally(() => setIsInitialized(true));
+  }, [loadQuizFromDB]);
 
   // 2. Klargjør data for autolagring
   const debouncedState = useDebounce(
-    { categories, teams, gameTitle, gameDescription, adjustmentLog },
+    { categories, teams, quizTitle, quizDescription, adjustmentLog },
     1500
   );
 
   // 3. Autosave med debounce når data endres
   useEffect(() => {
-    // Lagre kun hvis initialiseringen er ferdig og brukeren er logget inn.
+    // Lagre kun hvis initialiseringen er ferdig
     // Vi sjekker også at vi ikke er midt i en innlasting, for å unngå å lagre
     // den initielle staten tilbake til databasen umiddelbart etter at den er hentet.
-    if (isInitialized && isSignedIn && !isLoading) {
+    if (isInitialized && !isLoading) {
       saveQuizToDB();
     }
     // Vi vil kun re-trigge denne effekten når den *debounced* verdien endrer seg.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [debouncedState, isInitialized, isSignedIn, saveQuizToDB]);
+  }, [debouncedState, isInitialized, saveQuizToDB]);
 
   // Viser laste- eller feilskjerm
-  if ((isLoading || !isInitialized) && isSignedIn) {
+  if (isLoading || !isInitialized) {
     return <FullScreenLoader message="Laster din quiz..." />;
-  }
-
-  if (error) {
-    return <FullScreenLoader message={`Feil: ${error}`} />;
   }
 
   return (

@@ -36,13 +36,7 @@ const genId = () => `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
 // Helper function to mark changes as "dirty"
 const withUnsavedChanges = <T extends (...args: any[]) => any>(
   fn: T,
-  set: (
-    partial:
-      | GameState
-      | Partial<GameState>
-      | ((state: GameState) => GameState | Partial<GameState>),
-    replace?: boolean | undefined
-  ) => void
+  set: any
 ): T => {
   return ((...args: Parameters<T>) => {
     set({ hasUnsavedChanges: true });
@@ -97,6 +91,13 @@ export const useGameStore = create<GameState>()((set, get) => {
     updateTeamPlayers: (id: string, players: string[]) =>
       set((state) => ({
         teams: state.teams.map((t) => (t.id === id ? { ...t, players } : t)),
+      })),
+
+    updateScore: (teamId: string, points: number) =>
+      set((state) => ({
+        teams: state.teams.map((t) =>
+          t.id === teamId ? { ...t, score: t.score + points } : t
+        ),
       })),
 
     setLastQuestion: (question: any) => {
@@ -196,7 +197,7 @@ export const useGameStore = create<GameState>()((set, get) => {
       });
     },
 
-    manualAdjustScore: (teamId: string, delta: number, reason: string) =>
+    manualAdjustScore: (teamId: string, delta: number, reason?: string) =>
       set((state) => {
         const team = state.teams.find((t) => t.id === teamId);
         if (!team || !Number.isFinite(delta) || delta === 0) return state;
@@ -240,13 +241,13 @@ export const useGameStore = create<GameState>()((set, get) => {
   return {
     categories: initialGameData.map((category) => ({
       name: category.name,
-      questions: category.questions.map((q) => ({
+      questions: category.questions.map((q: any) => ({
         points: q.points,
         question: q.question,
         answer: q.answer,
         imageUrl: q.imageUrl,
-        isJoker: q.isJoker,
-        jokerTask: q.jokerTask,
+        isJoker: q.isJoker || false,
+        jokerTask: q.jokerTask || "",
         answered: false,
       })),
     })),
@@ -274,6 +275,7 @@ export const useGameStore = create<GameState>()((set, get) => {
     removeTeam: withUnsavedChanges(actions.removeTeam, set),
     updateTeamName: withUnsavedChanges(actions.updateTeamName, set),
     updateTeamPlayers: withUnsavedChanges(actions.updateTeamPlayers, set),
+    updateScore: withUnsavedChanges(actions.updateScore, set),
     markQuestionAsAnswered: withUnsavedChanges(
       actions.markQuestionAsAnswered,
       set

@@ -33,10 +33,10 @@ export default function Setup() {
     updateTeamName,
     updateTeamPlayers,
     resetGame,
-    gameTitle,
-    setGameTitle,
-    gameDescription,
-    setGameDescription,
+    quizTitle,
+    setQuizTitle,
+    quizDescription,
+    setQuizDescription,
     addCategory,
     removeCategory,
     saveQuizToDB,
@@ -116,8 +116,8 @@ export default function Setup() {
                 <Label className="text-xl font-semibold text-accent">Spilltittel</Label>
                 <Input
                   type="text"
-                  value={gameTitle}
-                  onChange={(e) => setGameTitle(e.target.value)}
+                  value={quizTitle}
+                  onChange={(e) => setQuizTitle(e.target.value)}
                   className="mt-2"
                   placeholder="Navnet på quizen din"
                 />
@@ -125,8 +125,8 @@ export default function Setup() {
               <div>
                 <Label className="text-xl font-semibold text-accent">Spillbeskrivelse</Label>
                 <Textarea
-                  value={gameDescription}
-                  onChange={(e) => setGameDescription(e.target.value)}
+                  value={quizDescription}
+                  onChange={(e) => setQuizDescription(e.target.value)}
                   className="mt-2"
                   placeholder="En kort beskrivelse av quizen"
                   rows={3}

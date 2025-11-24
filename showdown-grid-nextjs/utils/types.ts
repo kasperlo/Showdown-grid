@@ -33,6 +33,7 @@ export interface LastQuestion {
 }
 
 export interface RoundProgress {
+  active: boolean;
   positiveTeamId: string | null;
   negativeAwardedTo: string[];
 }
@@ -67,6 +68,8 @@ export interface GameState {
 
   updateScore: (teamId: string, points: number) => void;
   setCategories: (categories: Category[]) => void;
+  addCategory: () => void;
+  removeCategory: (index: number) => void;
   markQuestionAsAnswered: (categoryName: string, questionIndex: number) => void;
 
   resetGame: () => void;
