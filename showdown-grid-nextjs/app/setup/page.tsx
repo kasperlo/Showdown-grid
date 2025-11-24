@@ -10,7 +10,6 @@ import { Textarea } from "@/components/ui/textarea";
 import { Trash2, Loader2 } from "lucide-react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useRouter } from "next/navigation";
-import brain from "brain";
 import {
   AlertDialog,
   AlertDialogAction,
