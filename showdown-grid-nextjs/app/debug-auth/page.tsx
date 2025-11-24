@@ -1,7 +1,7 @@
-"use client";
+'use client';
 
-import { useEffect, useState } from "react";
-import { createClient } from "@/lib/supabase";
+import { useEffect, useState } from 'react';
+import { createClient } from '@/lib/supabase';
 
 interface VerifyResponse {
   authenticated: boolean;
@@ -29,12 +29,12 @@ export default function DebugAuthPage() {
 
   const testServerAuth = async () => {
     try {
-      const response = await fetch("/api/auth/verify");
+      const response = await fetch('/api/auth/verify');
       const data = await response.json();
       setVerifyStatus(data);
       return data.authenticated;
     } catch (err: any) {
-      console.error("Verify endpoint error:", err);
+      console.error('Verify endpoint error:', err);
       setVerifyStatus({ authenticated: false, error: err.message });
       return false;
     }
@@ -42,7 +42,7 @@ export default function DebugAuthPage() {
 
   const testQuizEndpoint = async () => {
     try {
-      const response = await fetch("/api/quiz");
+      const response = await fetch('/api/quiz');
       const data = await response.json();
       setQuizStatus({
         status: response.status,
@@ -50,7 +50,7 @@ export default function DebugAuthPage() {
         data,
       });
     } catch (err: any) {
-      console.error("Quiz endpoint error:", err);
+      console.error('Quiz endpoint error:', err);
       setQuizStatus({ error: err.message });
     }
   };
@@ -63,42 +63,41 @@ export default function DebugAuthPage() {
 
         // Check current session
         const { data: sessionData } = await supabase.auth.getSession();
-        console.log("Current session:", sessionData);
+        console.log('Current session:', sessionData);
 
         if (!sessionData.session) {
           // Try to sign in anonymously
-          console.log("No session, signing in anonymously...");
-          const { data, error: signInError } =
-            await supabase.auth.signInAnonymously();
+          console.log('No session, signing in anonymously...');
+          const { data, error: signInError } = await supabase.auth.signInAnonymously();
 
           if (signInError) {
-            console.error("Sign in error:", signInError);
+            console.error('Sign in error:', signInError);
             setError(signInError.message);
             setLoading(false);
             return;
           }
 
-          console.log("Sign in successful:", data);
+          console.log('Sign in successful:', data);
           setAuthStatus(data);
         } else {
           setAuthStatus(sessionData);
         }
 
         // Check user
-        const { data: userData, error: userError } =
-          await supabase.auth.getUser();
-        console.log("User data:", userData, "Error:", userError);
+        const { data: userData, error: userError } = await supabase.auth.getUser();
+        console.log('User data:', userData, 'Error:', userError);
 
         // Wait a bit for cookies to be set
-        await new Promise((resolve) => setTimeout(resolve, 500));
+        await new Promise(resolve => setTimeout(resolve, 500));
 
         // Test server-side authentication
         await testServerAuth();
-
+        
         // Test quiz endpoint
         await testQuizEndpoint();
+
       } catch (err: any) {
-        console.error("Auth check error:", err);
+        console.error('Auth check error:', err);
         setError(err.message);
       } finally {
         setLoading(false);
@@ -109,9 +108,9 @@ export default function DebugAuthPage() {
   }, []);
 
   const getCookieInfo = () => {
-    if (typeof document === "undefined") return [];
-    const cookies = document.cookie.split(";").map((c) => c.trim());
-    return cookies.filter((c) => c.startsWith("sb-"));
+    if (typeof document === 'undefined') return [];
+    const cookies = document.cookie.split(';').map(c => c.trim());
+    return cookies.filter(c => c.startsWith('sb-'));
   };
 
   return (
@@ -240,9 +239,7 @@ export default function DebugAuthPage() {
         <ul className="text-sm space-y-1 list-disc list-inside text-gray-700">
           <li>Client-side Auth Status should show a user and session</li>
           <li>Server-side Verification should show "authenticated: true"</li>
-          <li>
-            Quiz Endpoint should return 404 (no data) or 200 (has data), NOT 401
-          </li>
+          <li>Quiz Endpoint should return 404 (no data) or 200 (has data), NOT 401</li>
           <li>You should see Supabase cookies (sb-*) listed</li>
         </ul>
       </div>
