@@ -1,17 +1,25 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { supabase } from '@/lib/supabase';
+import { createClient } from '@/lib/supabase-server';
 
 // GET - Load user's quiz
 export async function GET(request: NextRequest) {
   try {
-    // For now, we'll use a simple user_id from session or default to 'demo'
-    // In production, this would come from your auth system
-    const userId = 'demo-user'; // TODO: Get from auth session
+    const supabase = await createClient();
+
+    // Get the authenticated user
+    const { data: { user }, error: authError } = await supabase.auth.getUser();
+
+    if (authError || !user) {
+      return NextResponse.json(
+        { error: 'Unauthorized' },
+        { status: 401 }
+      );
+    }
 
     const { data, error } = await supabase
       .from('user_quizzes')
       .select('quiz_data')
-      .eq('user_id', userId)
+      .eq('user_id', user.id)
       .single();
 
     if (error) {
@@ -35,6 +43,18 @@ export async function GET(request: NextRequest) {
 // POST - Save user's quiz
 export async function POST(request: NextRequest) {
   try {
+    const supabase = await createClient();
+
+    // Get the authenticated user
+    const { data: { user }, error: authError } = await supabase.auth.getUser();
+
+    if (authError || !user) {
+      return NextResponse.json(
+        { error: 'Unauthorized' },
+        { status: 401 }
+      );
+    }
+
     const body = await request.json();
     const { data: quizData } = body;
 
@@ -45,13 +65,10 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // For now, we'll use a simple user_id from session or default to 'demo'
-    const userId = 'demo-user'; // TODO: Get from auth session
-
     const { error } = await supabase
       .from('user_quizzes')
       .upsert({
-        user_id: userId,
+        user_id: user.id,
         quiz_data: quizData,
         updated_at: new Date().toISOString(),
       }, {

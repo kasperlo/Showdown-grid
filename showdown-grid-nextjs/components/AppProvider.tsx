@@ -1,6 +1,8 @@
 import { ReactNode, useEffect, useState } from "react";
 import { useGameStore } from "@/utils/store";
 import { useDebounce } from "@/utils/useDebounce";
+import { createClient } from "@/lib/supabase";
+import { toast } from "@/hooks/use-toast";
 
 function FullScreenLoader({ message }: { message: string }) {
   return (
@@ -25,11 +27,52 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
   } = useGameStore();
 
   const [isInitialized, setIsInitialized] = useState(false);
+  const [isAuthReady, setIsAuthReady] = useState(false);
 
-  // 1. Last inn data ved oppstart
+  // 1. Sett opp anonymous authentication ved oppstart
   useEffect(() => {
-    loadQuizFromDB().finally(() => setIsInitialized(true));
-  }, [loadQuizFromDB]);
+    const initAuth = async () => {
+      try {
+        const supabase = createClient();
+
+        // Sjekk om bruker allerede er logget inn
+        const { data: { session } } = await supabase.auth.getSession();
+
+        if (!session) {
+          // Ingen sesjon funnet, logg inn anonymt
+          const { error } = await supabase.auth.signInAnonymously();
+
+          if (error) {
+            console.error('Anonymous sign-in error:', error);
+            toast({
+              title: "Autentiseringsfeil",
+              description: "Kunne ikke logge inn. Prøv å refresh siden.",
+              variant: "destructive",
+            });
+            return;
+          }
+        }
+
+        setIsAuthReady(true);
+      } catch (error) {
+        console.error('Auth initialization error:', error);
+        toast({
+          title: "Autentiseringsfeil",
+          description: "Kunne ikke initialisere autentisering.",
+          variant: "destructive",
+        });
+      }
+    };
+
+    initAuth();
+  }, []);
+
+  // 2. Last inn data når autentisering er klar
+  useEffect(() => {
+    if (isAuthReady) {
+      loadQuizFromDB().finally(() => setIsInitialized(true));
+    }
+  }, [isAuthReady, loadQuizFromDB]);
 
   // 2. Klargjør data for autolagring
   const debouncedState = useDebounce(
@@ -50,7 +93,7 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
   }, [debouncedState, isInitialized, saveQuizToDB]);
 
   // Viser laste- eller feilskjerm
-  if (isLoading || !isInitialized) {
+  if (!isAuthReady || isLoading || !isInitialized) {
     return <FullScreenLoader message="Laster din quiz..." />;
   }
 
