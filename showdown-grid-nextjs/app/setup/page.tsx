@@ -50,7 +50,7 @@ export default function Setup() {
   } = useGameStore();
   const router = useRouter();
   const [timerEnabled, setTimerEnabled] = useState(quizTimeLimit !== null);
-  const [timerValue, setTimerValue] = useState(quizTimeLimit || 60);
+  const [timerValue, setTimerValue] = useState<number | ''>(quizTimeLimit || 60);
 
   const handleCategoryNameChange = (
     e: React.ChangeEvent<HTMLInputElement>,
@@ -153,7 +153,11 @@ export default function Setup() {
                       checked={timerEnabled}
                       onCheckedChange={(checked) => {
                         setTimerEnabled(checked);
-                        setQuizTimeLimit(checked ? timerValue : null);
+                        const valueToSet = timerValue === '' ? 60 : timerValue;
+                        if (checked && timerValue === '') {
+                          setTimerValue(60);
+                        }
+                        setQuizTimeLimit(checked ? valueToSet : null);
                       }}
                     />
                   </div>
@@ -168,9 +172,24 @@ export default function Setup() {
                           max="300"
                           value={timerValue}
                           onChange={(e) => {
-                            const value = parseInt(e.target.value) || 60;
-                            setTimerValue(value);
-                            setQuizTimeLimit(value);
+                            const inputValue = e.target.value;
+                            // Allow empty string while typing
+                            if (inputValue === '') {
+                              setTimerValue('');
+                              return;
+                            }
+                            const value = parseInt(inputValue);
+                            if (!isNaN(value)) {
+                              setTimerValue(value);
+                              setQuizTimeLimit(value);
+                            }
+                          }}
+                          onBlur={(e) => {
+                            // If empty on blur, set to default 60
+                            if (e.target.value === '') {
+                              setTimerValue(60);
+                              setQuizTimeLimit(60);
+                            }
                           }}
                           className="max-w-xs"
                         />
