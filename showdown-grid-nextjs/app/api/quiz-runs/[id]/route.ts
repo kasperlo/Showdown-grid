@@ -4,9 +4,10 @@ import { createClient } from "@/lib/supabase-server";
 // GET - Fetch a single quiz run by ID
 export async function GET(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const { id } = await params;
     const supabase = await createClient();
     const {
       data: { user },
@@ -20,7 +21,7 @@ export async function GET(
     const { data, error } = await supabase
       .from("quiz_runs")
       .select("*")
-      .eq("id", params.id)
+      .eq("id", id)
       .eq("user_id", user.id)
       .single();
 
@@ -45,9 +46,10 @@ export async function GET(
 // DELETE - Delete a quiz run
 export async function DELETE(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const { id } = await params;
     const supabase = await createClient();
     const {
       data: { user },
@@ -61,7 +63,7 @@ export async function DELETE(
     const { error } = await supabase
       .from("quiz_runs")
       .delete()
-      .eq("id", params.id)
+      .eq("id", id)
       .eq("user_id", user.id);
 
     if (error) {
