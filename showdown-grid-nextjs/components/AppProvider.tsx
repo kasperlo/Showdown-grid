@@ -16,6 +16,7 @@ function FullScreenLoader({ message }: { message: string }) {
 export const AppProvider = ({ children }: { children: ReactNode }) => {
   const {
     loadQuizFromDB,
+    loadQuizzesList,
     saveQuizToDB,
     isLoading,
     isSaving,
@@ -70,9 +71,12 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
   // 2. Last inn data når autentisering er klar
   useEffect(() => {
     if (isAuthReady) {
-      loadQuizFromDB().finally(() => setIsInitialized(true));
+      Promise.all([
+        loadQuizFromDB(),
+        loadQuizzesList()
+      ]).finally(() => setIsInitialized(true));
     }
-  }, [isAuthReady, loadQuizFromDB]);
+  }, [isAuthReady, loadQuizFromDB, loadQuizzesList]);
 
   // 2. Klargjør data for autolagring
   const debouncedState = useDebounce(

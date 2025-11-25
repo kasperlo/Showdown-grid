@@ -5,6 +5,8 @@ import type {
   Team,
   Question,
   AdjustmentEntry,
+  QuizMetadata,
+  QuizTheme,
 } from "./types";
 import { gameData as initialGameData } from "./questions";
 
@@ -236,6 +238,9 @@ export const useGameStore = create<GameState>()((set, get) => {
     setQuizTitle: (title: string) => set({ quizTitle: title }),
     setQuizDescription: (description: string) =>
       set({ quizDescription: description }),
+    setQuizTimeLimit: (timeLimit: number | null) => set({ quizTimeLimit: timeLimit }),
+    setQuizTheme: (theme: QuizTheme) => set({ quizTheme: theme }),
+    setQuizIsPublic: (isPublic: boolean) => set({ quizIsPublic: isPublic }),
   };
 
   return {
@@ -263,9 +268,14 @@ export const useGameStore = create<GameState>()((set, get) => {
     adjustmentLog: [],
     quizTitle: "Showdown Grid",
     quizDescription: "A Jeopardy-style quiz game.",
+    quizTimeLimit: null as number | null,
+    quizTheme: 'classic' as QuizTheme,
+    quizIsPublic: false,
     isLoading: true,
     isSaving: false,
     hasUnsavedChanges: false,
+    activeQuizId: null as string | null,
+    quizzesList: [] as QuizMetadata[],
 
     // Wrap all mutating actions
     setCategories: withUnsavedChanges(actions.setCategories, set),
@@ -287,6 +297,9 @@ export const useGameStore = create<GameState>()((set, get) => {
     undoLastAdjustment: withUnsavedChanges(actions.undoLastAdjustment, set),
     setQuizTitle: withUnsavedChanges(actions.setQuizTitle, set),
     setQuizDescription: withUnsavedChanges(actions.setQuizDescription, set),
+    setQuizTimeLimit: withUnsavedChanges(actions.setQuizTimeLimit, set),
+    setQuizTheme: withUnsavedChanges(actions.setQuizTheme, set),
+    setQuizIsPublic: withUnsavedChanges(actions.setQuizIsPublic, set),
 
     // Non-mutating actions
     setLastQuestion: actions.setLastQuestion,
@@ -310,14 +323,113 @@ export const useGameStore = create<GameState>()((set, get) => {
 
         const quizData = await response.json();
 
-        // Completely overwrite state with data from database
-        set({ ...quizData.data, isLoading: false, hasUnsavedChanges: false });
+        // Extract quiz metadata
+        const { quizId, quizTitle, quizDescription, quizTimeLimit, quizTheme, quizIsPublic, ...restData } = quizData.data;
+
+        // Overwrite state with data from database
+        set({
+          ...restData,
+          quizTitle,
+          quizDescription,
+          quizTimeLimit: quizTimeLimit || null,
+          quizTheme: quizTheme || 'classic',
+          quizIsPublic: quizIsPublic || false,
+          activeQuizId: quizId,
+          isLoading: false,
+          hasUnsavedChanges: false
+        });
       } catch (error: any) {
         console.error("Failed to load quiz from DB:", error);
         set({
           isLoading: false,
           hasUnsavedChanges: false,
         });
+      }
+    },
+
+    loadQuizzesList: async () => {
+      try {
+        const response = await fetch("/api/quizzes");
+
+        if (!response.ok) {
+          throw new Error("Failed to load quizzes list");
+        }
+
+        const { quizzes } = await response.json();
+        set({ quizzesList: quizzes });
+      } catch (error) {
+        console.error("Failed to load quizzes list:", error);
+      }
+    },
+
+    switchQuiz: async (quizId: string) => {
+      try {
+        set({ isLoading: true });
+
+        // Activate the selected quiz
+        const activateResponse = await fetch(`/api/quizzes/${quizId}/activate`, {
+          method: "POST",
+        });
+
+        if (!activateResponse.ok) {
+          throw new Error("Failed to activate quiz");
+        }
+
+        // Reload the active quiz
+        await get().loadQuizFromDB();
+
+        // Reload the quizzes list to update active status
+        await get().loadQuizzesList();
+      } catch (error) {
+        console.error("Failed to switch quiz:", error);
+        set({ isLoading: false });
+      }
+    },
+
+    createNewQuiz: async (title: string, description?: string) => {
+      try {
+        const response = await fetch("/api/quizzes", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            title,
+            description,
+            setAsActive: false // Don't auto-switch to new quiz
+          }),
+        });
+
+        if (!response.ok) {
+          throw new Error("Failed to create quiz");
+        }
+
+        // Reload quizzes list
+        await get().loadQuizzesList();
+      } catch (error) {
+        console.error("Failed to create quiz:", error);
+        throw error;
+      }
+    },
+
+    deleteQuiz: async (quizId: string) => {
+      try {
+        const response = await fetch(`/api/quizzes/${quizId}`, {
+          method: "DELETE",
+        });
+
+        if (!response.ok) {
+          throw new Error("Failed to delete quiz");
+        }
+
+        // If we deleted the active quiz, load another one
+        if (get().activeQuizId === quizId) {
+          await get().loadQuizFromDB();
+        }
+
+        // Reload quizzes list
+        await get().loadQuizzesList();
+      } catch (error) {
+        console.error("Failed to delete quiz:", error);
+        throw error;
       }
     },
 
@@ -332,6 +444,9 @@ export const useGameStore = create<GameState>()((set, get) => {
           teams,
           quizTitle,
           quizDescription,
+          quizTimeLimit,
+          quizTheme,
+          quizIsPublic,
           adjustmentLog,
         } = get();
 
@@ -340,6 +455,9 @@ export const useGameStore = create<GameState>()((set, get) => {
           teams,
           quizTitle,
           quizDescription,
+          quizTimeLimit,
+          quizTheme,
+          quizIsPublic,
           adjustmentLog,
         };
 

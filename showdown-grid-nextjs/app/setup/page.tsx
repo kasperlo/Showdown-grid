@@ -22,6 +22,7 @@ import {
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
 import AdminAdjust from "@/components/AdminAdjust";
+import { ThemeSelector } from "@/components/ThemeSelector";
 
 export default function Setup() {
   const {
@@ -37,6 +38,10 @@ export default function Setup() {
     setQuizTitle,
     quizDescription,
     setQuizDescription,
+    quizTimeLimit,
+    setQuizTimeLimit,
+    quizIsPublic,
+    setQuizIsPublic,
     addCategory,
     removeCategory,
     saveQuizToDB,
@@ -44,6 +49,8 @@ export default function Setup() {
     hasUnsavedChanges,
   } = useGameStore();
   const router = useRouter();
+  const [timerEnabled, setTimerEnabled] = useState(quizTimeLimit !== null);
+  const [timerValue, setTimerValue] = useState(quizTimeLimit || 60);
 
   const handleCategoryNameChange = (
     e: React.ChangeEvent<HTMLInputElement>,
@@ -111,7 +118,7 @@ export default function Setup() {
 
           {/* Generelt */}
           <TabsContent value="general">
-            <div className="glass p-6 rounded-b-lg space-y-6">
+            <div className="glass p-6 rounded-b-lg space-y-8">
               <div>
                 <Label className="text-xl font-semibold text-accent">Spilltittel</Label>
                 <Input
@@ -131,6 +138,81 @@ export default function Setup() {
                   placeholder="En kort beskrivelse av quizen"
                   rows={3}
                 />
+              </div>
+
+              <div className="border-t border-border pt-6">
+                <div className="space-y-4">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <Label className="text-xl font-semibold text-accent">Tidsbegrensning</Label>
+                      <p className="text-sm text-muted-foreground mt-1">
+                        Aktiver nedtelling på alle spørsmål
+                      </p>
+                    </div>
+                    <Switch
+                      checked={timerEnabled}
+                      onCheckedChange={(checked) => {
+                        setTimerEnabled(checked);
+                        setQuizTimeLimit(checked ? timerValue : null);
+                      }}
+                    />
+                  </div>
+
+                  {timerEnabled && (
+                    <div className="space-y-3">
+                      <Label>Antall sekunder</Label>
+                      <div className="flex items-center gap-4">
+                        <Input
+                          type="number"
+                          min="10"
+                          max="300"
+                          value={timerValue}
+                          onChange={(e) => {
+                            const value = parseInt(e.target.value) || 60;
+                            setTimerValue(value);
+                            setQuizTimeLimit(value);
+                          }}
+                          className="max-w-xs"
+                        />
+                        <div className="flex gap-2">
+                          {[30, 60, 90, 120].map((seconds) => (
+                            <Button
+                              key={seconds}
+                              type="button"
+                              variant={timerValue === seconds ? "default" : "outline"}
+                              size="sm"
+                              onClick={() => {
+                                setTimerValue(seconds);
+                                setQuizTimeLimit(seconds);
+                              }}
+                            >
+                              {seconds}s
+                            </Button>
+                          ))}
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              <div className="border-t border-border pt-6">
+                <ThemeSelector />
+              </div>
+
+              <div className="border-t border-border pt-6">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <Label className="text-xl font-semibold text-accent">Offentlig Quiz</Label>
+                    <p className="text-sm text-muted-foreground mt-1">
+                      Gjør quizen synlig for alle brukere i det offentlige galleriet
+                    </p>
+                  </div>
+                  <Switch
+                    checked={quizIsPublic}
+                    onCheckedChange={(checked) => setQuizIsPublic(checked)}
+                  />
+                </div>
               </div>
             </div>
           </TabsContent>

@@ -8,6 +8,7 @@ import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Settings } from "lucide-react";
 import { useGameStore } from "@/utils/store";
+import { QuizSelector } from "@/components/QuizSelector";
 
 export default function Home() {
   const router = useRouter();
@@ -26,6 +27,7 @@ export default function Home() {
             {quizDescription}
           </p>
           <div className="absolute top-0 right-0 flex items-center gap-2">
+            <QuizSelector />
             <Button
               variant="ghost"
               size="icon"

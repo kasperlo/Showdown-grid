@@ -48,6 +48,21 @@ export interface AdjustmentEntry {
   type: "manual";
 }
 
+export type QuizTheme = 'classic' | 'modern' | 'christmas';
+
+export interface QuizMetadata {
+  id: string;
+  title: string;
+  description: string;
+  is_active: boolean;
+  is_public: boolean;
+  time_limit: number | null;
+  theme: QuizTheme;
+  created_at: string;
+  updated_at: string;
+  user_id?: string;
+}
+
 export interface GameState {
   categories: Category[];
   teams: Team[];
@@ -92,6 +107,20 @@ export interface GameState {
   // Quiz metadata
   quizTitle: string;
   quizDescription: string;
+  quizTimeLimit: number | null;
+  quizTheme: QuizTheme;
+  quizIsPublic: boolean;
   setQuizTitle: (title: string) => void;
   setQuizDescription: (description: string) => void;
+  setQuizTimeLimit: (timeLimit: number | null) => void;
+  setQuizTheme: (theme: QuizTheme) => void;
+  setQuizIsPublic: (isPublic: boolean) => void;
+
+  // Multiple quizzes support
+  activeQuizId: string | null;
+  quizzesList: QuizMetadata[];
+  loadQuizzesList: () => Promise<void>;
+  switchQuiz: (quizId: string) => Promise<void>;
+  createNewQuiz: (title: string, description?: string) => Promise<void>;
+  deleteQuiz: (quizId: string) => Promise<void>;
 }

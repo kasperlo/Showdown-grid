@@ -74,6 +74,108 @@
     --input: 215 27% 17%;
     --ring: 217 91% 60%;
   }
+
+  /* Theme: Classic Jeopardy (Blue/Gold) - Default */
+  [data-theme="classic"] {
+    --background: 221 39% 11%;
+    --foreground: 210 40% 98%;
+
+    --card: 222 47% 15%;
+    --card-foreground: 210 40% 98%;
+
+    --popover: 222 47% 15%;
+    --popover-foreground: 210 40% 98%;
+
+    --primary: 217 91% 60%;
+    --primary-foreground: 222 47% 11%;
+
+    --secondary: 215 25% 27%;
+    --secondary-foreground: 210 40% 98%;
+
+    --muted: 215 20% 27%;
+    --muted-foreground: 217 19% 72%;
+
+    --accent: 45 93% 58%;
+    --accent-foreground: 222 47% 11%;
+
+    --destructive: 0 84% 60%;
+    --destructive-foreground: 210 40% 98%;
+
+    --success: 142 71% 45%;
+    --success-foreground: 144 61% 13%;
+
+    --border: 215 25% 27%;
+    --input: 215 25% 27%;
+    --ring: 217 91% 60%;
+  }
+
+  /* Theme: Modern (Sleek grayscale with blue accents) */
+  [data-theme="modern"] {
+    --background: 220 20% 12%;
+    --foreground: 220 10% 98%;
+
+    --card: 220 15% 18%;
+    --card-foreground: 220 10% 98%;
+
+    --popover: 220 15% 18%;
+    --popover-foreground: 220 10% 98%;
+
+    --primary: 215 70% 55%;
+    --primary-foreground: 220 20% 12%;
+
+    --secondary: 220 15% 28%;
+    --secondary-foreground: 220 10% 98%;
+
+    --muted: 220 15% 30%;
+    --muted-foreground: 220 15% 75%;
+
+    --accent: 195 70% 50%;
+    --accent-foreground: 220 20% 12%;
+
+    --destructive: 0 84% 60%;
+    --destructive-foreground: 220 10% 98%;
+
+    --success: 142 71% 45%;
+    --success-foreground: 144 61% 13%;
+
+    --border: 220 15% 28%;
+    --input: 220 15% 23%;
+    --ring: 215 70% 55%;
+  }
+
+  /* Theme: Christmas (Classic red, green & white) */
+  [data-theme="christmas"] {
+    --background: 140 25% 12%;
+    --foreground: 0 0% 98%;
+
+    --card: 140 20% 18%;
+    --card-foreground: 0 0% 98%;
+
+    --popover: 140 20% 18%;
+    --popover-foreground: 0 0% 98%;
+
+    --primary: 355 70% 50%;
+    --primary-foreground: 0 0% 98%;
+
+    --secondary: 140 35% 28%;
+    --secondary-foreground: 0 0% 98%;
+
+    --muted: 140 15% 28%;
+    --muted-foreground: 0 0% 80%;
+
+    --accent: 142 55% 45%;
+    --accent-foreground: 0 0% 98%;
+
+    --destructive: 0 84% 60%;
+    --destructive-foreground: 0 0% 98%;
+
+    --success: 142 71% 45%;
+    --success-foreground: 0 0% 98%;
+
+    --border: 140 20% 25%;
+    --input: 140 20% 22%;
+    --ring: 355 70% 50%;
+  }
 }
 
 @layer base {
@@ -134,4 +236,69 @@
   .points-chip {
     @apply text-3xl md:text-4xl text-accent font-extrabold text-score;
   }
+}
+
+/* Christmas theme - Snowfall animation */
+@keyframes snowfall {
+  0% {
+    transform: translateY(-10vh) translateX(0) rotate(0deg);
+    opacity: 0;
+  }
+  10% {
+    opacity: 0.8;
+  }
+  90% {
+    opacity: 0.8;
+  }
+  100% {
+    transform: translateY(110vh) translateX(50px) rotate(180deg);
+    opacity: 0;
+  }
+}
+
+@keyframes snowfall-alt {
+  0% {
+    transform: translateY(-10vh) translateX(0) rotate(0deg);
+    opacity: 0;
+  }
+  10% {
+    opacity: 0.8;
+  }
+  90% {
+    opacity: 0.8;
+  }
+  100% {
+    transform: translateY(110vh) translateX(-50px) rotate(-180deg);
+    opacity: 0;
+  }
+}
+
+[data-theme="christmas"] .snowflake {
+  position: fixed;
+  top: -10vh;
+  color: white;
+  font-size: 1.2rem;
+  opacity: 0.7;
+  pointer-events: none;
+  z-index: 1000;
+  animation: snowfall linear infinite;
+  text-shadow: 0 0 4px rgba(255, 255, 255, 0.5);
+}
+
+[data-theme="christmas"] .snowflake:nth-child(odd) {
+  animation-name: snowfall-alt;
+}
+
+/* Timer animations */
+@keyframes timer-pulse {
+  0%, 100% {
+    transform: scale(1);
+  }
+  50% {
+    transform: scale(1.05);
+  }
+}
+
+.timer-warning {
+  animation: timer-pulse 1s ease-in-out infinite;
 }

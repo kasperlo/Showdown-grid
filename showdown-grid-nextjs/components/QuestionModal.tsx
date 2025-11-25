@@ -9,16 +9,18 @@ import {
   DialogDescription,
 } from "@/components/ui/dialog";
 import { useGameStore } from "@/utils/store";
+import { Timer } from "@/components/Timer";
 
 /**
  * Modal viser spørsmål/svar.
  * Poengtildeling skjer i RoundDock ETTER at denne lukkes.
  */
 export function QuestionModal() {
-  const { lastQuestion, isQuestionOpen, setQuestionOpen, endRound } = useGameStore();
+  const { lastQuestion, isQuestionOpen, setQuestionOpen, endRound, quizTimeLimit } = useGameStore();
   const [revealed, setRevealed] = useState(false);
   const [countdown, setCountdown] = useState<number | null>(null);
   const [isJokerActive, setIsJokerActive] = useState(false);
+  const [isTimerActive, setIsTimerActive] = useState(false);
 
   useEffect(() => {
     if (isQuestionOpen && lastQuestion?.isJoker) {
@@ -53,6 +55,20 @@ export function QuestionModal() {
     setRevealed(false);
   }, [lastQuestion?.categoryName, lastQuestion?.questionIndex]);
 
+  // Timer activation
+  useEffect(() => {
+    if (isQuestionOpen && quizTimeLimit && !lastQuestion?.isJoker) {
+      setIsTimerActive(true);
+    } else {
+      setIsTimerActive(false);
+    }
+  }, [isQuestionOpen, quizTimeLimit, lastQuestion?.isJoker]);
+
+  const handleTimeUp = () => {
+    // Optionally auto-reveal answer or just notify
+    // For now, we'll just leave it as is
+  };
+
   if (!lastQuestion) return null;
 
   return (
@@ -69,9 +85,18 @@ export function QuestionModal() {
     >
       <DialogContent className="bg-popover border-accent text-foreground max-w-4xl w-full h-auto md:h-3/4 flex flex-col">
         <DialogHeader>
-          <DialogTitle className="display-lg text-accent">
-            {lastQuestion.categoryName} • {lastQuestion.points}
-          </DialogTitle>
+          <div className="flex items-center justify-between">
+            <DialogTitle className="display-lg text-accent">
+              {lastQuestion.categoryName} • {lastQuestion.points}
+            </DialogTitle>
+            {isTimerActive && quizTimeLimit && (
+              <Timer
+                initialTime={quizTimeLimit}
+                onTimeUp={handleTimeUp}
+                className="ml-4"
+              />
+            )}
+          </div>
           <DialogDescription className="sr-only">
             Vis svaret ved behov. Lukk for å tildele poeng i dokken nederst.
           </DialogDescription>
