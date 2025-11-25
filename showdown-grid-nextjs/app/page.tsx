@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback } from "react";
 import { GameBoard } from "@/components/GameBoard";
 import { Ranking } from "@/components/Ranking";
 import { RoundDock } from "@/components/RoundDock";
@@ -21,38 +21,44 @@ export default function Home() {
     loadQuizFromDB,
     quizzesList,
     loadQuizzesList,
+    isLoading,
   } = useGameStore();
 
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
+  const [isInitialized, setIsInitialized] = useState(false);
 
-  // Get current user ID
-  useEffect(() => {
-    const getUserId = async () => {
-      const supabase = createClient();
-      const { data: { user } } = await supabase.auth.getUser();
-      setCurrentUserId(user?.id || null);
-    };
-    getUserId();
-  }, []);
+  // Stable callback for navigation
+  const navigateToQuizzes = useCallback(() => {
+    router.push("/quizzes");
+  }, [router]);
 
-  // Load quiz data
+  // Single effect for initialization: get user ID and load data
   useEffect(() => {
-    const loadData = async () => {
-      await Promise.all([loadQuizFromDB(), loadQuizzesList()]);
-      setIsLoading(false);
+    const initialize = async () => {
+      try {
+        // Get current user ID
+        const supabase = createClient();
+        const { data: { user } } = await supabase.auth.getUser();
+        setCurrentUserId(user?.id || null);
+
+        // Load quiz data
+        await Promise.all([loadQuizFromDB(), loadQuizzesList()]);
+      } finally {
+        setIsInitialized(true);
+      }
     };
-    loadData();
+
+    initialize();
   }, [loadQuizFromDB, loadQuizzesList]);
 
   // Redirect to /quizzes if no active quiz and user has no quizzes
   useEffect(() => {
-    if (!isLoading && !activeQuizId && quizzesList.length === 0) {
-      router.push("/quizzes");
+    if (isInitialized && !isLoading && !activeQuizId && quizzesList.length === 0) {
+      navigateToQuizzes();
     }
-  }, [activeQuizId, quizzesList, router, isLoading]);
+  }, [isInitialized, isLoading, activeQuizId, quizzesList, navigateToQuizzes]);
 
-  // Check if current user owns the active quiz
+  // Derived state: check if current user owns the active quiz
   const isOwner = currentUserId && activeQuizOwnerId && currentUserId === activeQuizOwnerId;
 
   return (

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
 import { cn } from "@/lib/utils";
 
 interface TimerProps {
@@ -13,28 +13,66 @@ interface TimerProps {
 export function Timer({ initialTime, onTimeUp, isPaused = false, className }: TimerProps) {
   const [timeLeft, setTimeLeft] = useState(initialTime);
   const [isRunning, setIsRunning] = useState(true);
+  const intervalRef = useRef<NodeJS.Timeout | null>(null);
+  const onTimeUpRef = useRef(onTimeUp);
 
+  // Keep onTimeUp callback ref up to date
   useEffect(() => {
+    onTimeUpRef.current = onTimeUp;
+  }, [onTimeUp]);
+
+  // Single consolidated effect for timer management
+  useEffect(() => {
+    // Reset timer when initialTime changes
     setTimeLeft(initialTime);
     setIsRunning(true);
-  }, [initialTime]);
 
-  useEffect(() => {
-    if (!isRunning || isPaused || timeLeft <= 0) return;
+    // Clear any existing interval
+    if (intervalRef.current) {
+      clearInterval(intervalRef.current);
+    }
 
-    const interval = setInterval(() => {
+    // Don't start if paused or time is up
+    if (isPaused || initialTime <= 0) return;
+
+    // Start countdown
+    intervalRef.current = setInterval(() => {
       setTimeLeft((prev) => {
         if (prev <= 1) {
           setIsRunning(false);
-          onTimeUp?.();
+          onTimeUpRef.current?.();
           return 0;
         }
         return prev - 1;
       });
     }, 1000);
 
-    return () => clearInterval(interval);
-  }, [isRunning, isPaused, timeLeft, onTimeUp]);
+    // Cleanup on unmount or when dependencies change
+    return () => {
+      if (intervalRef.current) {
+        clearInterval(intervalRef.current);
+      }
+    };
+  }, [initialTime, isPaused]);
+
+  // Pause/resume handler
+  useEffect(() => {
+    if (isPaused && intervalRef.current) {
+      clearInterval(intervalRef.current);
+      intervalRef.current = null;
+    } else if (!isPaused && isRunning && timeLeft > 0 && !intervalRef.current) {
+      intervalRef.current = setInterval(() => {
+        setTimeLeft((prev) => {
+          if (prev <= 1) {
+            setIsRunning(false);
+            onTimeUpRef.current?.();
+            return 0;
+          }
+          return prev - 1;
+        });
+      }, 1000);
+    }
+  }, [isPaused, isRunning, timeLeft]);
 
   const progress = (timeLeft / initialTime) * 100;
   const isWarning = timeLeft <= 10;

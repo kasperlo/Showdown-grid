@@ -9,6 +9,12 @@ type ConfettiProps = {
 export default function Confetti({ show, duration = 1200, onComplete }: ConfettiProps) {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const rafRef = useRef<number | null>(null);
+  const onCompleteRef = useRef(onComplete);
+
+  // Keep onComplete ref up to date
+  useEffect(() => {
+    onCompleteRef.current = onComplete;
+  }, [onComplete]);
 
   useEffect(() => {
     if (!show) return;
@@ -19,7 +25,7 @@ export default function Confetti({ show, duration = 1200, onComplete }: Confetti
       window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 
     if (prefersReduced) {
-      const t = setTimeout(() => onComplete?.(), Math.min(400, duration));
+      const t = setTimeout(() => onCompleteRef.current?.(), Math.min(400, duration));
       return () => clearTimeout(t);
     }
 
@@ -104,7 +110,7 @@ export default function Confetti({ show, duration = 1200, onComplete }: Confetti
       if (progress < 1) {
         rafRef.current = requestAnimationFrame(tick);
       } else {
-        onComplete?.();
+        onCompleteRef.current?.();
       }
     };
 
@@ -116,7 +122,7 @@ export default function Confetti({ show, duration = 1200, onComplete }: Confetti
       const c = canvasRef.current;
       if (c) c.getContext("2d")?.clearRect(0, 0, c.width, c.height);
     };
-  }, [show, duration, onComplete]);
+  }, [show, duration]);
 
   if (!show) return null;
 

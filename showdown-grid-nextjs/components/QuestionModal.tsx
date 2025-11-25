@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useState, useRef, useMemo } from "react";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -19,50 +19,49 @@ export function QuestionModal() {
   const { lastQuestion, isQuestionOpen, setQuestionOpen, endRound, quizTimeLimit } = useGameStore();
   const [revealed, setRevealed] = useState(false);
   const [countdown, setCountdown] = useState<number | null>(null);
-  const [isJokerActive, setIsJokerActive] = useState(false);
-  const [isTimerActive, setIsTimerActive] = useState(false);
+  const intervalRef = useRef<NodeJS.Timeout | null>(null);
 
+  // Derived state: determine if joker is active
+  const isJokerActive = Boolean(isQuestionOpen && lastQuestion?.isJoker && countdown !== null && countdown > 0);
+
+  // Derived state: determine if timer should be active
+  const isTimerActive = Boolean(isQuestionOpen && quizTimeLimit && !lastQuestion?.isJoker);
+
+  // Single consolidated effect for modal state management
   useEffect(() => {
-    if (isQuestionOpen && lastQuestion?.isJoker) {
-      setIsJokerActive(true);
-      setCountdown(10);
-      setRevealed(false); // Sørg for at svaret er skjult
+    // Reset revealed state when question changes
+    setRevealed(false);
 
-      const timer = setInterval(() => {
+    // Clear any existing interval
+    if (intervalRef.current) {
+      clearInterval(intervalRef.current);
+      intervalRef.current = null;
+    }
+
+    // Handle joker countdown
+    if (isQuestionOpen && lastQuestion?.isJoker) {
+      setCountdown(10);
+
+      intervalRef.current = setInterval(() => {
         setCountdown((prev) => {
           if (prev === null || prev <= 1) {
-            clearInterval(timer);
+            if (intervalRef.current) clearInterval(intervalRef.current);
             return 0;
           }
           return prev - 1;
         });
       }, 1000);
-
-      return () => {
-        clearInterval(timer);
-        setIsJokerActive(false);
-        setCountdown(null);
-      };
     } else {
-      setIsJokerActive(false);
       setCountdown(null);
     }
-  }, [isQuestionOpen, lastQuestion]);
 
-  // BUGFIX #2: hver gang aktivt spørsmål byttes, nullstill "vis svar"
-  useEffect(() => {
-    // Avhengigheter: identiteten til ruten
-    setRevealed(false);
-  }, [lastQuestion?.categoryName, lastQuestion?.questionIndex]);
-
-  // Timer activation
-  useEffect(() => {
-    if (isQuestionOpen && quizTimeLimit && !lastQuestion?.isJoker) {
-      setIsTimerActive(true);
-    } else {
-      setIsTimerActive(false);
-    }
-  }, [isQuestionOpen, quizTimeLimit, lastQuestion?.isJoker]);
+    // Cleanup on unmount or when dependencies change
+    return () => {
+      if (intervalRef.current) {
+        clearInterval(intervalRef.current);
+      }
+    };
+  }, [isQuestionOpen, lastQuestion?.categoryName, lastQuestion?.questionIndex, lastQuestion?.isJoker]);
 
   const handleTimeUp = () => {
     // Optionally auto-reveal answer or just notify

@@ -1,8 +1,9 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback } from "react";
 import { useGameStore } from "@/utils/store";
 import { useRouter } from "next/navigation";
+import { usePublicQuizzes } from "@/hooks/usePublicQuizzes";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -54,30 +55,17 @@ export default function QuizzesPage() {
   const [newQuizTitle, setNewQuizTitle] = useState("");
   const [newQuizDescription, setNewQuizDescription] = useState("");
   const [isCreating, setIsCreating] = useState(false);
-  const [publicQuizzes, setPublicQuizzes] = useState<QuizMetadata[]>([]);
-  const [isLoadingPublic, setIsLoadingPublic] = useState(false);
 
+  // Use custom hook for public quizzes
+  const { publicQuizzes, isLoadingPublic } = usePublicQuizzes();
+
+  // Load user's quizzes on mount
   useEffect(() => {
     loadQuizzesList();
-    loadPublicQuizzes();
   }, [loadQuizzesList]);
 
-  const loadPublicQuizzes = async () => {
-    setIsLoadingPublic(true);
-    try {
-      const response = await fetch("/api/quizzes/public");
-      if (response.ok) {
-        const { quizzes } = await response.json();
-        setPublicQuizzes(quizzes);
-      }
-    } catch (error) {
-      console.error("Failed to load public quizzes:", error);
-    } finally {
-      setIsLoadingPublic(false);
-    }
-  };
-
-  const handleCreateQuiz = async () => {
+  // Stable callback for creating quiz
+  const handleCreateQuiz = useCallback(async () => {
     if (!newQuizTitle.trim()) {
       toast({
         title: "Feil",
@@ -106,9 +94,10 @@ export default function QuizzesPage() {
     } finally {
       setIsCreating(false);
     }
-  };
+  }, [createNewQuiz, newQuizTitle, newQuizDescription]);
 
-  const handleActivateQuiz = async (quizId: string, isPublic: boolean = false) => {
+  // Stable callback for activating quiz
+  const handleActivateQuiz = useCallback(async (quizId: string, isPublic: boolean = false) => {
     if (quizId === activeQuizId) return;
 
     try {
@@ -135,9 +124,10 @@ export default function QuizzesPage() {
         variant: "destructive",
       });
     }
-  };
+  }, [activeQuizId, loadPublicQuiz, switchQuiz, router]);
 
-  const handleDeleteQuiz = async (quizId: string) => {
+  // Stable callback for deleting quiz
+  const handleDeleteQuiz = useCallback(async (quizId: string) => {
     try {
       await deleteQuiz(quizId);
       toast({
@@ -151,9 +141,10 @@ export default function QuizzesPage() {
         variant: "destructive",
       });
     }
-  };
+  }, [deleteQuiz]);
 
-  const renderQuizCard = (quiz: QuizMetadata, isPublic: boolean = false) => (
+  // Stable callback for rendering quiz cards
+  const renderQuizCard = useCallback((quiz: QuizMetadata, isPublic: boolean = false) => (
     <Card
       key={quiz.id}
       className={`relative group cursor-pointer transition-all hover:shadow-lg ${
@@ -228,7 +219,7 @@ export default function QuizzesPage() {
         </div>
       </CardContent>
     </Card>
-  );
+  ), [activeQuizId, handleActivateQuiz, handleDeleteQuiz]);
 
   return (
     <main className="stage min-h-screen">

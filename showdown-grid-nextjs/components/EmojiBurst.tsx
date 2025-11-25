@@ -22,6 +22,12 @@ export default function EmojiBurst({
 }: EmojiBurstProps) {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const rafRef = useRef<number | null>(null);
+  const onCompleteRef = useRef(onComplete);
+
+  // Keep onComplete ref up to date
+  useEffect(() => {
+    onCompleteRef.current = onComplete;
+  }, [onComplete]);
 
   useEffect(() => {
     if (!show) return;
@@ -31,7 +37,7 @@ export default function EmojiBurst({
       window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
 
     if (prefersReduced) {
-      const t = setTimeout(() => onComplete?.(), Math.min(300, duration));
+      const t = setTimeout(() => onCompleteRef.current?.(), Math.min(300, duration));
       return () => clearTimeout(t);
     }
 
@@ -126,7 +132,7 @@ export default function EmojiBurst({
       if (progress < 1) {
         rafRef.current = requestAnimationFrame(tick);
       } else {
-        onComplete?.();
+        onCompleteRef.current?.();
       }
     };
 
@@ -138,7 +144,7 @@ export default function EmojiBurst({
       const c = canvasRef.current;
       if (c) c.getContext("2d")?.clearRect(0, 0, c.width, c.height);
     };
-  }, [show, emojis, duration, intensity, onComplete]);
+  }, [show, emojis, duration, intensity]);
 
   if (!show) return null;
 
