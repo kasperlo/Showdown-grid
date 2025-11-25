@@ -72,6 +72,10 @@ export interface GameState {
 
   adjustmentLog: AdjustmentEntry[];
 
+  // Turn tracking
+  currentTurnTeamId: string | null;
+  isInitialTurnSelection: boolean;
+
   setLastQuestion: (question: LastQuestion | null) => void;
   setQuestionOpen: (open: boolean) => void;
 
@@ -91,6 +95,11 @@ export interface GameState {
   awardPositive: (teamId: string) => void;
   awardNegative: (teamId: string) => void;
   endRound: () => void;
+
+  // Turn management
+  setCurrentTurn: (teamId: string) => void;
+  initializeTurn: () => void;
+  nextTurn: () => void;
 
   manualAdjustScore: (teamId: string, delta: number, reason?: string) => void;
   undoLastAdjustment: () => void;

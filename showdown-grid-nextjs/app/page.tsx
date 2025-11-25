@@ -9,6 +9,7 @@ import { Button } from "@/components/ui/button";
 import { Settings } from "lucide-react";
 import { useGameStore } from "@/utils/store";
 import { QuizSelector } from "@/components/QuizSelector";
+import { TurnIndicator } from "@/components/TurnIndicator";
 import { createClient } from "@/lib/supabase";
 
 export default function Home() {
@@ -22,6 +23,9 @@ export default function Home() {
     quizzesList,
     loadQuizzesList,
     isLoading,
+    teams,
+    currentTurnTeamId,
+    initializeTurn,
   } = useGameStore();
 
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
@@ -53,6 +57,17 @@ export default function Home() {
     }
   }, [isInitialized, isLoading, activeQuizId, quizzesList, router]);
 
+  // Initialize turn selection after quiz is loaded
+  useEffect(() => {
+    if (isInitialized && !isLoading && teams.length > 0 && !currentTurnTeamId) {
+      // Small delay before triggering spinner
+      const timeout = setTimeout(() => {
+        initializeTurn();
+      }, 500);
+      return () => clearTimeout(timeout);
+    }
+  }, [isInitialized, isLoading, teams.length, currentTurnTeamId, initializeTurn]);
+
   // Derived state: check if current user owns the active quiz
   const isOwner = currentUserId && activeQuizOwnerId && currentUserId === activeQuizOwnerId;
 
@@ -60,6 +75,7 @@ export default function Home() {
     <main className="stage min-h-screen">
       <div className="container mx-auto p-4 md:p-8">
         <header className="text-center mb-10 relative">
+          <TurnIndicator />
           <h1 className="display-xl text-accent drop-shadow-sm">{quizTitle}</h1>
           <p className="mt-2 text-lg text-muted-foreground">
             {quizDescription}

@@ -197,6 +197,9 @@ export const useGameStore = create<GameState>()((set, get) => {
         isQuestionOpen: false,
         round: initialRoundState(),
       });
+      
+      // Move to next team's turn
+      get().nextTurn();
     },
 
     manualAdjustScore: (teamId: string, delta: number, reason?: string) =>
@@ -241,6 +244,46 @@ export const useGameStore = create<GameState>()((set, get) => {
     setQuizTimeLimit: (timeLimit: number | null) => set({ quizTimeLimit: timeLimit }),
     setQuizTheme: (theme: QuizTheme) => set({ quizTheme: theme }),
     setQuizIsPublic: (isPublic: boolean) => set({ quizIsPublic: isPublic }),
+
+    // Turn management actions
+    setCurrentTurn: (teamId: string) => {
+      set({ currentTurnTeamId: teamId, isInitialTurnSelection: false });
+    },
+
+    initializeTurn: () => {
+      const teams = get().teams;
+      if (!teams.length) return;
+      
+      // Pick random team for first turn
+      const randomIndex = Math.floor(Math.random() * teams.length);
+      const randomTeamId = teams[randomIndex].id;
+      
+      // Set initial turn selection flag to true for spinner animation
+      set({ isInitialTurnSelection: true });
+      
+      // After animation (3 seconds), set the actual turn
+      setTimeout(() => {
+        set({ currentTurnTeamId: randomTeamId, isInitialTurnSelection: false });
+      }, 3000);
+    },
+
+    nextTurn: () => {
+      const teams = get().teams;
+      const currentId = get().currentTurnTeamId;
+      
+      if (!teams.length) return;
+      
+      // If no current turn, initialize
+      if (!currentId) {
+        get().initializeTurn();
+        return;
+      }
+      
+      // Find next team in rotation
+      const currentIndex = teams.findIndex(t => t.id === currentId);
+      const nextIndex = (currentIndex + 1) % teams.length;
+      set({ currentTurnTeamId: teams[nextIndex].id });
+    },
   };
 
   return {
@@ -266,6 +309,8 @@ export const useGameStore = create<GameState>()((set, get) => {
     isQuestionOpen: false,
     round: initialRoundState(),
     adjustmentLog: [],
+    currentTurnTeamId: null as string | null,
+    isInitialTurnSelection: false,
     quizTitle: "Showdown Grid",
     quizDescription: "A Jeopardy-style quiz game.",
     quizTimeLimit: null as number | null,
@@ -306,6 +351,9 @@ export const useGameStore = create<GameState>()((set, get) => {
     setLastQuestion: actions.setLastQuestion,
     setQuestionOpen: actions.setQuestionOpen,
     endRound: actions.endRound,
+    setCurrentTurn: actions.setCurrentTurn,
+    initializeTurn: actions.initializeTurn,
+    nextTurn: actions.nextTurn,
 
     loadQuizFromDB: async () => {
       set({ isLoading: true });

@@ -10,7 +10,12 @@ interface TimerProps {
   className?: string;
 }
 
-export function Timer({ initialTime, onTimeUp, isPaused = false, className }: TimerProps) {
+export function Timer({
+  initialTime,
+  onTimeUp,
+  isPaused = false,
+  className,
+}: TimerProps) {
   const [timeLeft, setTimeLeft] = useState(initialTime);
   const [isRunning, setIsRunning] = useState(true);
   const intervalRef = useRef<NodeJS.Timeout | null>(null);
@@ -34,7 +39,7 @@ export function Timer({ initialTime, onTimeUp, isPaused = false, className }: Ti
     }
 
     // Don't start if paused or time is up
-    if (isPaused || initialTime <= 0 || !isRunning) {
+    if (isPaused || initialTime <= 0) {
       return;
     }
 
@@ -57,10 +62,11 @@ export function Timer({ initialTime, onTimeUp, isPaused = false, className }: Ti
         intervalRef.current = null;
       }
     };
-  }, [initialTime, isPaused, isRunning]);
+  }, [initialTime, isPaused]);
 
   const progress = (timeLeft / initialTime) * 100;
   const isWarning = timeLeft <= 10;
+  const isFinished = timeLeft === 0;
   const radius = 45;
   const circumference = 2 * Math.PI * radius;
   const strokeDashoffset = circumference - (progress / 100) * circumference;
@@ -72,7 +78,13 @@ export function Timer({ initialTime, onTimeUp, isPaused = false, className }: Ti
   };
 
   return (
-    <div className={cn("relative inline-flex items-center justify-center", className)}>
+    <div
+      className={cn(
+        "relative inline-flex items-center justify-center",
+        isFinished && "timer-finished",
+        className
+      )}
+    >
       <svg className="transform -rotate-90" width="120" height="120">
         {/* Background circle */}
         <circle
@@ -88,7 +100,13 @@ export function Timer({ initialTime, onTimeUp, isPaused = false, className }: Ti
           cx="60"
           cy="60"
           r={radius}
-          stroke={isWarning ? "hsl(var(--destructive))" : "hsl(var(--accent))"}
+          stroke={
+            isFinished
+              ? "hsl(var(--destructive))"
+              : isWarning
+              ? "hsl(var(--destructive))"
+              : "hsl(var(--accent))"
+          }
           strokeWidth="8"
           fill="none"
           strokeDasharray={circumference}
@@ -99,11 +117,12 @@ export function Timer({ initialTime, onTimeUp, isPaused = false, className }: Ti
       </svg>
       <div
         className={cn(
-          "absolute inset-0 flex items-center justify-center text-2xl font-bold",
-          isWarning && "timer-warning text-destructive"
+          "absolute inset-0 flex items-center justify-center font-bold",
+          isFinished ? "text-lg text-destructive" : "text-2xl",
+          isWarning && !isFinished && "timer-warning text-destructive"
         )}
       >
-        {formatTime(timeLeft)}
+        {isFinished ? "SVAR!!!" : formatTime(timeLeft)}
       </div>
     </div>
   );
