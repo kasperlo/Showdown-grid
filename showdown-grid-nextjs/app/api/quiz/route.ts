@@ -9,7 +9,14 @@ export async function GET(request: NextRequest) {
     // Get the authenticated user
     const { data: { user }, error: authError } = await supabase.auth.getUser();
 
+    console.log('[API /quiz GET] Auth check:', { 
+      hasUser: !!user, 
+      userId: user?.id,
+      authError: authError?.message 
+    });
+
     if (authError || !user) {
+      console.error('[API /quiz GET] Unauthorized:', authError);
       return NextResponse.json(
         { error: 'Unauthorized' },
         { status: 401 }
@@ -73,7 +80,14 @@ export async function POST(request: NextRequest) {
     // Get the authenticated user
     const { data: { user }, error: authError } = await supabase.auth.getUser();
 
+    console.log('[API /quiz POST] Auth check:', { 
+      hasUser: !!user, 
+      userId: user?.id,
+      authError: authError?.message 
+    });
+
     if (authError || !user) {
+      console.error('[API /quiz POST] Unauthorized:', authError);
       return NextResponse.json(
         { error: 'Unauthorized' },
         { status: 401 }

@@ -1,3 +1,5 @@
+"use client";
+
 import { ReactNode, useEffect, useCallback } from "react";
 import { useGameStore } from "@/utils/store";
 import { useDebounce } from "@/utils/useDebounce";

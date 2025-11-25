@@ -25,10 +25,11 @@ export function useAuth(): UseAuthReturn {
 
         if (!session) {
           // No session found, sign in anonymously
-          const { error } = await supabase.auth.signInAnonymously();
+          console.log('[useAuth] No session found, signing in anonymously...');
+          const { data, error } = await supabase.auth.signInAnonymously();
 
           if (error) {
-            console.error('Anonymous sign-in error:', error);
+            console.error('[useAuth] Anonymous sign-in error:', error);
             setIsAuthError(true);
             toast({
               title: "Autentiseringsfeil",
@@ -37,11 +38,33 @@ export function useAuth(): UseAuthReturn {
             });
             return;
           }
+
+          console.log('[useAuth] Anonymous sign-in successful:', data.user?.id);
+
+          // Wait for cookies to be set and propagate
+          await new Promise(resolve => setTimeout(resolve, 300));
+
+          // Verify session can be retrieved
+          const { data: { session: verifiedSession } } = await supabase.auth.getSession();
+          if (!verifiedSession) {
+            console.error('[useAuth] Session verification failed - session not retrievable');
+            setIsAuthError(true);
+            toast({
+              title: "Autentiseringsfeil",
+              description: "Session kunne ikke verifiseres. Prøv å refresh siden.",
+              variant: "destructive",
+            });
+            return;
+          }
+
+          console.log('[useAuth] Session verified successfully');
+        } else {
+          console.log('[useAuth] Existing session found:', session.user.id);
         }
 
         setIsAuthReady(true);
       } catch (error) {
-        console.error('Auth initialization error:', error);
+        console.error('[useAuth] Auth initialization error:', error);
         setIsAuthError(true);
         toast({
           title: "Autentiseringsfeil",
