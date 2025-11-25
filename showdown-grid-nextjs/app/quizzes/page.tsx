@@ -45,6 +45,7 @@ export default function QuizzesPage() {
     activeQuizId,
     loadQuizzesList,
     switchQuiz,
+    loadPublicQuiz,
     createNewQuiz,
     deleteQuiz,
   } = useGameStore();
@@ -107,20 +108,30 @@ export default function QuizzesPage() {
     }
   };
 
-  const handleActivateQuiz = async (quizId: string) => {
+  const handleActivateQuiz = async (quizId: string, isPublic: boolean = false) => {
     if (quizId === activeQuizId) return;
 
     try {
-      await switchQuiz(quizId);
-      toast({
-        title: "Byttet quiz!",
-        description: "Den valgte quizzen er nå aktiv",
-      });
+      if (isPublic) {
+        // Load public quiz without activating it in the database
+        await loadPublicQuiz(quizId);
+        toast({
+          title: "Lastet quiz!",
+          description: "Klar til å spille",
+        });
+      } else {
+        // Activate user's own quiz
+        await switchQuiz(quizId);
+        toast({
+          title: "Byttet quiz!",
+          description: "Den valgte quizzen er nå aktiv",
+        });
+      }
       router.push("/");
     } catch (error) {
       toast({
         title: "Feil",
-        description: "Kunne ikke bytte quiz",
+        description: isPublic ? "Kunne ikke laste quiz" : "Kunne ikke bytte quiz",
         variant: "destructive",
       });
     }
@@ -148,7 +159,7 @@ export default function QuizzesPage() {
       className={`relative group cursor-pointer transition-all hover:shadow-lg ${
         quiz.is_active ? "border-primary shadow-md" : ""
       }`}
-      onClick={() => handleActivateQuiz(quiz.id)}
+      onClick={() => handleActivateQuiz(quiz.id, isPublic)}
     >
       {quiz.is_active && (
         <div className="absolute top-2 right-2">

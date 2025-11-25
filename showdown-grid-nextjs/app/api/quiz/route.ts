@@ -37,6 +37,7 @@ export async function GET(request: NextRequest) {
       data: {
         ...data.quiz_data,
         quizId: data.id,
+        quizOwnerId: data.user_id,
         quizTitle: data.title,
         quizDescription: data.description,
         quizTimeLimit: data.time_limit,

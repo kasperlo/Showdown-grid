@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { GameBoard } from "@/components/GameBoard";
 import { Ranking } from "@/components/Ranking";
 import { RoundDock } from "@/components/RoundDock";
@@ -9,14 +9,51 @@ import { Button } from "@/components/ui/button";
 import { Settings } from "lucide-react";
 import { useGameStore } from "@/utils/store";
 import { QuizSelector } from "@/components/QuizSelector";
+import { createClient } from "@/lib/supabase";
 
 export default function Home() {
   const router = useRouter();
-  const { quizTitle, quizDescription, loadQuizFromDB } = useGameStore();
+  const {
+    quizTitle,
+    quizDescription,
+    activeQuizId,
+    activeQuizOwnerId,
+    loadQuizFromDB,
+    quizzesList,
+    loadQuizzesList,
+  } = useGameStore();
 
+  const [currentUserId, setCurrentUserId] = useState<string | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
+
+  // Get current user ID
   useEffect(() => {
-    loadQuizFromDB();
-  }, [loadQuizFromDB]);
+    const getUserId = async () => {
+      const supabase = createClient();
+      const { data: { user } } = await supabase.auth.getUser();
+      setCurrentUserId(user?.id || null);
+    };
+    getUserId();
+  }, []);
+
+  // Load quiz data
+  useEffect(() => {
+    const loadData = async () => {
+      await Promise.all([loadQuizFromDB(), loadQuizzesList()]);
+      setIsLoading(false);
+    };
+    loadData();
+  }, [loadQuizFromDB, loadQuizzesList]);
+
+  // Redirect to /quizzes if no active quiz and user has no quizzes
+  useEffect(() => {
+    if (!isLoading && !activeQuizId && quizzesList.length === 0) {
+      router.push("/quizzes");
+    }
+  }, [activeQuizId, quizzesList, router, isLoading]);
+
+  // Check if current user owns the active quiz
+  const isOwner = currentUserId && activeQuizOwnerId && currentUserId === activeQuizOwnerId;
 
   return (
     <main className="stage min-h-screen">
@@ -28,15 +65,17 @@ export default function Home() {
           </p>
           <div className="absolute top-0 right-0 flex items-center gap-2">
             <QuizSelector />
-            <Button
-              variant="ghost"
-              size="icon"
-              onClick={() => router.push("/setup")}
-              aria-label="Åpne oppsett"
-              title="Oppsett"
-            >
-              <Settings className="h-8 w-8" />
-            </Button>
+            {isOwner && (
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={() => router.push("/setup")}
+                aria-label="Åpne oppsett"
+                title="Oppsett"
+              >
+                <Settings className="h-8 w-8" />
+              </Button>
+            )}
           </div>
         </header>
 

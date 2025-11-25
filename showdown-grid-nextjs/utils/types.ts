@@ -118,9 +118,11 @@ export interface GameState {
 
   // Multiple quizzes support
   activeQuizId: string | null;
+  activeQuizOwnerId: string | null;
   quizzesList: QuizMetadata[];
   loadQuizzesList: () => Promise<void>;
   switchQuiz: (quizId: string) => Promise<void>;
+  loadPublicQuiz: (quizId: string) => Promise<void>;
   createNewQuiz: (title: string, description?: string) => Promise<void>;
   deleteQuiz: (quizId: string) => Promise<void>;
 }

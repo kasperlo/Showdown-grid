@@ -275,6 +275,7 @@ export const useGameStore = create<GameState>()((set, get) => {
     isSaving: false,
     hasUnsavedChanges: false,
     activeQuizId: null as string | null,
+    activeQuizOwnerId: null as string | null,
     quizzesList: [] as QuizMetadata[],
 
     // Wrap all mutating actions
@@ -324,7 +325,7 @@ export const useGameStore = create<GameState>()((set, get) => {
         const quizData = await response.json();
 
         // Extract quiz metadata
-        const { quizId, quizTitle, quizDescription, quizTimeLimit, quizTheme, quizIsPublic, ...restData } = quizData.data;
+        const { quizId, quizOwnerId, quizTitle, quizDescription, quizTimeLimit, quizTheme, quizIsPublic, ...restData } = quizData.data;
 
         // Overwrite state with data from database
         set({
@@ -335,6 +336,7 @@ export const useGameStore = create<GameState>()((set, get) => {
           quizTheme: quizTheme || 'classic',
           quizIsPublic: quizIsPublic || false,
           activeQuizId: quizId,
+          activeQuizOwnerId: quizOwnerId,
           isLoading: false,
           hasUnsavedChanges: false
         });
@@ -382,6 +384,41 @@ export const useGameStore = create<GameState>()((set, get) => {
         await get().loadQuizzesList();
       } catch (error) {
         console.error("Failed to switch quiz:", error);
+        set({ isLoading: false });
+      }
+    },
+
+    loadPublicQuiz: async (quizId: string) => {
+      try {
+        set({ isLoading: true });
+
+        // Load the quiz without activating it
+        const response = await fetch(`/api/quizzes/${quizId}/load`);
+
+        if (!response.ok) {
+          throw new Error("Failed to load quiz");
+        }
+
+        const quizData = await response.json();
+
+        // Extract quiz metadata
+        const { quizId: id, quizOwnerId, quizTitle, quizDescription, quizTimeLimit, quizTheme, quizIsPublic, ...restData } = quizData.data;
+
+        // Load quiz data without making it "active" in the database
+        set({
+          ...restData,
+          quizTitle,
+          quizDescription,
+          quizTimeLimit: quizTimeLimit || null,
+          quizTheme: quizTheme || 'classic',
+          quizIsPublic: quizIsPublic || false,
+          activeQuizId: id,
+          activeQuizOwnerId: quizOwnerId,
+          isLoading: false,
+          hasUnsavedChanges: false
+        });
+      } catch (error) {
+        console.error("Failed to load public quiz:", error);
         set({ isLoading: false });
       }
     },
