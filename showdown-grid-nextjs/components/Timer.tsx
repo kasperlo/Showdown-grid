@@ -21,19 +21,22 @@ export function Timer({ initialTime, onTimeUp, isPaused = false, className }: Ti
     onTimeUpRef.current = onTimeUp;
   }, [onTimeUp]);
 
-  // Single consolidated effect for timer management
+  // Comprehensive timer effect: handles initialization, countdown, and pause/resume
   useEffect(() => {
-    // Reset timer when initialTime changes
+    // Reset state when initialTime changes
     setTimeLeft(initialTime);
     setIsRunning(true);
 
     // Clear any existing interval
     if (intervalRef.current) {
       clearInterval(intervalRef.current);
+      intervalRef.current = null;
     }
 
     // Don't start if paused or time is up
-    if (isPaused || initialTime <= 0) return;
+    if (isPaused || initialTime <= 0 || !isRunning) {
+      return;
+    }
 
     // Start countdown
     intervalRef.current = setInterval(() => {
@@ -51,28 +54,10 @@ export function Timer({ initialTime, onTimeUp, isPaused = false, className }: Ti
     return () => {
       if (intervalRef.current) {
         clearInterval(intervalRef.current);
+        intervalRef.current = null;
       }
     };
-  }, [initialTime, isPaused]);
-
-  // Pause/resume handler
-  useEffect(() => {
-    if (isPaused && intervalRef.current) {
-      clearInterval(intervalRef.current);
-      intervalRef.current = null;
-    } else if (!isPaused && isRunning && timeLeft > 0 && !intervalRef.current) {
-      intervalRef.current = setInterval(() => {
-        setTimeLeft((prev) => {
-          if (prev <= 1) {
-            setIsRunning(false);
-            onTimeUpRef.current?.();
-            return 0;
-          }
-          return prev - 1;
-        });
-      }, 1000);
-    }
-  }, [isPaused, isRunning, timeLeft]);
+  }, [initialTime, isPaused, isRunning]);
 
   const progress = (timeLeft / initialTime) * 100;
   const isWarning = timeLeft <= 10;

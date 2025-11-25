@@ -27,12 +27,7 @@ export default function Home() {
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
   const [isInitialized, setIsInitialized] = useState(false);
 
-  // Stable callback for navigation
-  const navigateToQuizzes = useCallback(() => {
-    router.push("/quizzes");
-  }, [router]);
-
-  // Single effect for initialization: get user ID and load data
+  // Single comprehensive effect for initialization and redirect
   useEffect(() => {
     const initialize = async () => {
       try {
@@ -51,12 +46,12 @@ export default function Home() {
     initialize();
   }, [loadQuizFromDB, loadQuizzesList]);
 
-  // Redirect to /quizzes if no active quiz and user has no quizzes
+  // Handle redirect after initialization completes
   useEffect(() => {
     if (isInitialized && !isLoading && !activeQuizId && quizzesList.length === 0) {
-      navigateToQuizzes();
+      router.push("/quizzes");
     }
-  }, [isInitialized, isLoading, activeQuizId, quizzesList, navigateToQuizzes]);
+  }, [isInitialized, isLoading, activeQuizId, quizzesList, router]);
 
   // Derived state: check if current user owns the active quiz
   const isOwner = currentUserId && activeQuizOwnerId && currentUserId === activeQuizOwnerId;
