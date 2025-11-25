@@ -1,7 +1,7 @@
-'use client';
+"use client";
 
-import { useEffect, useState } from 'react';
-import { createClient } from '@/lib/supabase';
+import { useEffect, useState } from "react";
+import { createClient } from "@/lib/supabase";
 
 export default function DebugAuthPage() {
   const [authStatus, setAuthStatus] = useState<any>(null);
@@ -15,63 +15,69 @@ export default function DebugAuthPage() {
         const supabase = createClient();
 
         // Check current session
-        console.log('[Debug] Checking current session...');
+        console.log("[Debug] Checking current session...");
         const { data: sessionData } = await supabase.auth.getSession();
-        console.log('[Debug] Current session:', sessionData);
+        console.log("[Debug] Current session:", sessionData);
 
         if (!sessionData.session) {
           // Try to sign in anonymously
-          console.log('[Debug] No session, signing in anonymously...');
-          const { data, error: signInError } = await supabase.auth.signInAnonymously();
+          console.log("[Debug] No session, signing in anonymously...");
+          const { data, error: signInError } =
+            await supabase.auth.signInAnonymously();
 
           if (signInError) {
-            console.error('[Debug] Sign in error:', signInError);
+            console.error("[Debug] Sign in error:", signInError);
             setError(signInError.message);
             return;
           }
 
-          console.log('[Debug] Sign in successful:', data);
-          
+          console.log("[Debug] Sign in successful:", data);
+
           // Wait for cookies
-          await new Promise(resolve => setTimeout(resolve, 300));
-          
+          await new Promise((resolve) => setTimeout(resolve, 300));
+
           // Verify session
-          const { data: { session: verifiedSession } } = await supabase.auth.getSession();
-          console.log('[Debug] Verified session:', verifiedSession);
-          
+          const {
+            data: { session: verifiedSession },
+          } = await supabase.auth.getSession();
+          console.log("[Debug] Verified session:", verifiedSession);
+
           setAuthStatus(data);
         } else {
           setAuthStatus(sessionData);
         }
 
         // Check user
-        const { data: userData, error: userError } = await supabase.auth.getUser();
-        console.log('[Debug] User data:', userData, 'Error:', userError);
+        const { data: userData, error: userError } =
+          await supabase.auth.getUser();
+        console.log("[Debug] User data:", userData, "Error:", userError);
 
         // Check cookies
-        if (typeof document !== 'undefined') {
+        if (typeof document !== "undefined") {
           const supabaseCookies = document.cookie
-            .split(';')
-            .filter(c => c.trim().startsWith('sb-'))
-            .map(c => c.trim());
-          console.log('[Debug] Supabase cookies:', supabaseCookies);
+            .split(";")
+            .filter((c) => c.trim().startsWith("sb-"))
+            .map((c) => c.trim());
+          console.log("[Debug] Supabase cookies:", supabaseCookies);
           setCookies(supabaseCookies);
         }
 
         // Test API call
-        console.log('[Debug] Testing API call...');
+        console.log("[Debug] Testing API call...");
         try {
-          const response = await fetch('/api/quizzes');
+          const response = await fetch("/api/quizzes");
           const data = await response.json();
-          console.log('[Debug] API test result:', { status: response.status, data });
+          console.log("[Debug] API test result:", {
+            status: response.status,
+            data,
+          });
           setApiTestResult({ status: response.status, data });
         } catch (apiError: any) {
-          console.error('[Debug] API test error:', apiError);
+          console.error("[Debug] API test error:", apiError);
           setApiTestResult({ error: apiError.message });
         }
-
       } catch (err: any) {
-        console.error('[Debug] Auth check error:', err);
+        console.error("[Debug] Auth check error:", err);
         setError(err.message);
       }
     };
@@ -104,7 +110,10 @@ export default function DebugAuthPage() {
           {cookies.length > 0 ? (
             <ul className="text-sm space-y-1">
               {cookies.map((cookie, i) => (
-                <li key={i} className="font-mono text-xs break-all bg-gray-50 p-2 rounded">
+                <li
+                  key={i}
+                  className="font-mono text-xs break-all bg-gray-50 p-2 rounded"
+                >
                   {cookie}
                 </li>
               ))}

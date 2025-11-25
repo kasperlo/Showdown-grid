@@ -1,5 +1,5 @@
-import { NextRequest, NextResponse } from 'next/server';
-import { createClient } from '@/lib/supabase-server';
+import { NextRequest, NextResponse } from "next/server";
+import { createClient } from "@/lib/supabase-server";
 
 // GET - Load user's active quiz
 export async function GET(request: NextRequest) {
@@ -7,45 +7,51 @@ export async function GET(request: NextRequest) {
     const supabase = await createClient();
 
     // Get the authenticated user
-    const { data: { user }, error: authError } = await supabase.auth.getUser();
+    const {
+      data: { user },
+      error: authError,
+    } = await supabase.auth.getUser();
 
-    console.log('[API /quiz GET] Auth check:', { 
-      hasUser: !!user, 
+    console.log("[API /quiz GET] Auth check:", {
+      hasUser: !!user,
       userId: user?.id,
-      authError: authError?.message 
+      authError: authError?.message,
     });
 
     if (authError || !user) {
-      console.error('[API /quiz GET] Unauthorized:', authError);
-      return NextResponse.json(
-        { error: 'Unauthorized' },
-        { status: 401 }
-      );
+      console.error("[API /quiz GET] Unauthorized:", authError);
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
     // Get the user's active quiz ID from users table
     const { data: userData, error: userError } = await supabase
-      .from('users')
-      .select('active_quiz_id')
-      .eq('user_id', user.id)
+      .from("users")
+      .select("active_quiz_id")
+      .eq("user_id", user.id)
       .single();
 
     if (userError || !userData?.active_quiz_id) {
       // No active quiz found
-      return NextResponse.json({ message: 'No active quiz found' }, { status: 404 });
+      return NextResponse.json(
+        { message: "No active quiz found" },
+        { status: 404 }
+      );
     }
 
     // Get the active quiz data
     const { data, error } = await supabase
-      .from('quizzes')
-      .select('*')
-      .eq('id', userData.active_quiz_id)
+      .from("quizzes")
+      .select("*")
+      .eq("id", userData.active_quiz_id)
       .single();
 
     if (error) {
-      if (error.code === 'PGRST116') {
+      if (error.code === "PGRST116") {
         // Active quiz no longer exists
-        return NextResponse.json({ message: 'No active quiz found' }, { status: 404 });
+        return NextResponse.json(
+          { message: "No active quiz found" },
+          { status: 404 }
+        );
       }
       throw error;
     }
@@ -61,14 +67,11 @@ export async function GET(request: NextRequest) {
         quizTimeLimit: data.time_limit,
         quizTheme: data.theme,
         quizIsPublic: data.is_public,
-      }
+      },
     });
   } catch (error) {
-    console.error('Error loading quiz:', error);
-    return NextResponse.json(
-      { error: 'Failed to load quiz' },
-      { status: 500 }
-    );
+    console.error("Error loading quiz:", error);
+    return NextResponse.json({ error: "Failed to load quiz" }, { status: 500 });
   }
 }
 
@@ -78,20 +81,20 @@ export async function POST(request: NextRequest) {
     const supabase = await createClient();
 
     // Get the authenticated user
-    const { data: { user }, error: authError } = await supabase.auth.getUser();
+    const {
+      data: { user },
+      error: authError,
+    } = await supabase.auth.getUser();
 
-    console.log('[API /quiz POST] Auth check:', { 
-      hasUser: !!user, 
+    console.log("[API /quiz POST] Auth check:", {
+      hasUser: !!user,
       userId: user?.id,
-      authError: authError?.message 
+      authError: authError?.message,
     });
 
     if (authError || !user) {
-      console.error('[API /quiz POST] Unauthorized:', authError);
-      return NextResponse.json(
-        { error: 'Unauthorized' },
-        { status: 401 }
-      );
+      console.error("[API /quiz POST] Unauthorized:", authError);
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
     const body = await request.json();
@@ -99,19 +102,26 @@ export async function POST(request: NextRequest) {
 
     if (!quizData) {
       return NextResponse.json(
-        { error: 'Quiz data is required' },
+        { error: "Quiz data is required" },
         { status: 400 }
       );
     }
 
     // Extract metadata from quiz data
-    const { quizTitle, quizDescription, quizTimeLimit, quizTheme, quizIsPublic, ...actualQuizData } = quizData;
+    const {
+      quizTitle,
+      quizDescription,
+      quizTimeLimit,
+      quizTheme,
+      quizIsPublic,
+      ...actualQuizData
+    } = quizData;
 
     // First, check if user has an active quiz
     const { data: userData } = await supabase
-      .from('users')
-      .select('active_quiz_id')
-      .eq('user_id', user.id)
+      .from("users")
+      .select("active_quiz_id")
+      .eq("user_id", user.id)
       .single();
 
     const activeQuizId = userData?.active_quiz_id;
@@ -119,55 +129,50 @@ export async function POST(request: NextRequest) {
     if (activeQuizId) {
       // Update existing active quiz
       const { error } = await supabase
-        .from('quizzes')
+        .from("quizzes")
         .update({
-          title: quizTitle || 'Min Quiz',
-          description: quizDescription || 'En Jeopardy-stil quiz',
+          title: quizTitle || "Min Quiz",
+          description: quizDescription || "En Jeopardy-stil quiz",
           time_limit: quizTimeLimit,
-          theme: quizTheme || 'classic',
+          theme: quizTheme || "classic",
           is_public: quizIsPublic || false,
           quiz_data: actualQuizData,
           updated_at: new Date().toISOString(),
         })
-        .eq('id', activeQuizId);
+        .eq("id", activeQuizId);
 
       if (error) throw error;
     } else {
       // Create new quiz and set as active in users table
       const { data: newQuiz, error: insertError } = await supabase
-        .from('quizzes')
+        .from("quizzes")
         .insert({
           user_id: user.id,
-          title: quizTitle || 'Min Quiz',
-          description: quizDescription || 'En Jeopardy-stil quiz',
+          title: quizTitle || "Min Quiz",
+          description: quizDescription || "En Jeopardy-stil quiz",
           time_limit: quizTimeLimit,
-          theme: quizTheme || 'classic',
+          theme: quizTheme || "classic",
           is_public: quizIsPublic || false,
           quiz_data: actualQuizData,
         })
-        .select('id')
+        .select("id")
         .single();
 
       if (insertError) throw insertError;
 
       // Set this quiz as active in users table
-      const { error: upsertError } = await supabase
-        .from('users')
-        .upsert({
-          user_id: user.id,
-          active_quiz_id: newQuiz.id,
-          updated_at: new Date().toISOString(),
-        });
+      const { error: upsertError } = await supabase.from("users").upsert({
+        user_id: user.id,
+        active_quiz_id: newQuiz.id,
+        updated_at: new Date().toISOString(),
+      });
 
       if (upsertError) throw upsertError;
     }
 
     return NextResponse.json({ success: true });
   } catch (error) {
-    console.error('Error saving quiz:', error);
-    return NextResponse.json(
-      { error: 'Failed to save quiz' },
-      { status: 500 }
-    );
+    console.error("Error saving quiz:", error);
+    return NextResponse.json({ error: "Failed to save quiz" }, { status: 500 });
   }
 }

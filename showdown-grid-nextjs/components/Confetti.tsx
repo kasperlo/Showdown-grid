@@ -6,7 +6,11 @@ type ConfettiProps = {
   onComplete?: () => void;
 };
 
-export default function Confetti({ show, duration = 1200, onComplete }: ConfettiProps) {
+export default function Confetti({
+  show,
+  duration = 1200,
+  onComplete,
+}: ConfettiProps) {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const rafRef = useRef<number | null>(null);
   const onCompleteRef = useRef(onComplete);
@@ -25,7 +29,10 @@ export default function Confetti({ show, duration = 1200, onComplete }: Confetti
       window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 
     if (prefersReduced) {
-      const t = setTimeout(() => onCompleteRef.current?.(), Math.min(400, duration));
+      const t = setTimeout(
+        () => onCompleteRef.current?.(),
+        Math.min(400, duration)
+      );
       return () => clearTimeout(t);
     }
 
@@ -45,9 +52,16 @@ export default function Confetti({ show, duration = 1200, onComplete }: Confetti
     window.addEventListener("resize", resize);
 
     type P = {
-      x: number; y: number; vx: number; vy: number;
-      size: number; rot: number; vr: number; color: string;
-      life: number; alpha: number;
+      x: number;
+      y: number;
+      vx: number;
+      vy: number;
+      size: number;
+      rot: number;
+      vr: number;
+      color: string;
+      life: number;
+      alpha: number;
     };
 
     const colors = [
@@ -59,7 +73,10 @@ export default function Confetti({ show, duration = 1200, onComplete }: Confetti
     ];
 
     const particles: P[] = [];
-    const count = Math.min(220, Math.floor((window.innerWidth + window.innerHeight) / 6));
+    const count = Math.min(
+      220,
+      Math.floor((window.innerWidth + window.innerHeight) / 6)
+    );
 
     for (let i = 0; i < count; i++) {
       const angle = Math.random() * Math.PI - Math.PI / 2;
@@ -126,5 +143,11 @@ export default function Confetti({ show, duration = 1200, onComplete }: Confetti
 
   if (!show) return null;
 
-  return <canvas ref={canvasRef} aria-hidden="true" className="pointer-events-none fixed inset-0 z-[60]" />;
+  return (
+    <canvas
+      ref={canvasRef}
+      aria-hidden="true"
+      className="pointer-events-none fixed inset-0 z-[60]"
+    />
+  );
 }

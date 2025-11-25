@@ -50,7 +50,9 @@ export default function Setup() {
   } = useGameStore();
   const router = useRouter();
   const [timerEnabled, setTimerEnabled] = useState(quizTimeLimit !== null);
-  const [timerValue, setTimerValue] = useState<number | ''>(quizTimeLimit || 60);
+  const [timerValue, setTimerValue] = useState<number | "">(
+    quizTimeLimit || 60
+  );
 
   const handleCategoryNameChange = (
     e: React.ChangeEvent<HTMLInputElement>,
@@ -120,7 +122,9 @@ export default function Setup() {
           <TabsContent value="general">
             <div className="glass p-6 rounded-b-lg space-y-8">
               <div>
-                <Label className="text-xl font-semibold text-accent">Spilltittel</Label>
+                <Label className="text-xl font-semibold text-accent">
+                  Spilltittel
+                </Label>
                 <Input
                   type="text"
                   value={quizTitle}
@@ -130,7 +134,9 @@ export default function Setup() {
                 />
               </div>
               <div>
-                <Label className="text-xl font-semibold text-accent">Spillbeskrivelse</Label>
+                <Label className="text-xl font-semibold text-accent">
+                  Spillbeskrivelse
+                </Label>
                 <Textarea
                   value={quizDescription}
                   onChange={(e) => setQuizDescription(e.target.value)}
@@ -144,7 +150,9 @@ export default function Setup() {
                 <div className="space-y-4">
                   <div className="flex items-center justify-between">
                     <div>
-                      <Label className="text-xl font-semibold text-accent">Tidsbegrensning</Label>
+                      <Label className="text-xl font-semibold text-accent">
+                        Tidsbegrensning
+                      </Label>
                       <p className="text-sm text-muted-foreground mt-1">
                         Aktiver nedtelling på alle spørsmål
                       </p>
@@ -153,8 +161,8 @@ export default function Setup() {
                       checked={timerEnabled}
                       onCheckedChange={(checked) => {
                         setTimerEnabled(checked);
-                        const valueToSet = timerValue === '' ? 60 : timerValue;
-                        if (checked && timerValue === '') {
+                        const valueToSet = timerValue === "" ? 60 : timerValue;
+                        if (checked && timerValue === "") {
                           setTimerValue(60);
                         }
                         setQuizTimeLimit(checked ? valueToSet : null);
@@ -174,8 +182,8 @@ export default function Setup() {
                           onChange={(e) => {
                             const inputValue = e.target.value;
                             // Allow empty string while typing
-                            if (inputValue === '') {
-                              setTimerValue('');
+                            if (inputValue === "") {
+                              setTimerValue("");
                               return;
                             }
                             const value = parseInt(inputValue);
@@ -186,7 +194,7 @@ export default function Setup() {
                           }}
                           onBlur={(e) => {
                             // If empty on blur, set to default 60
-                            if (e.target.value === '') {
+                            if (e.target.value === "") {
                               setTimerValue(60);
                               setQuizTimeLimit(60);
                             }
@@ -198,7 +206,9 @@ export default function Setup() {
                             <Button
                               key={seconds}
                               type="button"
-                              variant={timerValue === seconds ? "default" : "outline"}
+                              variant={
+                                timerValue === seconds ? "default" : "outline"
+                              }
                               size="sm"
                               onClick={() => {
                                 setTimerValue(seconds);
@@ -222,9 +232,12 @@ export default function Setup() {
               <div className="border-t border-border pt-6">
                 <div className="flex items-center justify-between">
                   <div>
-                    <Label className="text-xl font-semibold text-accent">Offentlig Quiz</Label>
+                    <Label className="text-xl font-semibold text-accent">
+                      Offentlig Quiz
+                    </Label>
                     <p className="text-sm text-muted-foreground mt-1">
-                      Gjør quizen synlig for alle brukere i det offentlige galleriet
+                      Gjør quizen synlig for alle brukere i det offentlige
+                      galleriet
                     </p>
                   </div>
                   <Switch
@@ -285,14 +298,15 @@ export default function Setup() {
               <div className="mt-8 pt-6 border-t border-border text-center">
                 <AlertDialog>
                   <AlertDialogTrigger asChild>
-                    <Button variant="destructive">Reset Game State</Button>
+                    <Button variant="destructive">Nullstill</Button>
                   </AlertDialogTrigger>
                   <AlertDialogContent>
                     <AlertDialogHeader>
                       <AlertDialogTitle>Er du helt sikker?</AlertDialogTitle>
                       <AlertDialogDescription>
-                        Dette nullstiller **score** og **answered** på alle spørsmål.
-                        Lag og egendefinerte kategorier beholdes. Kan ikke angres.
+                        Dette nullstiller **poeng** og **svar** på alle
+                        spørsmål. Lag, kategorier og spørsmål beholdes. Kan ikke
+                        angres.
                       </AlertDialogDescription>
                     </AlertDialogHeader>
                     <AlertDialogFooter>
@@ -317,11 +331,15 @@ export default function Setup() {
                 <div key={categoryIndex} className="tile p-6">
                   <div className="flex justify-between items-start mb-6">
                     <div>
-                      <Label className="text-xl font-semibold text-accent">Kategorinavn</Label>
+                      <Label className="text-xl font-semibold text-accent">
+                        Kategorinavn
+                      </Label>
                       <Input
                         type="text"
                         value={category.name}
-                        onChange={(e) => handleCategoryNameChange(e, categoryIndex)}
+                        onChange={(e) =>
+                          handleCategoryNameChange(e, categoryIndex)
+                        }
                         className="mt-2"
                       />
                     </div>
@@ -338,14 +356,19 @@ export default function Setup() {
                       </AlertDialogTrigger>
                       <AlertDialogContent>
                         <AlertDialogHeader>
-                          <AlertDialogTitle>Fjerne kategorien "{category.name}"?</AlertDialogTitle>
+                          <AlertDialogTitle>
+                            Fjerne kategorien "{category.name}"?
+                          </AlertDialogTitle>
                           <AlertDialogDescription>
-                            Dette vil slette kategorien og alle tilhørende spørsmål permanent. Handlingen kan ikke angres.
+                            Dette vil slette kategorien og alle tilhørende
+                            spørsmål permanent. Handlingen kan ikke angres.
                           </AlertDialogDescription>
                         </AlertDialogHeader>
                         <AlertDialogFooter>
                           <AlertDialogCancel>Avbryt</AlertDialogCancel>
-                          <AlertDialogAction onClick={() => removeCategory(categoryIndex)}>
+                          <AlertDialogAction
+                            onClick={() => removeCategory(categoryIndex)}
+                          >
                             Slett
                           </AlertDialogAction>
                         </AlertDialogFooter>
@@ -422,7 +445,14 @@ export default function Setup() {
                                 variant="destructive"
                                 size="icon"
                                 className="absolute top-1 right-1 h-6 w-6"
-                                onClick={() => handleQuestionChange(categoryIndex, questionIndex, "imageUrl", "")}
+                                onClick={() =>
+                                  handleQuestionChange(
+                                    categoryIndex,
+                                    questionIndex,
+                                    "imageUrl",
+                                    ""
+                                  )
+                                }
                                 title="Fjern bilde"
                               >
                                 <Trash2 className="h-4 w-4" />
@@ -432,7 +462,11 @@ export default function Setup() {
                         </div>
                         <div className="space-y-3 pt-3 border-t border-border">
                           <div className="flex items-center justify-between">
-                            <Label htmlFor={`joker-switch-${categoryIndex}-${questionIndex}`}>Joker</Label>
+                            <Label
+                              htmlFor={`joker-switch-${categoryIndex}-${questionIndex}`}
+                            >
+                              Joker
+                            </Label>
                             <Switch
                               id={`joker-switch-${categoryIndex}-${questionIndex}`}
                               checked={question.isJoker}

@@ -48,7 +48,7 @@ export interface AdjustmentEntry {
   type: "manual";
 }
 
-export type QuizTheme = 'classic' | 'modern' | 'christmas';
+export type QuizTheme = "classic" | "modern" | "christmas";
 
 export interface QuizMetadata {
   id: string;

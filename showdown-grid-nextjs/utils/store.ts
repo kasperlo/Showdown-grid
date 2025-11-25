@@ -153,9 +153,7 @@ export const useGameStore = create<GameState>()((set, get) => {
       set((state) => {
         return {
           teams: state.teams.map((t) =>
-            t.id === teamId
-              ? { ...t, score: t.score + lastQuestion.points }
-              : t
+            t.id === teamId ? { ...t, score: t.score + lastQuestion.points } : t
           ),
           round: { ...state.round, positiveTeamId: teamId },
         };
@@ -197,7 +195,7 @@ export const useGameStore = create<GameState>()((set, get) => {
         isQuestionOpen: false,
         round: initialRoundState(),
       });
-      
+
       // Move to next team's turn
       get().nextTurn();
     },
@@ -241,7 +239,8 @@ export const useGameStore = create<GameState>()((set, get) => {
     setQuizTitle: (title: string) => set({ quizTitle: title }),
     setQuizDescription: (description: string) =>
       set({ quizDescription: description }),
-    setQuizTimeLimit: (timeLimit: number | null) => set({ quizTimeLimit: timeLimit }),
+    setQuizTimeLimit: (timeLimit: number | null) =>
+      set({ quizTimeLimit: timeLimit }),
     setQuizTheme: (theme: QuizTheme) => set({ quizTheme: theme }),
     setQuizIsPublic: (isPublic: boolean) => set({ quizIsPublic: isPublic }),
 
@@ -253,14 +252,14 @@ export const useGameStore = create<GameState>()((set, get) => {
     initializeTurn: () => {
       const teams = get().teams;
       if (!teams.length) return;
-      
+
       // Pick random team for first turn
       const randomIndex = Math.floor(Math.random() * teams.length);
       const randomTeamId = teams[randomIndex].id;
-      
+
       // Set initial turn selection flag to true for spinner animation
       set({ isInitialTurnSelection: true });
-      
+
       // After animation (3 seconds), set the actual turn
       setTimeout(() => {
         set({ currentTurnTeamId: randomTeamId, isInitialTurnSelection: false });
@@ -270,17 +269,17 @@ export const useGameStore = create<GameState>()((set, get) => {
     nextTurn: () => {
       const teams = get().teams;
       const currentId = get().currentTurnTeamId;
-      
+
       if (!teams.length) return;
-      
+
       // If no current turn, initialize
       if (!currentId) {
         get().initializeTurn();
         return;
       }
-      
+
       // Find next team in rotation
-      const currentIndex = teams.findIndex(t => t.id === currentId);
+      const currentIndex = teams.findIndex((t) => t.id === currentId);
       const nextIndex = (currentIndex + 1) % teams.length;
       set({ currentTurnTeamId: teams[nextIndex].id });
     },
@@ -314,7 +313,7 @@ export const useGameStore = create<GameState>()((set, get) => {
     quizTitle: "Showdown Grid",
     quizDescription: "A Jeopardy-style quiz game.",
     quizTimeLimit: null as number | null,
-    quizTheme: 'classic' as QuizTheme,
+    quizTheme: "classic" as QuizTheme,
     quizIsPublic: false,
     isLoading: true,
     isSaving: false,
@@ -373,7 +372,16 @@ export const useGameStore = create<GameState>()((set, get) => {
         const quizData = await response.json();
 
         // Extract quiz metadata
-        const { quizId, quizOwnerId, quizTitle, quizDescription, quizTimeLimit, quizTheme, quizIsPublic, ...restData } = quizData.data;
+        const {
+          quizId,
+          quizOwnerId,
+          quizTitle,
+          quizDescription,
+          quizTimeLimit,
+          quizTheme,
+          quizIsPublic,
+          ...restData
+        } = quizData.data;
 
         // Overwrite state with data from database
         set({
@@ -381,12 +389,12 @@ export const useGameStore = create<GameState>()((set, get) => {
           quizTitle,
           quizDescription,
           quizTimeLimit: quizTimeLimit || null,
-          quizTheme: quizTheme || 'classic',
+          quizTheme: quizTheme || "classic",
           quizIsPublic: quizIsPublic || false,
           activeQuizId: quizId,
           activeQuizOwnerId: quizOwnerId,
           isLoading: false,
-          hasUnsavedChanges: false
+          hasUnsavedChanges: false,
         });
       } catch (error: any) {
         console.error("Failed to load quiz from DB:", error);
@@ -417,9 +425,12 @@ export const useGameStore = create<GameState>()((set, get) => {
         set({ isLoading: true });
 
         // Activate the selected quiz
-        const activateResponse = await fetch(`/api/quizzes/${quizId}/activate`, {
-          method: "POST",
-        });
+        const activateResponse = await fetch(
+          `/api/quizzes/${quizId}/activate`,
+          {
+            method: "POST",
+          }
+        );
 
         if (!activateResponse.ok) {
           throw new Error("Failed to activate quiz");
@@ -450,7 +461,16 @@ export const useGameStore = create<GameState>()((set, get) => {
         const quizData = await response.json();
 
         // Extract quiz metadata
-        const { quizId: id, quizOwnerId, quizTitle, quizDescription, quizTimeLimit, quizTheme, quizIsPublic, ...restData } = quizData.data;
+        const {
+          quizId: id,
+          quizOwnerId,
+          quizTitle,
+          quizDescription,
+          quizTimeLimit,
+          quizTheme,
+          quizIsPublic,
+          ...restData
+        } = quizData.data;
 
         // Load quiz data without making it "active" in the database
         set({
@@ -458,12 +478,12 @@ export const useGameStore = create<GameState>()((set, get) => {
           quizTitle,
           quizDescription,
           quizTimeLimit: quizTimeLimit || null,
-          quizTheme: quizTheme || 'classic',
+          quizTheme: quizTheme || "classic",
           quizIsPublic: quizIsPublic || false,
           activeQuizId: id,
           activeQuizOwnerId: quizOwnerId,
           isLoading: false,
-          hasUnsavedChanges: false
+          hasUnsavedChanges: false,
         });
       } catch (error) {
         console.error("Failed to load public quiz:", error);
@@ -479,7 +499,7 @@ export const useGameStore = create<GameState>()((set, get) => {
           body: JSON.stringify({
             title,
             description,
-            setAsActive: false // Don't auto-switch to new quiz
+            setAsActive: false, // Don't auto-switch to new quiz
           }),
         });
 

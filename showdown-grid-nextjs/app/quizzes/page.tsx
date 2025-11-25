@@ -97,129 +97,140 @@ export default function QuizzesPage() {
   }, [createNewQuiz, newQuizTitle, newQuizDescription]);
 
   // Stable callback for activating quiz
-  const handleActivateQuiz = useCallback(async (quizId: string, isPublic: boolean = false) => {
-    if (quizId === activeQuizId) return;
+  const handleActivateQuiz = useCallback(
+    async (quizId: string, isPublic: boolean = false) => {
+      if (quizId === activeQuizId) return;
 
-    try {
-      if (isPublic) {
-        // Load public quiz without activating it in the database
-        await loadPublicQuiz(quizId);
+      try {
+        if (isPublic) {
+          // Load public quiz without activating it in the database
+          await loadPublicQuiz(quizId);
+          toast({
+            title: "Lastet quiz!",
+            description: "Klar til å spille",
+          });
+        } else {
+          // Activate user's own quiz
+          await switchQuiz(quizId);
+          toast({
+            title: "Byttet quiz!",
+            description: "Den valgte quizzen er nå aktiv",
+          });
+        }
+        router.push("/");
+      } catch (error) {
         toast({
-          title: "Lastet quiz!",
-          description: "Klar til å spille",
-        });
-      } else {
-        // Activate user's own quiz
-        await switchQuiz(quizId);
-        toast({
-          title: "Byttet quiz!",
-          description: "Den valgte quizzen er nå aktiv",
+          title: "Feil",
+          description: isPublic
+            ? "Kunne ikke laste quiz"
+            : "Kunne ikke bytte quiz",
+          variant: "destructive",
         });
       }
-      router.push("/");
-    } catch (error) {
-      toast({
-        title: "Feil",
-        description: isPublic ? "Kunne ikke laste quiz" : "Kunne ikke bytte quiz",
-        variant: "destructive",
-      });
-    }
-  }, [activeQuizId, loadPublicQuiz, switchQuiz, router]);
+    },
+    [activeQuizId, loadPublicQuiz, switchQuiz, router]
+  );
 
   // Stable callback for deleting quiz
-  const handleDeleteQuiz = useCallback(async (quizId: string) => {
-    try {
-      await deleteQuiz(quizId);
-      toast({
-        title: "Slettet!",
-        description: "Quizzen ble slettet",
-      });
-    } catch (error) {
-      toast({
-        title: "Feil",
-        description: "Kunne ikke slette quiz",
-        variant: "destructive",
-      });
-    }
-  }, [deleteQuiz]);
+  const handleDeleteQuiz = useCallback(
+    async (quizId: string) => {
+      try {
+        await deleteQuiz(quizId);
+        toast({
+          title: "Slettet!",
+          description: "Quizzen ble slettet",
+        });
+      } catch (error) {
+        toast({
+          title: "Feil",
+          description: "Kunne ikke slette quiz",
+          variant: "destructive",
+        });
+      }
+    },
+    [deleteQuiz]
+  );
 
   // Stable callback for rendering quiz cards
-  const renderQuizCard = useCallback((quiz: QuizMetadata, isPublic: boolean = false) => (
-    <Card
-      key={quiz.id}
-      className={`relative group cursor-pointer transition-all hover:shadow-lg ${
-        quiz.id === activeQuizId ? "border-primary shadow-md" : ""
-      }`}
-      onClick={() => handleActivateQuiz(quiz.id, isPublic)}
-    >
-      {quiz.id === activeQuizId && (
-        <div className="absolute top-2 right-2">
-          <span className="bg-primary text-primary-foreground text-xs px-2 py-1 rounded-full flex items-center gap-1">
-            <Check className="h-3 w-3" />
-            Aktiv
-          </span>
-        </div>
-      )}
-      {isPublic && quiz.is_public && (
-        <div className="absolute top-2 left-2">
-          <span className="bg-accent text-accent-foreground text-xs px-2 py-1 rounded-full flex items-center gap-1">
-            <Globe className="h-3 w-3" />
-            Offentlig
-          </span>
-        </div>
-      )}
-      <CardHeader>
-        <CardTitle className="pr-16 group-hover:text-primary transition-colors">
-          {quiz.title}
-        </CardTitle>
-        <CardDescription className="line-clamp-2">
-          {quiz.description}
-        </CardDescription>
-        <div className="flex items-center gap-2 pt-2 text-xs text-muted-foreground">
-          <span className="capitalize">{quiz.theme}</span>
-          {quiz.time_limit && <span>• {quiz.time_limit}s timer</span>}
-        </div>
-      </CardHeader>
-      <CardContent>
-        <div className="flex justify-end">
-          {!isPublic && (
-            <AlertDialog>
-              <AlertDialogTrigger asChild>
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  className="text-destructive hover:text-destructive hover:bg-destructive/10"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                  }}
-                >
-                  <Trash2 className="h-4 w-4" />
-                </Button>
-              </AlertDialogTrigger>
-              <AlertDialogContent>
-                <AlertDialogHeader>
-                  <AlertDialogTitle>Er du sikker?</AlertDialogTitle>
-                  <AlertDialogDescription>
-                    Dette vil permanent slette quizzen "{quiz.title}".
-                    Denne handlingen kan ikke angres.
-                  </AlertDialogDescription>
-                </AlertDialogHeader>
-                <AlertDialogFooter>
-                  <AlertDialogCancel>Avbryt</AlertDialogCancel>
-                  <AlertDialogAction
-                    onClick={() => handleDeleteQuiz(quiz.id)}
-                    className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+  const renderQuizCard = useCallback(
+    (quiz: QuizMetadata, isPublic: boolean = false) => (
+      <Card
+        key={quiz.id}
+        className={`relative group cursor-pointer transition-all hover:shadow-lg ${
+          quiz.id === activeQuizId ? "border-primary shadow-md" : ""
+        }`}
+        onClick={() => handleActivateQuiz(quiz.id, isPublic)}
+      >
+        {quiz.id === activeQuizId && (
+          <div className="absolute top-2 right-2">
+            <span className="bg-primary text-primary-foreground text-xs px-2 py-1 rounded-full flex items-center gap-1">
+              <Check className="h-3 w-3" />
+              Aktiv
+            </span>
+          </div>
+        )}
+        {isPublic && quiz.is_public && (
+          <div className="absolute top-2 left-2">
+            <span className="bg-accent text-accent-foreground text-xs px-2 py-1 rounded-full flex items-center gap-1">
+              <Globe className="h-3 w-3" />
+              Offentlig
+            </span>
+          </div>
+        )}
+        <CardHeader>
+          <CardTitle className="pr-16 group-hover:text-primary transition-colors">
+            {quiz.title}
+          </CardTitle>
+          <CardDescription className="line-clamp-2">
+            {quiz.description}
+          </CardDescription>
+          <div className="flex items-center gap-2 pt-2 text-xs text-muted-foreground">
+            <span className="capitalize">{quiz.theme}</span>
+            {quiz.time_limit && <span>• {quiz.time_limit}s timer</span>}
+          </div>
+        </CardHeader>
+        <CardContent>
+          <div className="flex justify-end">
+            {!isPublic && (
+              <AlertDialog>
+                <AlertDialogTrigger asChild>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="text-destructive hover:text-destructive hover:bg-destructive/10"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                    }}
                   >
-                    Slett
-                  </AlertDialogAction>
-                </AlertDialogFooter>
-              </AlertDialogContent>
-            </AlertDialog>
-          )}
-        </div>
-      </CardContent>
-    </Card>
-  ), [activeQuizId, handleActivateQuiz, handleDeleteQuiz]);
+                    <Trash2 className="h-4 w-4" />
+                  </Button>
+                </AlertDialogTrigger>
+                <AlertDialogContent>
+                  <AlertDialogHeader>
+                    <AlertDialogTitle>Er du sikker?</AlertDialogTitle>
+                    <AlertDialogDescription>
+                      Dette vil permanent slette quizzen "{quiz.title}". Denne
+                      handlingen kan ikke angres.
+                    </AlertDialogDescription>
+                  </AlertDialogHeader>
+                  <AlertDialogFooter>
+                    <AlertDialogCancel>Avbryt</AlertDialogCancel>
+                    <AlertDialogAction
+                      onClick={() => handleDeleteQuiz(quiz.id)}
+                      className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                    >
+                      Slett
+                    </AlertDialogAction>
+                  </AlertDialogFooter>
+                </AlertDialogContent>
+              </AlertDialog>
+            )}
+          </div>
+        </CardContent>
+      </Card>
+    ),
+    [activeQuizId, handleActivateQuiz, handleDeleteQuiz]
+  );
 
   return (
     <main className="stage min-h-screen">
@@ -242,7 +253,10 @@ export default function QuizzesPage() {
             </div>
           </div>
 
-          <Dialog open={isCreateDialogOpen} onOpenChange={setIsCreateDialogOpen}>
+          <Dialog
+            open={isCreateDialogOpen}
+            onOpenChange={setIsCreateDialogOpen}
+          >
             <DialogTrigger asChild>
               <Button className="gap-2">
                 <Plus className="h-4 w-4" />
@@ -309,7 +323,9 @@ export default function QuizzesPage() {
           <TabsContent value="public">
             {isLoadingPublic ? (
               <div className="text-center p-12">
-                <p className="text-muted-foreground">Laster offentlige quizzer...</p>
+                <p className="text-muted-foreground">
+                  Laster offentlige quizzer...
+                </p>
               </div>
             ) : publicQuizzes.length > 0 ? (
               <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">

@@ -2,9 +2,9 @@ import React, { useEffect, useRef } from "react";
 
 type EmojiBurstProps = {
   show: boolean;
-  emojis: string[];           // kilde-sett – vi velger ÉN tilfeldig per burst
-  duration?: number;          // ms
-  intensity?: number;         // 0.6 .. 2.0 – påvirker antall og fart
+  emojis: string[]; // kilde-sett – vi velger ÉN tilfeldig per burst
+  duration?: number; // ms
+  intensity?: number; // 0.6 .. 2.0 – påvirker antall og fart
   onComplete?: () => void;
 };
 
@@ -37,7 +37,10 @@ export default function EmojiBurst({
       window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
 
     if (prefersReduced) {
-      const t = setTimeout(() => onCompleteRef.current?.(), Math.min(300, duration));
+      const t = setTimeout(
+        () => onCompleteRef.current?.(),
+        Math.min(300, duration)
+      );
       return () => clearTimeout(t);
     }
 
@@ -77,20 +80,21 @@ export default function EmojiBurst({
     // Antall: færre enn før, skaler lett med bredde og intensitet
     const baseCount = Math.round((window.innerWidth / 20) * intensity);
     const count = Math.min(160, Math.max(40, baseCount)); // 40–160
-    const rand = (min: number, max: number) => min + Math.random() * (max - min);
+    const rand = (min: number, max: number) =>
+      min + Math.random() * (max - min);
 
     const particles: P[] = [];
     for (let i = 0; i < count; i++) {
       particles.push({
         x: rand(0, window.innerWidth),
-        y: rand(-120, -20),              // start over toppen
-        vx: rand(-0.6, 0.6),             // svak horisontal start
-        vy: rand(2.2, 5.2) * intensity,  // fallhastighet
+        y: rand(-120, -20), // start over toppen
+        vx: rand(-0.6, 0.6), // svak horisontal start
+        vy: rand(2.2, 5.2) * intensity, // fallhastighet
         rot: rand(0, Math.PI * 2),
-        vr: rand(-0.15, 0.15),           // roter sakte
-        size: rand(28, 48),              // store nok for storskjerm
+        vr: rand(-0.15, 0.15), // roter sakte
+        size: rand(28, 48), // store nok for storskjerm
         alpha: 1,
-        seed: Math.random() * 1000,      // unik vindfase
+        seed: Math.random() * 1000, // unik vindfase
       });
     }
 
@@ -109,8 +113,8 @@ export default function EmojiBurst({
         // Vind som varierer over tid og per partikkel
         const wind = Math.sin((now + p.seed) * 0.0016) * 0.35;
         p.vx += wind * 0.04;
-        p.vy += 0.12;            // lett gravitasjon
-        p.vx *= 0.996;           // litt drag
+        p.vy += 0.12; // lett gravitasjon
+        p.vx *= 0.996; // litt drag
         p.vy *= 0.998;
 
         p.x += p.vx;

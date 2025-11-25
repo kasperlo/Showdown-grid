@@ -37,7 +37,9 @@ export default function Home() {
       try {
         // Get current user ID
         const supabase = createClient();
-        const { data: { user } } = await supabase.auth.getUser();
+        const {
+          data: { user },
+        } = await supabase.auth.getUser();
         setCurrentUserId(user?.id || null);
 
         // Load quiz data
@@ -52,7 +54,12 @@ export default function Home() {
 
   // Handle redirect after initialization completes
   useEffect(() => {
-    if (isInitialized && !isLoading && !activeQuizId && quizzesList.length === 0) {
+    if (
+      isInitialized &&
+      !isLoading &&
+      !activeQuizId &&
+      quizzesList.length === 0
+    ) {
       router.push("/quizzes");
     }
   }, [isInitialized, isLoading, activeQuizId, quizzesList, router]);
@@ -66,10 +73,17 @@ export default function Home() {
       }, 500);
       return () => clearTimeout(timeout);
     }
-  }, [isInitialized, isLoading, teams.length, currentTurnTeamId, initializeTurn]);
+  }, [
+    isInitialized,
+    isLoading,
+    teams.length,
+    currentTurnTeamId,
+    initializeTurn,
+  ]);
 
   // Derived state: check if current user owns the active quiz
-  const isOwner = currentUserId && activeQuizOwnerId && currentUserId === activeQuizOwnerId;
+  const isOwner =
+    currentUserId && activeQuizOwnerId && currentUserId === activeQuizOwnerId;
 
   return (
     <main className="stage min-h-screen">

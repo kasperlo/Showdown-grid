@@ -16,16 +16,29 @@ import { Timer } from "@/components/Timer";
  * Poengtildeling skjer i RoundDock ETTER at denne lukkes.
  */
 export function QuestionModal() {
-  const { lastQuestion, isQuestionOpen, setQuestionOpen, endRound, quizTimeLimit } = useGameStore();
+  const {
+    lastQuestion,
+    isQuestionOpen,
+    setQuestionOpen,
+    endRound,
+    quizTimeLimit,
+  } = useGameStore();
   const [revealed, setRevealed] = useState(false);
   const [countdown, setCountdown] = useState<number | null>(null);
   const intervalRef = useRef<NodeJS.Timeout | null>(null);
 
   // Derived state: determine if joker is active
-  const isJokerActive = Boolean(isQuestionOpen && lastQuestion?.isJoker && countdown !== null && countdown > 0);
+  const isJokerActive = Boolean(
+    isQuestionOpen &&
+      lastQuestion?.isJoker &&
+      countdown !== null &&
+      countdown > 0
+  );
 
   // Derived state: determine if timer should be active
-  const isTimerActive = Boolean(isQuestionOpen && quizTimeLimit && !lastQuestion?.isJoker);
+  const isTimerActive = Boolean(
+    isQuestionOpen && quizTimeLimit && !lastQuestion?.isJoker
+  );
 
   // Single consolidated effect for modal state management
   useEffect(() => {
@@ -61,7 +74,12 @@ export function QuestionModal() {
         clearInterval(intervalRef.current);
       }
     };
-  }, [isQuestionOpen, lastQuestion?.categoryName, lastQuestion?.questionIndex, lastQuestion?.isJoker]);
+  }, [
+    isQuestionOpen,
+    lastQuestion?.categoryName,
+    lastQuestion?.questionIndex,
+    lastQuestion?.isJoker,
+  ]);
 
   const handleTimeUp = () => {
     // Optionally auto-reveal answer or just notify
@@ -122,7 +140,11 @@ export function QuestionModal() {
         ) : (
           // STANDARD VIEW
           <div className="flex-grow flex flex-col items-center justify-center text-center p-6 space-y-6">
-            {isJokerActive && <p className="text-2xl font-bold text-destructive">TIDEN ER UTE!</p>}
+            {isJokerActive && (
+              <p className="text-2xl font-bold text-destructive">
+                TIDEN ER UTE!
+              </p>
+            )}
             <p className="text-2xl md:text-4xl font-semibold leading-tight">
               {lastQuestion.question}
             </p>

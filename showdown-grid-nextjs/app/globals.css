@@ -185,20 +185,38 @@
 
   body {
     @apply bg-background text-foreground antialiased;
-    font-family: 'Inter', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, 'Noto Sans', sans-serif;
+    font-family: "Inter", system-ui, -apple-system, BlinkMacSystemFont,
+      "Segoe UI", Roboto, "Helvetica Neue", Arial, "Noto Sans", sans-serif;
     font-feature-settings: "rlig" 1, "calt" 1, "tnum" 1, "ss01" 1;
     font-optical-sizing: auto;
   }
 
-  h1, h2, h3, h4, h5, h6 {
+  h1,
+  h2,
+  h3,
+  h4,
+  h5,
+  h6 {
     font-weight: 700;
     letter-spacing: -0.02em;
   }
 
   /* Storskjerm-typografi */
-  .display-xl { font-weight: 800; letter-spacing: -0.04em; font-size: clamp(2.5rem, 6vw, 5rem); }
-  .display-lg { font-weight: 800; letter-spacing: -0.04em; font-size: clamp(2rem, 4vw, 3.25rem); }
-  .text-score { font-variant-numeric: tabular-nums; font-weight: 900; letter-spacing: -0.02em; }
+  .display-xl {
+    font-weight: 800;
+    letter-spacing: -0.04em;
+    font-size: clamp(2.5rem, 6vw, 5rem);
+  }
+  .display-lg {
+    font-weight: 800;
+    letter-spacing: -0.04em;
+    font-size: clamp(2rem, 4vw, 3.25rem);
+  }
+  .text-score {
+    font-variant-numeric: tabular-nums;
+    font-weight: 900;
+    letter-spacing: -0.02em;
+  }
 
   /* Subtile glasskort og fliser */
   .glass {
@@ -207,19 +225,34 @@
   .tile {
     @apply rounded-xl glass transition-all duration-200 will-change-transform;
   }
-  .tile:hover { transform: translateY(-2px) scale(1.02); }
+  .tile:hover {
+    transform: translateY(-2px) scale(1.02);
+  }
 
   /* Bakgrunn med subtil “stage”-glow */
   .stage {
-    background:
-      radial-gradient(60% 50% at 50% 0%, hsl(var(--primary)/0.18) 0%, transparent 60%),
-      radial-gradient(40% 35% at 80% 10%, hsl(var(--accent)/0.14) 0%, transparent 60%),
-      radial-gradient(50% 40% at 20% 10%, hsl(var(--chart-3)/0.14) 0%, transparent 60%);
+    background: radial-gradient(
+        60% 50% at 50% 0%,
+        hsl(var(--primary) / 0.18) 0%,
+        transparent 60%
+      ),
+      radial-gradient(
+        40% 35% at 80% 10%,
+        hsl(var(--accent) / 0.14) 0%,
+        transparent 60%
+      ),
+      radial-gradient(
+        50% 40% at 20% 10%,
+        hsl(var(--chart-3) / 0.14) 0%,
+        transparent 60%
+      );
   }
 
   /* Reduced motion respects */
   @media (prefers-reduced-motion: reduce) {
-    .tile:hover { transform: none; }
+    .tile:hover {
+      transform: none;
+    }
   }
 }
 
@@ -229,8 +262,8 @@
     @apply tile h-24 flex items-center justify-center text-center font-bold uppercase tracking-wider;
     background-image: linear-gradient(
       135deg,
-      hsl(var(--primary)/0.25),
-      hsl(var(--accent)/0.25)
+      hsl(var(--primary) / 0.25),
+      hsl(var(--accent) / 0.25)
     );
   }
   .points-chip {
@@ -291,7 +324,8 @@
 
 /* Timer animations */
 @keyframes timer-pulse {
-  0%, 100% {
+  0%,
+  100% {
     transform: scale(1);
   }
   50% {
@@ -304,14 +338,33 @@
 }
 
 @keyframes timer-shake {
-  0%, 100% { transform: translateX(0); }
-  10%, 30%, 50%, 70%, 90% { transform: translateX(-4px); }
-  20%, 40%, 60%, 80% { transform: translateX(4px); }
+  0%,
+  100% {
+    transform: translateX(0);
+  }
+  10%,
+  30%,
+  50%,
+  70%,
+  90% {
+    transform: translateX(-4px);
+  }
+  20%,
+  40%,
+  60%,
+  80% {
+    transform: translateX(4px);
+  }
 }
 
 @keyframes timer-glow {
-  0%, 100% { filter: drop-shadow(0 0 0px hsl(var(--destructive))); }
-  50% { filter: drop-shadow(0 0 20px hsl(var(--destructive))); }
+  0%,
+  100% {
+    filter: drop-shadow(0 0 0px hsl(var(--destructive)));
+  }
+  50% {
+    filter: drop-shadow(0 0 20px hsl(var(--destructive)));
+  }
 }
 
 .timer-finished {
@@ -320,13 +373,14 @@
 
 /* Turn indicator animations */
 @keyframes highlight-pulse {
-  0%, 100% { 
-    transform: scale(1); 
-    box-shadow: 0 0 0 0 hsl(var(--accent) / 0.7); 
+  0%,
+  100% {
+    transform: scale(1);
+    box-shadow: 0 0 0 0 hsl(var(--accent) / 0.7);
   }
-  50% { 
-    transform: scale(1.05); 
-    box-shadow: 0 0 0 15px hsl(var(--accent) / 0); 
+  50% {
+    transform: scale(1.05);
+    box-shadow: 0 0 0 15px hsl(var(--accent) / 0);
   }
 }
 
