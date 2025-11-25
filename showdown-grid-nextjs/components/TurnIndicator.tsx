@@ -1,9 +1,12 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import dynamic from "next/dynamic";
 import { useGameStore } from "@/utils/store";
 import { cn } from "@/lib/utils";
-import Confetti from "./Confetti";
+
+// Lazy load Confetti to reduce initial bundle size
+const Confetti = dynamic(() => import("./Confetti"), { ssr: false });
 
 export function TurnIndicator() {
   const { teams, currentTurnTeamId, isInitialTurnSelection } = useGameStore();

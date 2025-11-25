@@ -1,10 +1,13 @@
-import React from "react";
+import React, { useMemo } from "react";
 import { useGameStore } from "@/utils/store";
 import { Trophy } from "lucide-react";
 
 export function Ranking() {
   const { teams } = useGameStore();
-  const sortedTeams = [...teams].sort((a, b) => b.score - a.score);
+  const sortedTeams = useMemo(
+    () => [...teams].sort((a, b) => b.score - a.score),
+    [teams]
+  );
 
   const rankColors = ["text-accent", "text-muted-foreground", "text-primary"];
 

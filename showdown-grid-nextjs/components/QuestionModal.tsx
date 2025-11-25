@@ -16,13 +16,14 @@ import { Timer } from "@/components/Timer";
  * Poengtildeling skjer i RoundDock ETTER at denne lukkes.
  */
 export function QuestionModal() {
-  const {
-    lastQuestion,
-    isQuestionOpen,
-    setQuestionOpen,
-    endRound,
-    quizTimeLimit,
-  } = useGameStore();
+  const lastQuestion = useGameStore((state) => state.lastQuestion);
+  const isQuestionOpen = useGameStore((state) => state.isQuestionOpen);
+  const setQuestionOpen = useGameStore((state) => state.setQuestionOpen);
+  const endRound = useGameStore((state) => state.endRound);
+  const quizTimeLimit = useGameStore((state) => state.quizTimeLimit);
+  const currentRunStartTime = useGameStore((state) => state.currentRunStartTime);
+  const setRunStartTime = useGameStore((state) => state.setRunStartTime);
+
   const [revealed, setRevealed] = useState(false);
   const [countdown, setCountdown] = useState<number | null>(null);
   const intervalRef = useRef<NodeJS.Timeout | null>(null);
@@ -44,6 +45,11 @@ export function QuestionModal() {
   useEffect(() => {
     // Reset revealed state when question changes
     setRevealed(false);
+
+    // Start quiz run tracking when first question opens
+    if (isQuestionOpen && !currentRunStartTime) {
+      setRunStartTime(Date.now());
+    }
 
     // Clear any existing interval
     if (intervalRef.current) {
@@ -79,6 +85,8 @@ export function QuestionModal() {
     lastQuestion?.categoryName,
     lastQuestion?.questionIndex,
     lastQuestion?.isJoker,
+    currentRunStartTime,
+    setRunStartTime,
   ]);
 
   const handleTimeUp = () => {

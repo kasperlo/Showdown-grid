@@ -1,8 +1,11 @@
 import React, { useMemo, useState } from "react";
+import dynamic from "next/dynamic";
 import { useGameStore } from "@/utils/store";
 import { Button } from "@/components/ui/button";
 import { Plus, Minus, X } from "lucide-react";
-import EmojiBurst from "./EmojiBurst";
+
+// Lazy load EmojiBurst to reduce initial bundle size
+const EmojiBurst = dynamic(() => import("./EmojiBurst"), { ssr: false });
 
 /**
  * Minimal tildelingsdokk med emoji-regn.

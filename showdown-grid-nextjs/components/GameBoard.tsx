@@ -1,19 +1,20 @@
 "use client";
 
+import { useCallback } from "react";
 import { useGameStore } from "@/utils/store";
 import { QuestionModal } from "./QuestionModal";
 
 export function GameBoard() {
-  const { categories, setLastQuestion } = useGameStore();
+  const categories = useGameStore((state) => state.categories);
+  const setLastQuestion = useGameStore((state) => state.setLastQuestion);
 
-  const handleQuestionClick = (
-    categoryName: string,
-    question: any,
-    questionIndex: number
-  ) => {
-    if (question.answered) return;
-    setLastQuestion({ ...question, categoryName, questionIndex });
-  };
+  const handleQuestionClick = useCallback(
+    (categoryName: string, question: any, questionIndex: number) => {
+      if (question.answered) return;
+      setLastQuestion({ ...question, categoryName, questionIndex });
+    },
+    [setLastQuestion]
+  );
 
   return (
     <section className="flex-grow w-full max-w-7xl mx-auto">

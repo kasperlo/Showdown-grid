@@ -6,7 +6,7 @@ import { Ranking } from "@/components/Ranking";
 import { RoundDock } from "@/components/RoundDock";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
-import { Settings } from "lucide-react";
+import { Settings, History } from "lucide-react";
 import { useGameStore } from "@/utils/store";
 import { QuizSelector } from "@/components/QuizSelector";
 import { TurnIndicator } from "@/components/TurnIndicator";
@@ -14,19 +14,18 @@ import { createClient } from "@/lib/supabase";
 
 export default function Home() {
   const router = useRouter();
-  const {
-    quizTitle,
-    quizDescription,
-    activeQuizId,
-    activeQuizOwnerId,
-    loadQuizFromDB,
-    quizzesList,
-    loadQuizzesList,
-    isLoading,
-    teams,
-    currentTurnTeamId,
-    initializeTurn,
-  } = useGameStore();
+  // Optimize store selectors to reduce re-renders
+  const quizTitle = useGameStore((state) => state.quizTitle);
+  const quizDescription = useGameStore((state) => state.quizDescription);
+  const activeQuizId = useGameStore((state) => state.activeQuizId);
+  const activeQuizOwnerId = useGameStore((state) => state.activeQuizOwnerId);
+  const loadQuizFromDB = useGameStore((state) => state.loadQuizFromDB);
+  const quizzesList = useGameStore((state) => state.quizzesList);
+  const loadQuizzesList = useGameStore((state) => state.loadQuizzesList);
+  const isLoading = useGameStore((state) => state.isLoading);
+  const teams = useGameStore((state) => state.teams);
+  const currentTurnTeamId = useGameStore((state) => state.currentTurnTeamId);
+  const initializeTurn = useGameStore((state) => state.initializeTurn);
 
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
   const [isInitialized, setIsInitialized] = useState(false);
@@ -95,6 +94,15 @@ export default function Home() {
             {quizDescription}
           </p>
           <div className="absolute top-0 right-0 flex items-center gap-2">
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={() => router.push("/history")}
+              aria-label="Se historikk"
+              title="Historikk"
+            >
+              <History className="h-8 w-8" />
+            </Button>
             <QuizSelector />
             {isOwner && (
               <Button

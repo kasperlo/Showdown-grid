@@ -321,6 +321,7 @@ export const useGameStore = create<GameState>()((set, get) => {
     activeQuizId: null as string | null,
     activeQuizOwnerId: null as string | null,
     quizzesList: [] as QuizMetadata[],
+    currentRunStartTime: null as number | null,
 
     // Wrap all mutating actions
     setCategories: withUnsavedChanges(actions.setCategories, set),
@@ -582,6 +583,51 @@ export const useGameStore = create<GameState>()((set, get) => {
       } catch (error) {
         console.error("Failed to save quiz to DB:", error);
         set({ isSaving: false });
+      }
+    },
+
+    setRunStartTime: (time: number | null) => {
+      set({ currentRunStartTime: time });
+    },
+
+    saveQuizRun: async () => {
+      const state = get();
+
+      if (!state.currentRunStartTime || !state.activeQuizId) {
+        console.error("No active run to save - missing start time or quiz ID");
+        return;
+      }
+
+      const endTime = Date.now();
+
+      try {
+        const response = await fetch("/api/quiz-runs", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            quizId: state.activeQuizId,
+            startedAt: new Date(state.currentRunStartTime).toISOString(),
+            endedAt: new Date(endTime).toISOString(),
+            finalState: {
+              categories: state.categories,
+              teams: state.teams,
+              adjustmentLog: state.adjustmentLog,
+            },
+          }),
+        });
+
+        if (!response.ok) {
+          throw new Error("Failed to save quiz run");
+        }
+
+        const { run } = await response.json();
+        console.log("Quiz run saved successfully:", run);
+
+        // Reset run timer
+        set({ currentRunStartTime: null });
+      } catch (error) {
+        console.error("Error saving quiz run:", error);
+        throw error;
       }
     },
   };

@@ -1,8 +1,10 @@
 "use client";
 
-import React, { useMemo } from "react";
+import React, { useMemo, useState } from "react";
+import { useRouter } from "next/navigation";
 import { useGameStore } from "@/utils/store";
-import { Crown, Medal } from "lucide-react";
+import { Crown, Medal, Save, ArrowLeft } from "lucide-react";
+import { Button } from "@/components/ui/button";
 
 type RankedTeam = {
   id: string;
@@ -28,10 +30,34 @@ function rankTeams(teams: { id: string; name: string; score: number }[]): Ranked
 }
 
 export default function Results() {
-  const { teams } = useGameStore();
+  const router = useRouter();
+  const teams = useGameStore((state) => state.teams);
+  const currentRunStartTime = useGameStore((state) => state.currentRunStartTime);
+  const saveQuizRun = useGameStore((state) => state.saveQuizRun);
+  const [isSaving, setIsSaving] = useState(false);
+  const [hasSaved, setHasSaved] = useState(false);
 
   const ranked = useMemo(() => rankTeams(teams), [teams]);
   const hasTeams = ranked.length > 0;
+
+  const handleSaveRun = async () => {
+    if (!currentRunStartTime) {
+      alert("Ingen aktiv quiz-økt å lagre");
+      return;
+    }
+
+    setIsSaving(true);
+    try {
+      await saveQuizRun();
+      setHasSaved(true);
+      setTimeout(() => setHasSaved(false), 3000);
+    } catch (error) {
+      console.error("Failed to save quiz run:", error);
+      alert("Kunne ikke lagre quiz-økten");
+    } finally {
+      setIsSaving(false);
+    }
+  };
 
   // Gruppér etter rank 1..3 for podium
   const groups: Record<number, RankedTeam[]> = useMemo(() => {
@@ -65,6 +91,27 @@ export default function Results() {
   return (
     <div className="min-h-screen bg-background text-foreground px-6 py-10">
       <header className="text-center mb-8">
+        <div className="flex items-center justify-between mb-4 max-w-3xl mx-auto">
+          <Button
+            variant="ghost"
+            onClick={() => router.push("/")}
+          >
+            <ArrowLeft className="mr-2 h-4 w-4" />
+            Tilbake
+          </Button>
+
+          {hasTeams && currentRunStartTime && (
+            <Button
+              onClick={handleSaveRun}
+              disabled={isSaving || hasSaved}
+              variant={hasSaved ? "outline" : "default"}
+            >
+              <Save className="mr-2 h-4 w-4" />
+              {isSaving ? "Lagrer..." : hasSaved ? "Lagret!" : "Lagre økt"}
+            </Button>
+          )}
+        </div>
+
         <h1 className="text-6xl md:text-7xl font-extrabold tracking-tight text-accent drop-shadow-sm">
           RESULTATER
         </h1>

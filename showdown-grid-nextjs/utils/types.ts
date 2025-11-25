@@ -62,6 +62,53 @@ export interface QuizMetadata {
   user_id?: string;
 }
 
+// Quiz Run types for history and statistics
+export interface TeamResult {
+  teamId: string;
+  teamName: string;
+  finalScore: number;
+  rank: number;
+}
+
+export interface QuizRunFinalState {
+  categories: Category[];
+  teams: Team[];
+  adjustmentLog: AdjustmentEntry[];
+}
+
+export interface QuizRun {
+  id: string;
+  quiz_id: string;
+  user_id: string;
+  started_at: string;
+  ended_at: string;
+  duration_seconds: number;
+  quiz_title: string;
+  quiz_description: string | null;
+  quiz_theme: string | null;
+  quiz_time_limit: number | null;
+  final_state: QuizRunFinalState;
+  total_questions: number;
+  answered_questions: number;
+  completion_percentage: number;
+  team_results: TeamResult[];
+  winning_team_name: string | null;
+  winning_score: number | null;
+  created_at: string;
+}
+
+export interface QuizRunSummary {
+  id: string;
+  quiz_title: string;
+  ended_at: string;
+  duration_seconds: number;
+  total_questions: number;
+  answered_questions: number;
+  completion_percentage: number;
+  winning_team_name: string | null;
+  winning_score: number | null;
+}
+
 export interface GameState {
   categories: Category[];
   teams: Team[];
@@ -133,4 +180,9 @@ export interface GameState {
   loadPublicQuiz: (quizId: string) => Promise<void>;
   createNewQuiz: (title: string, description?: string) => Promise<void>;
   deleteQuiz: (quizId: string) => Promise<void>;
+
+  // Quiz run tracking
+  currentRunStartTime: number | null;
+  setRunStartTime: (time: number | null) => void;
+  saveQuizRun: () => Promise<void>;
 }
