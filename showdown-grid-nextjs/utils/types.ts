@@ -144,7 +144,7 @@ export interface GameState {
   endRound: () => void;
 
   // Turn management
-  setCurrentTurn: (teamId: string) => void;
+  setCurrentTurn: (teamId: string | null) => void;
   initializeTurn: () => void;
   nextTurn: () => void;
 

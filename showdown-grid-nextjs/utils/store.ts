@@ -245,7 +245,7 @@ export const useGameStore = create<GameState>()((set, get) => {
     setQuizIsPublic: (isPublic: boolean) => set({ quizIsPublic: isPublic }),
 
     // Turn management actions
-    setCurrentTurn: (teamId: string) => {
+    setCurrentTurn: (teamId: string | null) => {
       set({ currentTurnTeamId: teamId, isInitialTurnSelection: false });
     },
 

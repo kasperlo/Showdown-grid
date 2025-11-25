@@ -4,12 +4,17 @@ import { useEffect, useState } from "react";
 import dynamic from "next/dynamic";
 import { useGameStore } from "@/utils/store";
 import { cn } from "@/lib/utils";
+import { Button } from "@/components/ui/button";
 
 // Lazy load Confetti to reduce initial bundle size
 const Confetti = dynamic(() => import("./Confetti"), { ssr: false });
 
 export function TurnIndicator() {
-  const { teams, currentTurnTeamId, isInitialTurnSelection } = useGameStore();
+  const teams = useGameStore((state) => state.teams);
+  const currentTurnTeamId = useGameStore((state) => state.currentTurnTeamId);
+  const isInitialTurnSelection = useGameStore((state) => state.isInitialTurnSelection);
+  const initializeTurn = useGameStore((state) => state.initializeTurn);
+
   const [showConfetti, setShowConfetti] = useState(false);
   const [spinningTeamIndex, setSpinningTeamIndex] = useState(0);
 
@@ -34,6 +39,24 @@ export function TurnIndicator() {
     };
   }, [isInitialTurnSelection, teams.length]);
 
+  // If no teams exist, don't render anything
+  if (!teams.length) return null;
+
+  // If no current turn selected and not spinning, show "Start" button
+  if (!currentTurnTeamId && !isInitialTurnSelection) {
+    return (
+      <div className="mb-6">
+        <Button
+          onClick={initializeTurn}
+          size="lg"
+          className="text-lg px-8 py-6 bg-gradient-to-r from-accent/90 to-primary/90 hover:from-accent hover:to-primary"
+        >
+          Hvem skal starte?
+        </Button>
+      </div>
+    );
+  }
+
   const currentTeam = currentTurnTeamId
     ? teams.find((t) => t.id === currentTurnTeamId)
     : null;
@@ -47,13 +70,13 @@ export function TurnIndicator() {
   return (
     <>
       {showConfetti && (
-        <Confetti 
-          show={showConfetti} 
-          onComplete={() => setShowConfetti(false)} 
+        <Confetti
+          show={showConfetti}
+          onComplete={() => setShowConfetti(false)}
         />
       )}
-      
-      <div className="mb-6">
+
+      <div className="mb-6 relative inline-block">
         <div
           className={cn(
             "inline-flex items-center gap-3 px-6 py-3 rounded-full",

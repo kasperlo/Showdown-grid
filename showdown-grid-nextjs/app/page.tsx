@@ -23,9 +23,6 @@ export default function Home() {
   const quizzesList = useGameStore((state) => state.quizzesList);
   const loadQuizzesList = useGameStore((state) => state.loadQuizzesList);
   const isLoading = useGameStore((state) => state.isLoading);
-  const teams = useGameStore((state) => state.teams);
-  const currentTurnTeamId = useGameStore((state) => state.currentTurnTeamId);
-  const initializeTurn = useGameStore((state) => state.initializeTurn);
 
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
   const [isInitialized, setIsInitialized] = useState(false);
@@ -63,22 +60,8 @@ export default function Home() {
     }
   }, [isInitialized, isLoading, activeQuizId, quizzesList, router]);
 
-  // Initialize turn selection after quiz is loaded
-  useEffect(() => {
-    if (isInitialized && !isLoading && teams.length > 0 && !currentTurnTeamId) {
-      // Small delay before triggering spinner
-      const timeout = setTimeout(() => {
-        initializeTurn();
-      }, 500);
-      return () => clearTimeout(timeout);
-    }
-  }, [
-    isInitialized,
-    isLoading,
-    teams.length,
-    currentTurnTeamId,
-    initializeTurn,
-  ]);
+  // Turn selection is now manual via TurnIndicator component
+  // Removed automatic initializeTurn() - user clicks "Hvem skal starte?" button instead
 
   // Derived state: check if current user owns the active quiz
   const isOwner =
