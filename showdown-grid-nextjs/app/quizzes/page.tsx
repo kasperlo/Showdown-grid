@@ -157,11 +157,11 @@ export default function QuizzesPage() {
     <Card
       key={quiz.id}
       className={`relative group cursor-pointer transition-all hover:shadow-lg ${
-        quiz.is_active ? "border-primary shadow-md" : ""
+        quiz.id === activeQuizId ? "border-primary shadow-md" : ""
       }`}
       onClick={() => handleActivateQuiz(quiz.id, isPublic)}
     >
-      {quiz.is_active && (
+      {quiz.id === activeQuizId && (
         <div className="absolute top-2 right-2">
           <span className="bg-primary text-primary-foreground text-xs px-2 py-1 rounded-full flex items-center gap-1">
             <Check className="h-3 w-3" />

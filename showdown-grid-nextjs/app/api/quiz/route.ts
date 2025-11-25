@@ -16,17 +16,28 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    // Get the active quiz for this user
+    // Get the user's active quiz ID from users table
+    const { data: userData, error: userError } = await supabase
+      .from('users')
+      .select('active_quiz_id')
+      .eq('user_id', user.id)
+      .single();
+
+    if (userError || !userData?.active_quiz_id) {
+      // No active quiz found
+      return NextResponse.json({ message: 'No active quiz found' }, { status: 404 });
+    }
+
+    // Get the active quiz data
     const { data, error } = await supabase
       .from('quizzes')
       .select('*')
-      .eq('user_id', user.id)
-      .eq('is_active', true)
+      .eq('id', userData.active_quiz_id)
       .single();
 
     if (error) {
       if (error.code === 'PGRST116') {
-        // No active quiz found
+        // Active quiz no longer exists
         return NextResponse.json({ message: 'No active quiz found' }, { status: 404 });
       }
       throw error;
@@ -83,14 +94,15 @@ export async function POST(request: NextRequest) {
     const { quizTitle, quizDescription, quizTimeLimit, quizTheme, quizIsPublic, ...actualQuizData } = quizData;
 
     // First, check if user has an active quiz
-    const { data: activeQuiz } = await supabase
-      .from('quizzes')
-      .select('id')
+    const { data: userData } = await supabase
+      .from('users')
+      .select('active_quiz_id')
       .eq('user_id', user.id)
-      .eq('is_active', true)
       .single();
 
-    if (activeQuiz) {
+    const activeQuizId = userData?.active_quiz_id;
+
+    if (activeQuizId) {
       // Update existing active quiz
       const { error } = await supabase
         .from('quizzes')
@@ -103,12 +115,12 @@ export async function POST(request: NextRequest) {
           quiz_data: actualQuizData,
           updated_at: new Date().toISOString(),
         })
-        .eq('id', activeQuiz.id);
+        .eq('id', activeQuizId);
 
       if (error) throw error;
     } else {
-      // Create new quiz and set as active
-      const { error } = await supabase
+      // Create new quiz and set as active in users table
+      const { data: newQuiz, error: insertError } = await supabase
         .from('quizzes')
         .insert({
           user_id: user.id,
@@ -118,10 +130,22 @@ export async function POST(request: NextRequest) {
           theme: quizTheme || 'classic',
           is_public: quizIsPublic || false,
           quiz_data: actualQuizData,
-          is_active: true,
+        })
+        .select('id')
+        .single();
+
+      if (insertError) throw insertError;
+
+      // Set this quiz as active in users table
+      const { error: upsertError } = await supabase
+        .from('users')
+        .upsert({
+          user_id: user.id,
+          active_quiz_id: newQuiz.id,
+          updated_at: new Date().toISOString(),
         });
 
-      if (error) throw error;
+      if (upsertError) throw upsertError;
     }
 
     return NextResponse.json({ success: true });

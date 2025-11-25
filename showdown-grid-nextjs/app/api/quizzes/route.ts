@@ -17,7 +17,7 @@ export async function GET(request: NextRequest) {
 
     const { data, error } = await supabase
       .from('quizzes')
-      .select('id, title, description, is_active, is_public, time_limit, theme, created_at, updated_at')
+      .select('id, title, description, is_public, time_limit, theme, created_at, updated_at')
       .eq('user_id', user.id)
       .order('created_at', { ascending: false });
 
@@ -77,13 +77,27 @@ export async function POST(request: NextRequest) {
         title,
         description: description || 'En Jeopardy-stil quiz',
         quiz_data: defaultQuizData,
-        is_active: setAsActive || false,
       })
       .select()
       .single();
 
     if (error) {
       throw error;
+    }
+
+    // If setAsActive is true, update users table
+    if (setAsActive) {
+      const { error: upsertError } = await supabase
+        .from('users')
+        .upsert({
+          user_id: user.id,
+          active_quiz_id: data.id,
+          updated_at: new Date().toISOString(),
+        });
+
+      if (upsertError) {
+        console.error('Failed to set quiz as active:', upsertError);
+      }
     }
 
     return NextResponse.json({ quiz: data }, { status: 201 });

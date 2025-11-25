@@ -54,7 +54,6 @@ export interface QuizMetadata {
   id: string;
   title: string;
   description: string;
-  is_active: boolean;
   is_public: boolean;
   time_limit: number | null;
   theme: QuizTheme;

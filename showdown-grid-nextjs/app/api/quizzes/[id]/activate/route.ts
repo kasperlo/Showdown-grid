@@ -34,12 +34,14 @@ export async function POST(
       );
     }
 
-    // Set this quiz as active (trigger will deactivate others)
+    // Set this quiz as active in users table
     const { error } = await supabase
-      .from('quizzes')
-      .update({ is_active: true })
-      .eq('id', id)
-      .eq('user_id', user.id);
+      .from('users')
+      .upsert({
+        user_id: user.id,
+        active_quiz_id: id,
+        updated_at: new Date().toISOString(),
+      });
 
     if (error) {
       throw error;

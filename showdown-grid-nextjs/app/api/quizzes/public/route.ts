@@ -12,7 +12,7 @@ export async function GET(request: NextRequest) {
 
     const { data, error } = await supabase
       .from('quizzes')
-      .select('id, title, description, is_active, is_public, time_limit, theme, created_at, updated_at, user_id')
+      .select('id, title, description, is_public, time_limit, theme, created_at, updated_at, user_id')
       .eq('is_public', true)
       .order('created_at', { ascending: false });
 
