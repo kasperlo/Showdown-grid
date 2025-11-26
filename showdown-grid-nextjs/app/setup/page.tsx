@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useState } from "react";
 import { useGameStore } from "@/utils/store";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -23,6 +23,7 @@ import {
 } from "@/components/ui/alert-dialog";
 import AdminAdjust from "@/components/AdminAdjust";
 import { ThemeSelector } from "@/components/ThemeSelector";
+import { ImageUpload } from "@/components/ImageUpload";
 
 export default function Setup() {
   const {
@@ -417,49 +418,18 @@ export default function Setup() {
                           />
                         </div>
 
-                        <div>
-                          <Label>Bilde-URL</Label>
-                          <div className="flex items-center gap-2 mt-1">
-                            <Input
-                              type="text"
-                              placeholder="Lim inn URL til bilde"
-                              value={question.imageUrl || ""}
-                              onChange={(e) =>
-                                handleQuestionChange(
-                                  categoryIndex,
-                                  questionIndex,
-                                  "imageUrl",
-                                  e.target.value
-                                )
-                              }
-                            />
-                          </div>
-                          {question.imageUrl && (
-                            <div className="mt-2 relative">
-                              <img
-                                src={question.imageUrl}
-                                alt="Forhåndsvisning"
-                                className="rounded-lg max-h-32 w-full object-contain border bg-muted/30"
-                              />
-                              <Button
-                                variant="destructive"
-                                size="icon"
-                                className="absolute top-1 right-1 h-6 w-6"
-                                onClick={() =>
-                                  handleQuestionChange(
-                                    categoryIndex,
-                                    questionIndex,
-                                    "imageUrl",
-                                    ""
-                                  )
-                                }
-                                title="Fjern bilde"
-                              >
-                                <Trash2 className="h-4 w-4" />
-                              </Button>
-                            </div>
-                          )}
-                        </div>
+                        <ImageUpload
+                          value={question.imageUrl}
+                          onChange={(url) =>
+                            handleQuestionChange(
+                              categoryIndex,
+                              questionIndex,
+                              "imageUrl",
+                              url
+                            )
+                          }
+                          label="Bilde"
+                        />
                         <div className="space-y-3 pt-3 border-t border-border">
                           <div className="flex items-center justify-between">
                             <Label
