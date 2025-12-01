@@ -35,6 +35,9 @@ const defaultQuestions = (): Question[] =>
 
 const genId = () => `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
 
+// Module-level variable for rate limiting session saves (max 1 per second)
+let lastSessionSaveTime = 0;
+
 // Helper function to mark changes as "dirty"
 const withUnsavedChanges = <T extends (...args: any[]) => any>(
   fn: T,
@@ -125,6 +128,15 @@ export const useGameStore = create<GameState>()((set, get) => {
     },
 
     resetGame: () => {
+      const state = get();
+      
+      // Complete active session if one exists before resetting
+      if (state.activeRunId) {
+        get().completeSession(state.activeRunId).catch((error) => {
+          console.error("Failed to complete session on reset:", error);
+        });
+      }
+
       const resetCategories = get().categories.map((cat) => ({
         ...cat,
         questions: cat.questions.map((q) => ({ ...q, answered: false })),
@@ -138,6 +150,10 @@ export const useGameStore = create<GameState>()((set, get) => {
         isQuestionOpen: false,
         round: initialRoundState(),
         adjustmentLog: [],
+        currentTurnTeamId: null,
+        isInitialTurnSelection: false,
+        activeRunId: null,
+        currentRunStartTime: null,
       });
     },
 
@@ -310,6 +326,7 @@ export const useGameStore = create<GameState>()((set, get) => {
     adjustmentLog: [],
     currentTurnTeamId: null as string | null,
     isInitialTurnSelection: false,
+    isPlayingPublicQuiz: false,
     quizTitle: "Showdown Grid",
     quizDescription: "A Jeopardy-style quiz game.",
     quizTimeLimit: null as number | null,
@@ -322,6 +339,7 @@ export const useGameStore = create<GameState>()((set, get) => {
     activeQuizOwnerId: null as string | null,
     quizzesList: [] as QuizMetadata[],
     currentRunStartTime: null as number | null,
+    activeRunId: null as string | null,
 
     // Wrap all mutating actions
     setCategories: withUnsavedChanges(actions.setCategories, set),
@@ -362,7 +380,7 @@ export const useGameStore = create<GameState>()((set, get) => {
 
         if (response.status === 404) {
           console.log("No saved quiz found for user, using initial state.");
-          set({ isLoading: false, hasUnsavedChanges: false });
+          set({ isLoading: false, hasUnsavedChanges: false, isPlayingPublicQuiz: false });
           return;
         }
 
@@ -396,12 +414,14 @@ export const useGameStore = create<GameState>()((set, get) => {
           activeQuizOwnerId: quizOwnerId,
           isLoading: false,
           hasUnsavedChanges: false,
+          isPlayingPublicQuiz: false,
         });
       } catch (error: any) {
         console.error("Failed to load quiz from DB:", error);
         set({
           isLoading: false,
           hasUnsavedChanges: false,
+          isPlayingPublicQuiz: false,
         });
       }
     },
@@ -485,7 +505,12 @@ export const useGameStore = create<GameState>()((set, get) => {
           activeQuizOwnerId: quizOwnerId,
           isLoading: false,
           hasUnsavedChanges: false,
+          isPlayingPublicQuiz: true,
         });
+
+        // Try to restore active session, or start new one if none exists
+        await get().restoreActiveSession(id);
+        // If no session was restored, we'll start one when first question opens
       } catch (error) {
         console.error("Failed to load public quiz:", error);
         set({ isLoading: false });
@@ -540,8 +565,12 @@ export const useGameStore = create<GameState>()((set, get) => {
     },
 
     saveQuizToDB: async () => {
-      // Don't save if nothing has changed
+      // Don't save if nothing has changed or if playing a public quiz
       if (!get().hasUnsavedChanges && !get().isSaving) return;
+      if (get().isPlayingPublicQuiz) {
+        console.log("Skipping save - playing public quiz (session-only)");
+        return;
+      }
 
       set({ isSaving: true });
       try {
@@ -591,23 +620,50 @@ export const useGameStore = create<GameState>()((set, get) => {
     },
 
     saveQuizRun: async () => {
+      // Legacy method - now uses completeSession
       const state = get();
+      if (state.activeRunId) {
+        await get().completeSession(state.activeRunId);
+      } else {
+        console.warn("No active session to complete");
+      }
+    },
 
-      if (!state.currentRunStartTime || !state.activeQuizId) {
-        console.error("No active run to save - missing start time or quiz ID");
-        return;
+    startSession: async () => {
+      const state = get();
+      if (!state.activeQuizId) {
+        console.error("Cannot start session - no active quiz ID");
+        return null;
       }
 
-      const endTime = Date.now();
+      // Check if there's already an active session for this quiz
+      try {
+        const checkResponse = await fetch(
+          `/api/quiz-runs/active?quizId=${state.activeQuizId}`
+        );
+        if (checkResponse.ok) {
+          const { run } = await checkResponse.json();
+          console.log("Found existing active session:", run.id);
+          set({
+            activeRunId: run.id,
+            currentRunStartTime: new Date(run.started_at).getTime(),
+          });
+          return run.id;
+        }
+      } catch (error) {
+        console.error("Error checking for active session:", error);
+      }
 
+      // Create new session
+      const startTime = Date.now();
       try {
         const response = await fetch("/api/quiz-runs", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
             quizId: state.activeQuizId,
-            startedAt: new Date(state.currentRunStartTime).toISOString(),
-            endedAt: new Date(endTime).toISOString(),
+            startedAt: new Date(startTime).toISOString(),
+            // No endedAt - this is a live session
             finalState: {
               categories: state.categories,
               teams: state.teams,
@@ -617,16 +673,124 @@ export const useGameStore = create<GameState>()((set, get) => {
         });
 
         if (!response.ok) {
-          throw new Error("Failed to save quiz run");
+          throw new Error("Failed to start session");
         }
 
         const { run } = await response.json();
-        console.log("Quiz run saved successfully:", run);
-
-        // Reset run timer
-        set({ currentRunStartTime: null });
+        console.log("Session started:", run.id);
+        set({
+          activeRunId: run.id,
+          currentRunStartTime: startTime,
+        });
+        return run.id;
       } catch (error) {
-        console.error("Error saving quiz run:", error);
+        console.error("Error starting session:", error);
+        return null;
+      }
+    },
+
+    saveSession: async () => {
+      const state = get();
+      if (!state.activeRunId) {
+        return; // No active session to save
+      }
+
+      // Rate limiting: only save once per second
+      const now = Date.now();
+      if (now - lastSessionSaveTime < 1000) {
+        return; // Skip if less than 1 second since last save
+      }
+
+      try {
+        const response = await fetch(`/api/quiz-runs/${state.activeRunId}`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            finalState: {
+              categories: state.categories,
+              teams: state.teams,
+              adjustmentLog: state.adjustmentLog,
+            },
+          }),
+        });
+
+        if (!response.ok) {
+          throw new Error("Failed to save session");
+        }
+
+        // Update last save time
+        lastSessionSaveTime = now;
+      } catch (error) {
+        console.error("Error saving session:", error);
+        // Don't throw - auto-save failures shouldn't break the app
+      }
+    },
+
+    restoreActiveSession: async (quizId: string) => {
+      try {
+        const response = await fetch(`/api/quiz-runs/active?quizId=${quizId}`);
+        if (response.status === 404) {
+          // No active session found - this is fine
+          return;
+        }
+
+        if (!response.ok) {
+          throw new Error("Failed to restore active session");
+        }
+
+        const { run } = await response.json();
+        const finalState = run.final_state;
+
+        // Restore state from session
+        set({
+          activeRunId: run.id,
+          currentRunStartTime: new Date(run.started_at).getTime(),
+          categories: finalState.categories || get().categories,
+          teams: finalState.teams || get().teams,
+          adjustmentLog: finalState.adjustmentLog || [],
+          hasUnsavedChanges: false,
+        });
+
+        console.log("Active session restored:", run.id);
+      } catch (error) {
+        console.error("Error restoring active session:", error);
+      }
+    },
+
+    completeSession: async (runId: string) => {
+      const state = get();
+      if (!state.currentRunStartTime) {
+        console.error("Cannot complete session - no start time");
+        return;
+      }
+
+      try {
+        const response = await fetch(`/api/quiz-runs/${runId}/complete`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            finalState: {
+              categories: state.categories,
+              teams: state.teams,
+              adjustmentLog: state.adjustmentLog,
+            },
+          }),
+        });
+
+        if (!response.ok) {
+          throw new Error("Failed to complete session");
+        }
+
+        const { run } = await response.json();
+        console.log("Session completed:", run.id);
+
+        // Reset session tracking
+        set({
+          activeRunId: null,
+          currentRunStartTime: null,
+        });
+      } catch (error) {
+        console.error("Error completing session:", error);
         throw error;
       }
     },

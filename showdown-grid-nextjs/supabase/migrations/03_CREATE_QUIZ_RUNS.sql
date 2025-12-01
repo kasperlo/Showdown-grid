@@ -48,10 +48,10 @@ CREATE TABLE IF NOT EXISTS quiz_runs (
 );
 
 -- Step 2: Create indexes for performance
-CREATE INDEX quiz_runs_user_id_idx ON quiz_runs(user_id);
-CREATE INDEX quiz_runs_quiz_id_idx ON quiz_runs(quiz_id);
-CREATE INDEX quiz_runs_ended_at_idx ON quiz_runs(ended_at DESC);
-CREATE INDEX quiz_runs_user_ended_idx ON quiz_runs(user_id, ended_at DESC);
+CREATE INDEX IF NOT EXISTS quiz_runs_user_id_idx ON quiz_runs(user_id);
+CREATE INDEX IF NOT EXISTS quiz_runs_quiz_id_idx ON quiz_runs(quiz_id);
+CREATE INDEX IF NOT EXISTS quiz_runs_ended_at_idx ON quiz_runs(ended_at DESC);
+CREATE INDEX IF NOT EXISTS quiz_runs_user_ended_idx ON quiz_runs(user_id, ended_at DESC);
 
 -- Step 3: Enable Row Level Security
 ALTER TABLE quiz_runs ENABLE ROW LEVEL SECURITY;

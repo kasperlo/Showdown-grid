@@ -18,9 +18,9 @@ export async function POST(request: NextRequest) {
     const body = await request.json();
     const { quizId, startedAt, endedAt, finalState } = body;
 
-    if (!quizId || !startedAt || !endedAt || !finalState) {
+    if (!quizId || !startedAt || !finalState) {
       return NextResponse.json(
-        { error: "Missing required fields" },
+        { error: "Missing required fields: quizId, startedAt, finalState" },
         { status: 400 }
       );
     }
@@ -39,62 +39,83 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Calculate statistics
     const categories: Category[] = finalState.categories || [];
     const teams: Team[] = finalState.teams || [];
     const adjustmentLog: AdjustmentEntry[] = finalState.adjustmentLog || [];
 
-    const totalQuestions = categories.reduce(
-      (sum, cat) => sum + cat.questions.length,
-      0
-    );
-    const answeredQuestions = categories.reduce(
-      (sum, cat) => sum + cat.questions.filter((q) => q.answered).length,
-      0
-    );
+    // For live sessions (no endedAt), we'll set minimal required fields
+    // Statistics will be calculated when the session is completed
+    const isLiveSession = !endedAt;
 
-    // Calculate team results and rankings
-    const sortedTeams = [...teams].sort((a, b) => b.score - a.score);
-    const teamResults = sortedTeams.map((team, index) => ({
-      teamId: team.id,
-      teamName: team.name,
-      finalScore: team.score,
-      rank: index + 1,
-    }));
+    let insertData: any = {
+      quiz_id: quizId,
+      user_id: user.id,
+      started_at: startedAt,
+      ended_at: endedAt || null,
+      duration_seconds: null,
+      quiz_title: quizData.title,
+      quiz_description: quizData.description,
+      quiz_theme: quizData.theme,
+      quiz_time_limit: quizData.time_limit,
+      final_state: {
+        categories,
+        teams,
+        adjustmentLog,
+      },
+    };
 
-    const winningTeam = sortedTeams[0];
-    const winningTeamName = winningTeam?.name || null;
-    const winningScore = winningTeam?.score || null;
+    if (isLiveSession) {
+      // For live sessions, set minimal statistics (will be updated on completion)
+      const totalQuestions = categories.reduce(
+        (sum, cat) => sum + cat.questions.length,
+        0
+      );
+      insertData.total_questions = totalQuestions;
+      insertData.answered_questions = 0;
+      insertData.team_results = [];
+      insertData.winning_team_name = null;
+      insertData.winning_score = null;
+    } else {
+      // For completed sessions, calculate all statistics
+      const totalQuestions = categories.reduce(
+        (sum, cat) => sum + cat.questions.length,
+        0
+      );
+      const answeredQuestions = categories.reduce(
+        (sum, cat) => sum + cat.questions.filter((q) => q.answered).length,
+        0
+      );
 
-    // Calculate duration
-    const durationSeconds = Math.round(
-      (new Date(endedAt).getTime() - new Date(startedAt).getTime()) / 1000
-    );
+      // Calculate team results and rankings
+      const sortedTeams = [...teams].sort((a, b) => b.score - a.score);
+      const teamResults = sortedTeams.map((team, index) => ({
+        teamId: team.id,
+        teamName: team.name,
+        finalScore: team.score,
+        rank: index + 1,
+      }));
+
+      const winningTeam = sortedTeams[0];
+      const winningTeamName = winningTeam?.name || null;
+      const winningScore = winningTeam?.score || null;
+
+      // Calculate duration
+      const durationSeconds = Math.round(
+        (new Date(endedAt).getTime() - new Date(startedAt).getTime()) / 1000
+      );
+
+      insertData.duration_seconds = durationSeconds;
+      insertData.total_questions = totalQuestions;
+      insertData.answered_questions = answeredQuestions;
+      insertData.team_results = teamResults;
+      insertData.winning_team_name = winningTeamName;
+      insertData.winning_score = winningScore;
+    }
 
     // Insert quiz run
     const { data, error } = await supabase
       .from("quiz_runs")
-      .insert({
-        quiz_id: quizId,
-        user_id: user.id,
-        started_at: startedAt,
-        ended_at: endedAt,
-        duration_seconds: durationSeconds,
-        quiz_title: quizData.title,
-        quiz_description: quizData.description,
-        quiz_theme: quizData.theme,
-        quiz_time_limit: quizData.time_limit,
-        final_state: {
-          categories,
-          teams,
-          adjustmentLog,
-        },
-        total_questions: totalQuestions,
-        answered_questions: answeredQuestions,
-        team_results: teamResults,
-        winning_team_name: winningTeamName,
-        winning_score: winningScore,
-      })
+      .insert(insertData)
       .select()
       .single();
 

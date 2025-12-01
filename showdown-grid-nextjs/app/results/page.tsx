@@ -3,7 +3,7 @@
 import React, { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useGameStore } from "@/utils/store";
-import { Crown, Medal, Save, ArrowLeft } from "lucide-react";
+import { Crown, Medal, CheckCircle, ArrowLeft } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
 type RankedTeam = {
@@ -32,30 +32,30 @@ function rankTeams(teams: { id: string; name: string; score: number }[]): Ranked
 export default function Results() {
   const router = useRouter();
   const teams = useGameStore((state) => state.teams);
-  const currentRunStartTime = useGameStore((state) => state.currentRunStartTime);
-  const saveQuizRun = useGameStore((state) => state.saveQuizRun);
-  const [isSaving, setIsSaving] = useState(false);
-  const [hasSaved, setHasSaved] = useState(false);
+  const activeRunId = useGameStore((state) => state.activeRunId);
+  const completeSession = useGameStore((state) => state.completeSession);
+  const [isCompleting, setIsCompleting] = useState(false);
+  const [hasCompleted, setHasCompleted] = useState(false);
 
   const ranked = useMemo(() => rankTeams(teams), [teams]);
   const hasTeams = ranked.length > 0;
 
-  const handleSaveRun = async () => {
-    if (!currentRunStartTime) {
-      alert("Ingen aktiv quiz-økt å lagre");
+  const handleCompleteSession = async () => {
+    if (!activeRunId) {
+      alert("Ingen aktiv quiz-økt å fullføre");
       return;
     }
 
-    setIsSaving(true);
+    setIsCompleting(true);
     try {
-      await saveQuizRun();
-      setHasSaved(true);
-      setTimeout(() => setHasSaved(false), 3000);
+      await completeSession(activeRunId);
+      setHasCompleted(true);
+      setTimeout(() => setHasCompleted(false), 3000);
     } catch (error) {
-      console.error("Failed to save quiz run:", error);
-      alert("Kunne ikke lagre quiz-økten");
+      console.error("Failed to complete session:", error);
+      alert("Kunne ikke fullføre quiz-økten");
     } finally {
-      setIsSaving(false);
+      setIsCompleting(false);
     }
   };
 
@@ -100,15 +100,24 @@ export default function Results() {
             Tilbake
           </Button>
 
-          {hasTeams && currentRunStartTime && (
+          {hasTeams && activeRunId && (
             <Button
-              onClick={handleSaveRun}
-              disabled={isSaving || hasSaved}
-              variant={hasSaved ? "outline" : "default"}
+              onClick={handleCompleteSession}
+              disabled={isCompleting || hasCompleted}
+              variant={hasCompleted ? "outline" : "default"}
             >
-              <Save className="mr-2 h-4 w-4" />
-              {isSaving ? "Lagrer..." : hasSaved ? "Lagret!" : "Lagre økt"}
+              <CheckCircle className="mr-2 h-4 w-4" />
+              {isCompleting
+                ? "Fullfører..."
+                : hasCompleted
+                ? "Fullført!"
+                : "Fullfør økt"}
             </Button>
+          )}
+          {hasTeams && !activeRunId && (
+            <p className="text-sm text-muted-foreground">
+              Ingen aktiv økt å fullføre
+            </p>
           )}
         </div>
 

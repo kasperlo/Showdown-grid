@@ -4,6 +4,7 @@ import { ReactNode, useEffect, useCallback } from "react";
 import { useGameStore } from "@/utils/store";
 import { useDebounce } from "@/utils/useDebounce";
 import { useAuth } from "@/hooks/useAuth";
+import { useSessionAutoSave } from "@/hooks/useSessionAutoSave";
 
 function FullScreenLoader({ message }: { message: string }) {
   return (
@@ -28,6 +29,9 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
 
   // Use custom auth hook for authentication
   const { isAuthReady } = useAuth();
+
+  // Auto-save sessions (for both own and public quizzes)
+  useSessionAutoSave();
 
   // Debounce state changes for autosave
   const debouncedState = useDebounce(

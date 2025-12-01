@@ -23,6 +23,8 @@ export function QuestionModal() {
   const quizTimeLimit = useGameStore((state) => state.quizTimeLimit);
   const currentRunStartTime = useGameStore((state) => state.currentRunStartTime);
   const setRunStartTime = useGameStore((state) => state.setRunStartTime);
+  const activeRunId = useGameStore((state) => state.activeRunId);
+  const startSession = useGameStore((state) => state.startSession);
 
   const [revealed, setRevealed] = useState(false);
   const [countdown, setCountdown] = useState<number | null>(null);
@@ -46,10 +48,17 @@ export function QuestionModal() {
     // Reset revealed state when question changes
     setRevealed(false);
 
-    // Start quiz run tracking when first question opens
-    if (isQuestionOpen && !currentRunStartTime) {
-      setRunStartTime(Date.now());
+    // Start quiz session when first question opens (if no active session exists)
+    if (isQuestionOpen && !activeRunId) {
+      startSession().then((runId) => {
+        if (runId) {
+          console.log("Session started automatically:", runId);
+        }
+      }).catch((error) => {
+        console.error("Failed to start session:", error);
+      });
     }
+    // Note: If session exists (restored), currentRunStartTime is already set by restoreActiveSession()
 
     // Clear any existing interval
     if (intervalRef.current) {
@@ -87,6 +96,8 @@ export function QuestionModal() {
     lastQuestion?.isJoker,
     currentRunStartTime,
     setRunStartTime,
+    activeRunId,
+    startSession,
   ]);
 
   const handleTimeUp = () => {

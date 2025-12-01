@@ -81,8 +81,8 @@ export interface QuizRun {
   quiz_id: string;
   user_id: string;
   started_at: string;
-  ended_at: string;
-  duration_seconds: number;
+  ended_at: string | null; // NULL for live sessions
+  duration_seconds: number | null; // NULL for live sessions
   quiz_title: string;
   quiz_description: string | null;
   quiz_theme: string | null;
@@ -95,6 +95,7 @@ export interface QuizRun {
   winning_team_name: string | null;
   winning_score: number | null;
   created_at: string;
+  updated_at?: string; // Timestamp of last update
 }
 
 export interface QuizRunSummary {
@@ -122,6 +123,9 @@ export interface GameState {
   // Turn tracking
   currentTurnTeamId: string | null;
   isInitialTurnSelection: boolean;
+
+  // Public quiz tracking
+  isPlayingPublicQuiz: boolean;
 
   setLastQuestion: (question: LastQuestion | null) => void;
   setQuestionOpen: (open: boolean) => void;
@@ -185,4 +189,11 @@ export interface GameState {
   currentRunStartTime: number | null;
   setRunStartTime: (time: number | null) => void;
   saveQuizRun: () => Promise<void>;
+
+  // Session management
+  activeRunId: string | null;
+  startSession: () => Promise<string | null>;
+  saveSession: () => Promise<void>;
+  restoreActiveSession: (quizId: string) => Promise<void>;
+  completeSession: (runId: string) => Promise<void>;
 }

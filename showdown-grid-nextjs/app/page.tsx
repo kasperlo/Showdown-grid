@@ -23,6 +23,12 @@ export default function Home() {
   const quizzesList = useGameStore((state) => state.quizzesList);
   const loadQuizzesList = useGameStore((state) => state.loadQuizzesList);
   const isLoading = useGameStore((state) => state.isLoading);
+  const isPlayingPublicQuiz = useGameStore(
+    (state) => state.isPlayingPublicQuiz
+  );
+  const restoreActiveSession = useGameStore(
+    (state) => state.restoreActiveSession
+  );
 
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
   const [isInitialized, setIsInitialized] = useState(false);
@@ -38,15 +44,26 @@ export default function Home() {
         } = await supabase.auth.getUser();
         setCurrentUserId(user?.id || null);
 
-        // Load quiz data
-        await Promise.all([loadQuizFromDB(), loadQuizzesList()]);
+        // Load quiz data - skip loadQuizFromDB if already playing a public quiz
+        if (isPlayingPublicQuiz) {
+          await loadQuizzesList();
+          // Note: restoreActiveSession is called inside loadPublicQuiz()
+        } else {
+          await Promise.all([loadQuizFromDB(), loadQuizzesList()]);
+          // After loading quiz, try to restore active session
+          // Use getState to access current state after async operations
+          const { activeQuizId: currentActiveQuizId } = useGameStore.getState();
+          if (currentActiveQuizId) {
+            await restoreActiveSession(currentActiveQuizId);
+          }
+        }
       } finally {
         setIsInitialized(true);
       }
     };
 
     initialize();
-  }, [loadQuizFromDB, loadQuizzesList]);
+  }, [loadQuizFromDB, loadQuizzesList, isPlayingPublicQuiz]);
 
   // Handle redirect after initialization completes
   useEffect(() => {
