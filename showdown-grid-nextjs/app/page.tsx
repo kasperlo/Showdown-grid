@@ -6,7 +6,7 @@ import { Ranking } from "@/components/Ranking";
 import { RoundDock } from "@/components/RoundDock";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
-import { Settings, History } from "lucide-react";
+import { Settings, History, UserPlus } from "lucide-react";
 import { useGameStore } from "@/utils/store";
 import { QuizSelector } from "@/components/QuizSelector";
 import { TurnIndicator } from "@/components/TurnIndicator";
@@ -31,18 +31,20 @@ export default function Home() {
   );
 
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
+  const [isAnonymous, setIsAnonymous] = useState<boolean>(false);
   const [isInitialized, setIsInitialized] = useState(false);
 
   // Single comprehensive effect for initialization and redirect
   useEffect(() => {
     const initialize = async () => {
       try {
-        // Get current user ID
+        // Get current user ID and check if anonymous
         const supabase = createClient();
         const {
           data: { user },
         } = await supabase.auth.getUser();
         setCurrentUserId(user?.id || null);
+        setIsAnonymous(user?.is_anonymous || false);
 
         // Load quiz data - skip loadQuizFromDB if already playing a public quiz
         if (isPlayingPublicQuiz) {
@@ -94,6 +96,17 @@ export default function Home() {
             {quizDescription}
           </p>
           <div className="absolute top-0 right-0 flex items-center gap-2">
+            {isAnonymous && (
+              <Button
+                variant="default"
+                size="sm"
+                onClick={() => router.push("/signup")}
+                className="bg-primary hover:bg-primary/90"
+              >
+                <UserPlus className="mr-2 h-4 w-4" />
+                Opprett konto
+              </Button>
+            )}
             <Button
               variant="ghost"
               size="icon"

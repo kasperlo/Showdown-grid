@@ -57,6 +57,9 @@ export async function middleware(request: NextRequest) {
   // Refresh session if expired - required for Server Components
   await supabase.auth.getSession()
 
+  // Note: Auth redirect logic (to /onboarding) is handled by useAuth hook
+  // Public routes like /onboarding and /signup are allowed without session
+  
   return response
 }
 
