@@ -1,9 +1,20 @@
 "use client";
 
-import { useEffect, useState, useCallback } from "react";
+import { useState, useCallback } from "react";
 import { useGameStore } from "@/utils/store";
 import { useRouter } from "next/navigation";
-import { usePublicQuizzes } from "@/hooks/usePublicQuizzes";
+import {
+  usePublicQuizzes,
+  useQuizzesList,
+  useQuiz,
+} from "@/hooks/queries/useQuizzes";
+import {
+  useCreateQuiz,
+  useActivateQuiz,
+  useDeleteQuiz,
+} from "@/hooks/mutations/useQuizMutations";
+import { useQueryClient } from "@tanstack/react-query";
+import { quizKeys } from "@/hooks/queries/useQuizzes";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -41,28 +52,27 @@ import type { QuizMetadata } from "@/utils/types";
 
 export default function QuizzesPage() {
   const router = useRouter();
-  const {
-    quizzesList,
-    activeQuizId,
-    loadQuizzesList,
-    switchQuiz,
-    loadPublicQuiz,
-    createNewQuiz,
-    deleteQuiz,
-  } = useGameStore();
+  const queryClient = useQueryClient();
+  const activeQuizId = useGameStore((state) => state.activeQuizId);
+  const setCategories = useGameStore((state) => state.setCategories);
+  const setQuizTitle = useGameStore((state) => state.setQuizTitle);
+  const setQuizDescription = useGameStore((state) => state.setQuizDescription);
+  const setQuizTimeLimit = useGameStore((state) => state.setQuizTimeLimit);
+  const setQuizTheme = useGameStore((state) => state.setQuizTheme);
+  const setQuizIsPublic = useGameStore((state) => state.setQuizIsPublic);
 
   const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false);
   const [newQuizTitle, setNewQuizTitle] = useState("");
   const [newQuizDescription, setNewQuizDescription] = useState("");
-  const [isCreating, setIsCreating] = useState(false);
 
-  // Use custom hook for public quizzes
-  const { publicQuizzes, isLoadingPublic } = usePublicQuizzes();
-
-  // Load user's quizzes on mount
-  useEffect(() => {
-    loadQuizzesList();
-  }, [loadQuizzesList]);
+  // Use TanStack Query for quizzes
+  const { data: quizzesList = [], isLoading: isLoadingQuizzes } =
+    useQuizzesList();
+  const { data: publicQuizzes = [], isLoading: isLoadingPublic } =
+    usePublicQuizzes();
+  const createQuizMutation = useCreateQuiz();
+  const activateQuizMutation = useActivateQuiz();
+  const deleteQuizMutation = useDeleteQuiz();
 
   // Stable callback for creating quiz
   const handleCreateQuiz = useCallback(async () => {
@@ -75,9 +85,12 @@ export default function QuizzesPage() {
       return;
     }
 
-    setIsCreating(true);
     try {
-      await createNewQuiz(newQuizTitle, newQuizDescription || undefined);
+      await createQuizMutation.mutateAsync({
+        title: newQuizTitle,
+        description: newQuizDescription || undefined,
+        setAsActive: false,
+      });
       setIsCreateDialogOpen(false);
       setNewQuizTitle("");
       setNewQuizDescription("");
@@ -91,10 +104,8 @@ export default function QuizzesPage() {
         description: "Kunne ikke opprette quiz",
         variant: "destructive",
       });
-    } finally {
-      setIsCreating(false);
     }
-  }, [createNewQuiz, newQuizTitle, newQuizDescription]);
+  }, [createQuizMutation, newQuizTitle, newQuizDescription]);
 
   // Stable callback for activating quiz
   const handleActivateQuiz = useCallback(
@@ -104,20 +115,53 @@ export default function QuizzesPage() {
       try {
         if (isPublic) {
           // Load public quiz without activating it in the database
-          await loadPublicQuiz(quizId);
-          toast({
-            title: "Lastet quiz!",
-            description: "Klar til å spille",
+          const quizData = await queryClient.fetchQuery({
+            queryKey: quizKeys.detail(quizId),
+            queryFn: async () => {
+              const response = await fetch(`/api/quizzes/${quizId}/load`);
+              if (!response.ok) throw new Error("Failed to load quiz");
+              const result = await response.json();
+              return result.data;
+            },
           });
+
+          if (quizData) {
+            // Update Zustand state with quiz data
+            setCategories(quizData.categories || []);
+            useGameStore.setState({
+              teams: quizData.teams || [],
+              adjustmentLog: quizData.adjustmentLog || [],
+            });
+            setQuizTitle(quizData.quizTitle || "");
+            setQuizDescription(quizData.quizDescription || "");
+            setQuizTimeLimit(quizData.quizTimeLimit);
+            setQuizTheme(quizData.quizTheme || "classic");
+            setQuizIsPublic(quizData.quizIsPublic || false);
+            useGameStore.setState({
+              activeQuizId: quizData.quizId,
+              activeQuizOwnerId: quizData.quizOwnerId,
+              isPlayingPublicQuiz: true,
+            });
+
+            toast({
+              title: "Lastet quiz!",
+              description: "Klar til å spille",
+            });
+            router.push("/");
+          }
         } else {
           // Activate user's own quiz
-          await switchQuiz(quizId);
+          // Reset isPlayingPublicQuiz flag when switching to own quiz
+          useGameStore.setState({ isPlayingPublicQuiz: false });
+          await activateQuizMutation.mutateAsync(quizId);
+          // Invalidate active quiz query to refetch
+          queryClient.invalidateQueries({ queryKey: quizKeys.active() });
           toast({
             title: "Byttet quiz!",
             description: "Den valgte quizzen er nå aktiv",
           });
+          router.push("/");
         }
-        router.push("/");
       } catch (error) {
         toast({
           title: "Feil",
@@ -128,14 +172,25 @@ export default function QuizzesPage() {
         });
       }
     },
-    [activeQuizId, loadPublicQuiz, switchQuiz, router]
+    [
+      activeQuizId,
+      queryClient,
+      activateQuizMutation,
+      setCategories,
+      setQuizTitle,
+      setQuizDescription,
+      setQuizTimeLimit,
+      setQuizTheme,
+      setQuizIsPublic,
+      router,
+    ]
   );
 
   // Stable callback for deleting quiz
   const handleDeleteQuiz = useCallback(
     async (quizId: string) => {
       try {
-        await deleteQuiz(quizId);
+        await deleteQuizMutation.mutateAsync(quizId);
         toast({
           title: "Slettet!",
           description: "Quizzen ble slettet",
@@ -148,7 +203,7 @@ export default function QuizzesPage() {
         });
       }
     },
-    [deleteQuiz]
+    [deleteQuizMutation]
   );
 
   // Stable callback for rendering quiz cards
@@ -302,8 +357,11 @@ export default function QuizzesPage() {
                 >
                   Avbryt
                 </Button>
-                <Button onClick={handleCreateQuiz} disabled={isCreating}>
-                  {isCreating ? "Oppretter..." : "Opprett"}
+                <Button
+                  onClick={handleCreateQuiz}
+                  disabled={createQuizMutation.isPending}
+                >
+                  {createQuizMutation.isPending ? "Oppretter..." : "Opprett"}
                 </Button>
               </DialogFooter>
             </DialogContent>

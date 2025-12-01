@@ -6,7 +6,13 @@ import { createClient } from "@/lib/supabase";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
 import { ArrowLeft, Loader2 } from "lucide-react";
 import Link from "next/link";
 
@@ -44,7 +50,9 @@ export default function SignupPage() {
       const supabase = createClient();
 
       // Check if user is currently anonymous
-      const { data: { session: currentSession } } = await supabase.auth.getSession();
+      const {
+        data: { session: currentSession },
+      } = await supabase.auth.getSession();
       const isAnonymous = currentSession?.user?.is_anonymous;
 
       // Sign up
@@ -84,11 +92,24 @@ export default function SignupPage() {
         }
       }
 
-      // Mark that user has chosen auth method
-      localStorage.setItem("auth-method-chosen", "true");
+      // Wait for session to be established and verify it exists
+      // Poll for session up to 3 seconds
+      let sessionEstablished = false;
+      for (let i = 0; i < 30; i++) {
+        const {
+          data: { session },
+        } = await supabase.auth.getSession();
+        if (session) {
+          sessionEstablished = true;
+          break;
+        }
+        await new Promise((resolve) => setTimeout(resolve, 100));
+      }
 
-      // Wait for session to propagate
-      await new Promise(resolve => setTimeout(resolve, 300));
+      if (!sessionEstablished) {
+        setError("Kunne ikke etablere sesjon. Prøv å logge inn på nytt.");
+        return;
+      }
 
       // Redirect to home
       router.push("/");
@@ -196,4 +217,3 @@ export default function SignupPage() {
     </div>
   );
 }
-

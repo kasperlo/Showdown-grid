@@ -129,12 +129,14 @@ export const useGameStore = create<GameState>()((set, get) => {
 
     resetGame: () => {
       const state = get();
-      
+
       // Complete active session if one exists before resetting
       if (state.activeRunId) {
-        get().completeSession(state.activeRunId).catch((error) => {
-          console.error("Failed to complete session on reset:", error);
-        });
+        get()
+          .completeSession(state.activeRunId)
+          .catch((error) => {
+            console.error("Failed to complete session on reset:", error);
+          });
       }
 
       const resetCategories = get().categories.map((cat) => ({
@@ -337,7 +339,6 @@ export const useGameStore = create<GameState>()((set, get) => {
     hasUnsavedChanges: false,
     activeQuizId: null as string | null,
     activeQuizOwnerId: null as string | null,
-    quizzesList: [] as QuizMetadata[],
     currentRunStartTime: null as number | null,
     activeRunId: null as string | null,
 
@@ -372,197 +373,6 @@ export const useGameStore = create<GameState>()((set, get) => {
     setCurrentTurn: actions.setCurrentTurn,
     initializeTurn: actions.initializeTurn,
     nextTurn: actions.nextTurn,
-
-    loadQuizFromDB: async () => {
-      set({ isLoading: true });
-      try {
-        const response = await fetch("/api/quiz");
-
-        if (response.status === 404) {
-          console.log("No saved quiz found for user, using initial state.");
-          set({ isLoading: false, hasUnsavedChanges: false, isPlayingPublicQuiz: false });
-          return;
-        }
-
-        if (!response.ok) {
-          throw new Error(`Failed to load quiz: ${response.status}`);
-        }
-
-        const quizData = await response.json();
-
-        // Extract quiz metadata
-        const {
-          quizId,
-          quizOwnerId,
-          quizTitle,
-          quizDescription,
-          quizTimeLimit,
-          quizTheme,
-          quizIsPublic,
-          ...restData
-        } = quizData.data;
-
-        // Overwrite state with data from database
-        set({
-          ...restData,
-          quizTitle,
-          quizDescription,
-          quizTimeLimit: quizTimeLimit || null,
-          quizTheme: quizTheme || "classic",
-          quizIsPublic: quizIsPublic || false,
-          activeQuizId: quizId,
-          activeQuizOwnerId: quizOwnerId,
-          isLoading: false,
-          hasUnsavedChanges: false,
-          isPlayingPublicQuiz: false,
-        });
-      } catch (error: any) {
-        console.error("Failed to load quiz from DB:", error);
-        set({
-          isLoading: false,
-          hasUnsavedChanges: false,
-          isPlayingPublicQuiz: false,
-        });
-      }
-    },
-
-    loadQuizzesList: async () => {
-      try {
-        const response = await fetch("/api/quizzes");
-
-        if (!response.ok) {
-          throw new Error("Failed to load quizzes list");
-        }
-
-        const { quizzes } = await response.json();
-        set({ quizzesList: quizzes });
-      } catch (error) {
-        console.error("Failed to load quizzes list:", error);
-      }
-    },
-
-    switchQuiz: async (quizId: string) => {
-      try {
-        set({ isLoading: true });
-
-        // Activate the selected quiz
-        const activateResponse = await fetch(
-          `/api/quizzes/${quizId}/activate`,
-          {
-            method: "POST",
-          }
-        );
-
-        if (!activateResponse.ok) {
-          throw new Error("Failed to activate quiz");
-        }
-
-        // Reload the active quiz
-        await get().loadQuizFromDB();
-
-        // Reload the quizzes list to update active status
-        await get().loadQuizzesList();
-      } catch (error) {
-        console.error("Failed to switch quiz:", error);
-        set({ isLoading: false });
-      }
-    },
-
-    loadPublicQuiz: async (quizId: string) => {
-      try {
-        set({ isLoading: true });
-
-        // Load the quiz without activating it
-        const response = await fetch(`/api/quizzes/${quizId}/load`);
-
-        if (!response.ok) {
-          throw new Error("Failed to load quiz");
-        }
-
-        const quizData = await response.json();
-
-        // Extract quiz metadata
-        const {
-          quizId: id,
-          quizOwnerId,
-          quizTitle,
-          quizDescription,
-          quizTimeLimit,
-          quizTheme,
-          quizIsPublic,
-          ...restData
-        } = quizData.data;
-
-        // Load quiz data without making it "active" in the database
-        set({
-          ...restData,
-          quizTitle,
-          quizDescription,
-          quizTimeLimit: quizTimeLimit || null,
-          quizTheme: quizTheme || "classic",
-          quizIsPublic: quizIsPublic || false,
-          activeQuizId: id,
-          activeQuizOwnerId: quizOwnerId,
-          isLoading: false,
-          hasUnsavedChanges: false,
-          isPlayingPublicQuiz: true,
-        });
-
-        // Try to restore active session, or start new one if none exists
-        await get().restoreActiveSession(id);
-        // If no session was restored, we'll start one when first question opens
-      } catch (error) {
-        console.error("Failed to load public quiz:", error);
-        set({ isLoading: false });
-      }
-    },
-
-    createNewQuiz: async (title: string, description?: string) => {
-      try {
-        const response = await fetch("/api/quizzes", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            title,
-            description,
-            setAsActive: false, // Don't auto-switch to new quiz
-          }),
-        });
-
-        if (!response.ok) {
-          throw new Error("Failed to create quiz");
-        }
-
-        // Reload quizzes list
-        await get().loadQuizzesList();
-      } catch (error) {
-        console.error("Failed to create quiz:", error);
-        throw error;
-      }
-    },
-
-    deleteQuiz: async (quizId: string) => {
-      try {
-        const response = await fetch(`/api/quizzes/${quizId}`, {
-          method: "DELETE",
-        });
-
-        if (!response.ok) {
-          throw new Error("Failed to delete quiz");
-        }
-
-        // If we deleted the active quiz, load another one
-        if (get().activeQuizId === quizId) {
-          await get().loadQuizFromDB();
-        }
-
-        // Reload quizzes list
-        await get().loadQuizzesList();
-      } catch (error) {
-        console.error("Failed to delete quiz:", error);
-        throw error;
-      }
-    },
 
     saveQuizToDB: async () => {
       // Don't save if nothing has changed or if playing a public quiz
@@ -757,10 +567,17 @@ export const useGameStore = create<GameState>()((set, get) => {
       }
     },
 
-    completeSession: async (runId: string) => {
+    completeSession: async (runId: string, quizId?: string) => {
       const state = get();
       if (!state.currentRunStartTime) {
         console.error("Cannot complete session - no start time");
+        return;
+      }
+
+      // Use provided quizId or fall back to activeQuizId from state
+      const sessionQuizId = quizId || state.activeQuizId;
+      if (!sessionQuizId) {
+        console.error("Cannot complete session - no quiz ID");
         return;
       }
 

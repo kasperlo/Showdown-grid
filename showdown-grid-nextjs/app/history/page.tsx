@@ -1,33 +1,16 @@
 "use client";
 
-import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { ArrowLeft, Clock, Trophy, Trash2 } from "lucide-react";
-import type { QuizRunSummary } from "@/utils/types";
+import { useQuizRuns } from "@/hooks/queries/useQuizRuns";
+import { useDeleteRun } from "@/hooks/mutations/useQuizRunMutations";
+import { toast } from "@/hooks/use-toast";
 
 export default function HistoryPage() {
   const router = useRouter();
-  const [runs, setRuns] = useState<QuizRunSummary[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
-
-  useEffect(() => {
-    loadRuns();
-  }, []);
-
-  const loadRuns = async () => {
-    try {
-      const response = await fetch("/api/quiz-runs?limit=50");
-      if (!response.ok) throw new Error("Failed to load runs");
-
-      const { runs: data } = await response.json();
-      setRuns(data);
-    } catch (error) {
-      console.error("Error loading runs:", error);
-    } finally {
-      setIsLoading(false);
-    }
-  };
+  const { data: runs = [], isLoading } = useQuizRuns(undefined, 50);
+  const deleteRunMutation = useDeleteRun();
 
   const handleDelete = async (runId: string, event: React.MouseEvent) => {
     event.stopPropagation();
@@ -37,17 +20,18 @@ export default function HistoryPage() {
     }
 
     try {
-      const response = await fetch(`/api/quiz-runs/${runId}`, {
-        method: "DELETE",
+      await deleteRunMutation.mutateAsync(runId);
+      toast({
+        title: "Suksess",
+        description: "Økten ble slettet",
       });
-
-      if (!response.ok) throw new Error("Failed to delete run");
-
-      // Reload list
-      loadRuns();
     } catch (error) {
       console.error("Error deleting run:", error);
-      alert("Kunne ikke slette økten");
+      toast({
+        title: "Feil",
+        description: "Kunne ikke slette økten",
+        variant: "destructive",
+      });
     }
   };
 

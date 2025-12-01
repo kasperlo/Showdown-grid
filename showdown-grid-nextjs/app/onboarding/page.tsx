@@ -4,7 +4,13 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
 import { Sparkles, User } from "lucide-react";
 
 export default function OnboardingPage() {
@@ -23,12 +29,25 @@ export default function OnboardingPage() {
         return;
       }
 
-      // Mark that user has chosen auth method
-      localStorage.setItem("auth-method-chosen", "true");
-      
-      // Wait for session to propagate
-      await new Promise(resolve => setTimeout(resolve, 300));
-      
+      // Wait for session to be established and verify it exists
+      // Poll for session up to 3 seconds
+      let sessionEstablished = false;
+      for (let i = 0; i < 30; i++) {
+        const {
+          data: { session },
+        } = await supabase.auth.getSession();
+        if (session) {
+          sessionEstablished = true;
+          break;
+        }
+        await new Promise((resolve) => setTimeout(resolve, 100));
+      }
+
+      if (!sessionEstablished) {
+        alert("Kunne ikke etablere sesjon. Prøv igjen.");
+        return;
+      }
+
       router.push("/");
       router.refresh();
     } catch (error) {
@@ -51,7 +70,7 @@ export default function OnboardingPage() {
             JEOPARTY 🥳
           </h1>
           <p className="text-xl text-muted-foreground">
-            Velkommen til den ultimate quiz-opplevelsen
+            Lets get this party started! 😂
           </p>
         </div>
 
@@ -66,7 +85,7 @@ export default function OnboardingPage() {
                 <CardTitle className="text-2xl">Kom i gang</CardTitle>
               </div>
               <CardDescription className="text-base">
-                Start umiddelbart som gjest - ingen registrering nødvendig
+                Start umiddelbart som gjest
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
@@ -96,7 +115,9 @@ export default function OnboardingPage() {
                 className="w-full bg-accent hover:bg-accent/90 text-accent-foreground font-semibold py-6 text-lg"
                 size="lg"
               >
-                {isLoading === "anonymous" ? "Starter..." : "Start som gjest"}
+                {isLoading === "anonymous"
+                  ? "Starter..."
+                  : "Fortsett som gjest"}
               </Button>
             </CardContent>
           </Card>
@@ -146,10 +167,9 @@ export default function OnboardingPage() {
         </div>
 
         <p className="text-center text-sm text-muted-foreground mt-6">
-          Du kan alltid oppgradere fra gjest til registrert bruker senere
+          Du kan også registrere bruker senere
         </p>
       </div>
     </div>
   );
 }
-

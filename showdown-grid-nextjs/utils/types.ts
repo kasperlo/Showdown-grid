@@ -161,7 +161,6 @@ export interface GameState {
   isLoading: boolean;
   isSaving: boolean;
   saveQuizToDB: () => Promise<void>;
-  loadQuizFromDB: () => Promise<void>;
 
   // Quiz metadata
   quizTitle: string;
@@ -178,12 +177,6 @@ export interface GameState {
   // Multiple quizzes support
   activeQuizId: string | null;
   activeQuizOwnerId: string | null;
-  quizzesList: QuizMetadata[];
-  loadQuizzesList: () => Promise<void>;
-  switchQuiz: (quizId: string) => Promise<void>;
-  loadPublicQuiz: (quizId: string) => Promise<void>;
-  createNewQuiz: (title: string, description?: string) => Promise<void>;
-  deleteQuiz: (quizId: string) => Promise<void>;
 
   // Quiz run tracking
   currentRunStartTime: number | null;
@@ -195,5 +188,5 @@ export interface GameState {
   startSession: () => Promise<string | null>;
   saveSession: () => Promise<void>;
   restoreActiveSession: (quizId: string) => Promise<void>;
-  completeSession: (runId: string) => Promise<void>;
+  completeSession: (runId: string, quizId?: string) => Promise<void>;
 }

@@ -11,18 +11,25 @@ import { useGameStore } from "@/utils/store";
 import { QuizSelector } from "@/components/QuizSelector";
 import { TurnIndicator } from "@/components/TurnIndicator";
 import { createClient } from "@/lib/supabase";
+import { useAuth } from "@/hooks/useAuth";
+import { useActiveQuiz, useQuizzesList } from "@/hooks/queries/useQuizzes";
+import type { QuizTheme } from "@/utils/types";
 
 export default function Home() {
   const router = useRouter();
+  const { isAuthReady, isAuthError } = useAuth();
+
   // Optimize store selectors to reduce re-renders
   const quizTitle = useGameStore((state) => state.quizTitle);
   const quizDescription = useGameStore((state) => state.quizDescription);
   const activeQuizId = useGameStore((state) => state.activeQuizId);
   const activeQuizOwnerId = useGameStore((state) => state.activeQuizOwnerId);
-  const loadQuizFromDB = useGameStore((state) => state.loadQuizFromDB);
-  const quizzesList = useGameStore((state) => state.quizzesList);
-  const loadQuizzesList = useGameStore((state) => state.loadQuizzesList);
-  const isLoading = useGameStore((state) => state.isLoading);
+  const setCategories = useGameStore((state) => state.setCategories);
+  const setQuizTitle = useGameStore((state) => state.setQuizTitle);
+  const setQuizDescription = useGameStore((state) => state.setQuizDescription);
+  const setQuizTimeLimit = useGameStore((state) => state.setQuizTimeLimit);
+  const setQuizTheme = useGameStore((state) => state.setQuizTheme);
+  const setQuizIsPublic = useGameStore((state) => state.setQuizIsPublic);
   const isPlayingPublicQuiz = useGameStore(
     (state) => state.isPlayingPublicQuiz
   );
@@ -30,54 +37,124 @@ export default function Home() {
     (state) => state.restoreActiveSession
   );
 
+  // Use TanStack Query for server state
+  // Disable useActiveQuiz when playing a public quiz (to avoid overwriting it)
+  const { data: activeQuizData, isLoading: isLoadingQuiz } = useActiveQuiz(
+    !isPlayingPublicQuiz
+  );
+  const { data: quizzesList = [], isLoading: isLoadingQuizzesList } =
+    useQuizzesList();
+
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
   const [isAnonymous, setIsAnonymous] = useState<boolean>(false);
   const [isInitialized, setIsInitialized] = useState(false);
 
-  // Single comprehensive effect for initialization and redirect
+  // Get user info
   useEffect(() => {
-    const initialize = async () => {
-      try {
-        // Get current user ID and check if anonymous
-        const supabase = createClient();
-        const {
-          data: { user },
-        } = await supabase.auth.getUser();
-        setCurrentUserId(user?.id || null);
-        setIsAnonymous(user?.is_anonymous || false);
+    if (!isAuthReady || isAuthError) {
+      return;
+    }
 
-        // Load quiz data - skip loadQuizFromDB if already playing a public quiz
-        if (isPlayingPublicQuiz) {
-          await loadQuizzesList();
-          // Note: restoreActiveSession is called inside loadPublicQuiz()
-        } else {
-          await Promise.all([loadQuizFromDB(), loadQuizzesList()]);
-          // After loading quiz, try to restore active session
-          // Use getState to access current state after async operations
-          const { activeQuizId: currentActiveQuizId } = useGameStore.getState();
-          if (currentActiveQuizId) {
-            await restoreActiveSession(currentActiveQuizId);
-          }
-        }
-      } finally {
-        setIsInitialized(true);
-      }
+    const getUserInfo = async () => {
+      const supabase = createClient();
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
+      setCurrentUserId(user?.id || null);
+      setIsAnonymous(user?.is_anonymous || false);
     };
 
-    initialize();
-  }, [loadQuizFromDB, loadQuizzesList, isPlayingPublicQuiz]);
+    getUserInfo();
+  }, [isAuthReady, isAuthError]);
+
+  // Stable callback to sync quiz data from query to Zustand store
+  const syncQuizDataToStore = useCallback(
+    (quizData: any) => {
+      setCategories(quizData.categories || []);
+      useGameStore.setState({
+        teams: quizData.teams || [],
+        adjustmentLog: quizData.adjustmentLog || [],
+        activeQuizId: quizData.quizId,
+        activeQuizOwnerId: quizData.quizOwnerId,
+      });
+      setQuizTitle(quizData.quizTitle || "");
+      setQuizDescription(quizData.quizDescription || "");
+      setQuizTimeLimit(quizData.quizTimeLimit);
+      setQuizTheme((quizData.quizTheme as QuizTheme) || "classic");
+      setQuizIsPublic(quizData.quizIsPublic || false);
+    },
+    [
+      setCategories,
+      setQuizTitle,
+      setQuizDescription,
+      setQuizTimeLimit,
+      setQuizTheme,
+      setQuizIsPublic,
+    ]
+  );
+
+  // Sync active quiz data from query to Zustand store
+  useEffect(() => {
+    if (!isAuthReady || isAuthError) {
+      return;
+    }
+
+    // If playing a public quiz, don't sync from query (data is already in Zustand)
+    if (isPlayingPublicQuiz) {
+      setIsInitialized(true);
+      return;
+    }
+
+    // For own quizzes, wait for query to load
+    if (isLoadingQuiz) {
+      return;
+    }
+
+    if (activeQuizData) {
+      // Update Zustand state with quiz data
+      syncQuizDataToStore(activeQuizData);
+
+      // Restore active session if quiz has an ID (only for own quizzes, not public)
+      if (activeQuizData.quizId) {
+        restoreActiveSession(activeQuizData.quizId).catch((error) => {
+          console.error("Failed to restore active session:", error);
+        });
+      }
+
+      setIsInitialized(true);
+    } else {
+      // No active quiz found
+      setIsInitialized(true);
+    }
+  }, [
+    isAuthReady,
+    isAuthError,
+    isLoadingQuiz,
+    activeQuizData,
+    syncQuizDataToStore,
+    restoreActiveSession,
+    isPlayingPublicQuiz,
+  ]);
 
   // Handle redirect after initialization completes
   useEffect(() => {
     if (
       isInitialized &&
-      !isLoading &&
+      !isLoadingQuiz &&
+      !isLoadingQuizzesList &&
       !activeQuizId &&
       quizzesList.length === 0
     ) {
       router.push("/quizzes");
     }
-  }, [isInitialized, isLoading, activeQuizId, quizzesList, router]);
+  }, [
+    isInitialized,
+    isLoadingQuiz,
+    isLoadingQuizzesList,
+    activeQuizId,
+    quizzesList,
+    router,
+  ]);
 
   // Turn selection is now manual via TurnIndicator component
   // Removed automatic initializeTurn() - user clicks "Hvem skal starte?" button instead

@@ -4,6 +4,7 @@ import "./globals.css";
 import { ThemeProvider } from "@/components/ThemeProvider";
 import { Snowfall } from "@/components/Snowfall";
 import { AppProvider } from "@/components/AppProvider";
+import { QueryProvider } from "@/components/QueryProvider";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -31,10 +32,12 @@ export default function RootLayout({
         className={`${geistSans.variable} ${geistMono.variable} antialiased`}
       >
         <ThemeProvider>
-          <AppProvider>
-            <Snowfall />
-            {children}
-          </AppProvider>
+          <QueryProvider>
+            <AppProvider>
+              <Snowfall />
+              {children}
+            </AppProvider>
+          </QueryProvider>
         </ThemeProvider>
       </body>
     </html>

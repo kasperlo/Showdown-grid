@@ -1,10 +1,11 @@
 "use client";
 
-import { ReactNode, useEffect, useCallback } from "react";
+import { ReactNode, useEffect } from "react";
 import { useGameStore } from "@/utils/store";
 import { useDebounce } from "@/utils/useDebounce";
 import { useAuth } from "@/hooks/useAuth";
 import { useSessionAutoSave } from "@/hooks/useSessionAutoSave";
+import { useUpdateQuiz } from "@/hooks/mutations/useQuizMutations";
 
 function FullScreenLoader({ message }: { message: string }) {
   return (
@@ -17,18 +18,23 @@ function FullScreenLoader({ message }: { message: string }) {
 
 export const AppProvider = ({ children }: { children: ReactNode }) => {
   const {
-    saveQuizToDB,
     isLoading,
-    isSaving,
     categories,
     teams,
     quizTitle,
     quizDescription,
     adjustmentLog,
+    quizTimeLimit,
+    quizTheme,
+    quizIsPublic,
   } = useGameStore();
 
   // Use custom auth hook for authentication
   const { isAuthReady } = useAuth();
+
+  // Use TanStack Query mutation for autosave
+  // Destructure to get stable references for useEffect dependencies
+  const { mutate: saveQuiz, isPending: isSaving } = useUpdateQuiz();
 
   // Auto-save sessions (for both own and public quizzes)
   useSessionAutoSave();
@@ -39,18 +45,41 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
     1500
   );
 
-  // Create stable reference for saveQuizToDB
-  const stableSaveQuiz = useCallback(() => {
-    saveQuizToDB();
-  }, [saveQuizToDB]);
-
   // Autosave when debounced state changes (but not during initial loading)
   useEffect(() => {
-    // Only save if not currently loading to avoid saving initial state
-    if (!isLoading && isAuthReady) {
-      stableSaveQuiz();
+    // Only save if:
+    // 1. Not currently loading (avoid saving initial state)
+    // 2. Auth is ready
+    // 3. No mutation is currently pending (avoid concurrent saves)
+    if (!isLoading && isAuthReady && !isSaving) {
+      saveQuiz({
+        data: {
+          categories,
+          teams,
+          quizTitle,
+          quizDescription,
+          quizTimeLimit,
+          quizTheme,
+          quizIsPublic,
+          adjustmentLog,
+        },
+      });
     }
-  }, [debouncedState, isLoading, isAuthReady, stableSaveQuiz]);
+  }, [
+    debouncedState,
+    isLoading,
+    isAuthReady,
+    isSaving,
+    saveQuiz,
+    categories,
+    teams,
+    quizTitle,
+    quizDescription,
+    quizTimeLimit,
+    quizTheme,
+    quizIsPublic,
+    adjustmentLog,
+  ]);
 
   // Show loading screen while auth is initializing
   if (!isAuthReady) {
