@@ -30,13 +30,15 @@ export default function RunDetailPage() {
     }
   };
 
-  const formatDuration = (seconds: number) => {
+  const formatDuration = (seconds: number | null) => {
+    if (seconds === null) return "Pågående";
     const mins = Math.floor(seconds / 60);
     const secs = seconds % 60;
     return `${mins} min ${secs} sek`;
   };
 
-  const formatDate = (dateString: string) => {
+  const formatDate = (dateString: string | null) => {
+    if (!dateString) return "Pågående";
     return new Date(dateString).toLocaleDateString("no-NO", {
       year: "numeric",
       month: "long",
@@ -100,7 +102,7 @@ export default function RunDetailPage() {
             <Clock className="mx-auto h-8 w-8 text-accent mb-2" />
             <p className="text-sm text-muted-foreground mb-1">Varighet</p>
             <p className="text-2xl font-bold text-accent">
-              {formatDuration(run.duration_seconds)}
+              {formatDuration(run.duration_seconds ?? null)}
             </p>
           </div>
 
