@@ -4,6 +4,7 @@ import type {
   Category,
   Team,
   Question,
+  LastQuestion,
   AdjustmentEntry,
   QuizMetadata,
   QuizTheme,
@@ -39,9 +40,9 @@ const genId = () => `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
 let lastSessionSaveTime = 0;
 
 // Helper function to mark changes as "dirty"
-const withUnsavedChanges = <T extends (...args: any[]) => any>(
+const withUnsavedChanges = <T extends (...args: never[]) => unknown>(
   fn: T,
-  set: any
+  set: (partial: Partial<GameState>) => void
 ): T => {
   return ((...args: Parameters<T>) => {
     set({ hasUnsavedChanges: true });
@@ -105,7 +106,7 @@ export const useGameStore = create<GameState>()((set, get) => {
         ),
       })),
 
-    setLastQuestion: (question: any) => {
+    setLastQuestion: (question: LastQuestion | null) => {
       set({
         lastQuestion: question,
         isQuestionOpen: !!question,
@@ -159,27 +160,46 @@ export const useGameStore = create<GameState>()((set, get) => {
       });
     },
 
-    awardPositive: (teamId: string) => {
-      const { lastQuestion, round } = get();
+    awardPositive: (teamId: string, customPoints?: number) => {
+      const { lastQuestion, round, adjustmentLog, teams } = get();
       if (!lastQuestion || round.positiveTeamId) return;
+
+      const pointsToAward = customPoints ?? lastQuestion.points;
+      const team = teams.find((t) => t.id === teamId);
 
       get().markQuestionAsAnswered(
         lastQuestion.categoryName,
         lastQuestion.questionIndex
       );
 
+      // Log custom scoring if points differ from question value
+      let newAdjustmentLog = adjustmentLog;
+      if (customPoints !== undefined && customPoints !== lastQuestion.points && team) {
+        const entry: AdjustmentEntry = {
+          id: genId(),
+          teamId,
+          teamNameSnapshot: team.name,
+          delta: customPoints,
+          reason: `Custom scoring på ${lastQuestion.categoryName} (${lastQuestion.points} poeng)`,
+          createdAt: Date.now(),
+          type: "custom_scoring",
+        };
+        newAdjustmentLog = [entry, ...adjustmentLog];
+      }
+
       set((state) => {
         return {
           teams: state.teams.map((t) =>
-            t.id === teamId ? { ...t, score: t.score + lastQuestion.points } : t
+            t.id === teamId ? { ...t, score: t.score + pointsToAward } : t
           ),
           round: { ...state.round, positiveTeamId: teamId },
+          adjustmentLog: newAdjustmentLog,
         };
       });
     },
 
-    awardNegative: (teamId: string) => {
-      const { lastQuestion, round } = get();
+    awardNegative: (teamId: string, customPoints?: number) => {
+      const { lastQuestion, round, adjustmentLog, teams } = get();
       if (
         !lastQuestion ||
         round.positiveTeamId ||
@@ -187,7 +207,24 @@ export const useGameStore = create<GameState>()((set, get) => {
       )
         return;
 
-      const penalty = -Math.round(lastQuestion.points * 0.5);
+      const defaultPenalty = -Math.round(lastQuestion.points * 0.5);
+      const penalty = customPoints ?? defaultPenalty;
+      const team = teams.find((t) => t.id === teamId);
+
+      // Log custom scoring if points differ from default penalty
+      let newAdjustmentLog = adjustmentLog;
+      if (customPoints !== undefined && customPoints !== defaultPenalty && team) {
+        const entry: AdjustmentEntry = {
+          id: genId(),
+          teamId,
+          teamNameSnapshot: team.name,
+          delta: customPoints,
+          reason: `Custom penalty på ${lastQuestion.categoryName} (standard: ${defaultPenalty})`,
+          createdAt: Date.now(),
+          type: "custom_scoring",
+        };
+        newAdjustmentLog = [entry, ...adjustmentLog];
+      }
 
       set((state) => ({
         teams: state.teams.map((t) =>
@@ -197,6 +234,7 @@ export const useGameStore = create<GameState>()((set, get) => {
           ...state.round,
           negativeAwardedTo: [...state.round.negativeAwardedTo, teamId],
         },
+        adjustmentLog: newAdjustmentLog,
       }));
     },
 
@@ -217,6 +255,37 @@ export const useGameStore = create<GameState>()((set, get) => {
       // Move to next team's turn
       get().nextTurn();
     },
+
+    skipQuestion: () => {
+      const { lastQuestion } = get();
+      if (!lastQuestion) return;
+
+      // Mark question as answered without awarding any points
+      get().markQuestionAsAnswered(
+        lastQuestion.categoryName,
+        lastQuestion.questionIndex
+      );
+
+      set({
+        lastQuestion: null,
+        isQuestionOpen: false,
+        round: initialRoundState(),
+      });
+
+      // Move to next team's turn
+      get().nextTurn();
+    },
+
+    toggleQuestionAnswered: (categoryName: string, questionIndex: number, answered: boolean) =>
+      set((state) => ({
+        categories: state.categories.map((cat) => {
+          if (cat.name !== categoryName) return cat;
+          const questions = [...cat.questions];
+          const q = questions[questionIndex];
+          if (q) questions[questionIndex] = { ...q, answered };
+          return { ...cat, questions };
+        }),
+      })),
 
     manualAdjustScore: (teamId: string, delta: number, reason?: string) =>
       set((state) => {
@@ -306,13 +375,13 @@ export const useGameStore = create<GameState>()((set, get) => {
   return {
     categories: initialGameData.map((category) => ({
       name: category.name,
-      questions: category.questions.map((q: any) => ({
+      questions: category.questions.map((q): Question => ({
         points: q.points,
         question: q.question,
         answer: q.answer,
         imageUrl: q.imageUrl,
-        isJoker: q.isJoker || false,
-        jokerTask: q.jokerTask || "",
+        isJoker: ('isJoker' in q && typeof q.isJoker === 'boolean') ? q.isJoker : false,
+        jokerTask: ('jokerTask' in q && typeof q.jokerTask === 'string') ? q.jokerTask : "",
         answered: false,
       })),
     })),
@@ -358,6 +427,8 @@ export const useGameStore = create<GameState>()((set, get) => {
     resetGame: withUnsavedChanges(actions.resetGame, set),
     awardPositive: withUnsavedChanges(actions.awardPositive, set),
     awardNegative: withUnsavedChanges(actions.awardNegative, set),
+    skipQuestion: withUnsavedChanges(actions.skipQuestion, set),
+    toggleQuestionAnswered: withUnsavedChanges(actions.toggleQuestionAnswered, set),
     manualAdjustScore: withUnsavedChanges(actions.manualAdjustScore, set),
     undoLastAdjustment: withUnsavedChanges(actions.undoLastAdjustment, set),
     setQuizTitle: withUnsavedChanges(actions.setQuizTitle, set),

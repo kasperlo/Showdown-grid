@@ -57,13 +57,15 @@ export async function migrateUserData(
       quizzesMigrated: result.quizzesMigrated || 0,
       sessionsMigrated: result.sessionsMigrated || 0,
     };
-  } catch (error: any) {
+  } catch (error: unknown) {
+    const errorMessage = error instanceof Error ? error.message : "Unknown error";
     return {
       success: false,
       quizzesMigrated: 0,
       sessionsMigrated: 0,
-      error: error.message || "Unknown error",
+      error: errorMessage,
     };
   }
 }
+
 

@@ -45,7 +45,7 @@ export interface AdjustmentEntry {
   delta: number;
   reason?: string;
   createdAt: number;
-  type: "manual";
+  type: "manual" | "custom_scoring";
 }
 
 export type QuizTheme = "classic" | "modern" | "christmas";
@@ -143,9 +143,11 @@ export interface GameState {
 
   resetGame: () => void;
 
-  awardPositive: (teamId: string) => void;
-  awardNegative: (teamId: string) => void;
+  awardPositive: (teamId: string, customPoints?: number) => void;
+  awardNegative: (teamId: string, customPoints?: number) => void;
+  skipQuestion: () => void;
   endRound: () => void;
+  toggleQuestionAnswered: (categoryName: string, questionIndex: number, answered: boolean) => void;
 
   // Turn management
   setCurrentTurn: (teamId: string | null) => void;

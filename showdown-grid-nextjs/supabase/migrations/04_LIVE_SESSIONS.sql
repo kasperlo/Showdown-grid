@@ -45,3 +45,4 @@ COMMENT ON COLUMN quiz_runs.duration_seconds IS 'NULL for live sessions, calcula
 COMMENT ON COLUMN quiz_runs.updated_at IS 'Timestamp of last update to the session state';
 COMMENT ON COLUMN quiz_runs.final_state IS 'Current state snapshot (updated during live session, final state when completed)';
 
+
