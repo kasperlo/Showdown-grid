@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useRef, useMemo } from "react";
+import React, { useEffect, useState, useRef } from "react";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -16,6 +16,25 @@ import { Timer } from "@/components/Timer";
  * Poengtildeling skjer i RoundDock ETTER at denne lukkes.
  */
 export function QuestionModal() {
+  const lastQuestion = useGameStore((state) => state.lastQuestion);
+  const isQuestionOpen = useGameStore((state) => state.isQuestionOpen);
+  const setQuestionOpen = useGameStore((state) => state.setQuestionOpen);
+  const endRound = useGameStore((state) => state.endRound);
+  const quizTimeLimit = useGameStore((state) => state.quizTimeLimit);
+  const currentRunStartTime = useGameStore((state) => state.currentRunStartTime);
+  const setRunStartTime = useGameStore((state) => state.setRunStartTime);
+  const activeRunId = useGameStore((state) => state.activeRunId);
+  const startSession = useGameStore((state) => state.startSession);
+
+  // Create a unique key for the question to reset component state when question changes
+  const questionKey = lastQuestion
+    ? `${lastQuestion.categoryName}-${lastQuestion.questionIndex}`
+    : 'no-question';
+
+  return <QuestionModalContent key={questionKey} />;
+}
+
+function QuestionModalContent() {
   const lastQuestion = useGameStore((state) => state.lastQuestion);
   const isQuestionOpen = useGameStore((state) => state.isQuestionOpen);
   const setQuestionOpen = useGameStore((state) => state.setQuestionOpen);
@@ -45,9 +64,6 @@ export function QuestionModal() {
 
   // Single consolidated effect for modal state management
   useEffect(() => {
-    // Reset revealed state when question changes
-    setRevealed(false);
-
     // Start quiz session when first question opens (if no active session exists)
     if (isQuestionOpen && !activeRunId) {
       startSession().then((runId) => {
@@ -66,9 +82,10 @@ export function QuestionModal() {
       intervalRef.current = null;
     }
 
-    // Handle joker countdown
+    // Handle joker countdown - initialize and start interval
     if (isQuestionOpen && lastQuestion?.isJoker) {
-      setCountdown(10);
+      // Use Promise to defer state update to avoid sync setState in effect
+      Promise.resolve().then(() => setCountdown(10));
 
       intervalRef.current = setInterval(() => {
         setCountdown((prev) => {
@@ -80,7 +97,7 @@ export function QuestionModal() {
         });
       }, 1000);
     } else {
-      setCountdown(null);
+      Promise.resolve().then(() => setCountdown(null));
     }
 
     // Cleanup on unmount or when dependencies change
@@ -113,7 +130,6 @@ export function QuestionModal() {
       onOpenChange={(isOpen) => {
         if (!isOpen) {
           setQuestionOpen(false);
-          setRevealed(false); // sikkerhetsnett ved lukking
         } else {
           setQuestionOpen(true);
         }

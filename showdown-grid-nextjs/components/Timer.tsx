@@ -17,21 +17,25 @@ export function Timer({
   className,
 }: TimerProps) {
   const [timeLeft, setTimeLeft] = useState(initialTime);
-  const [isRunning, setIsRunning] = useState(true);
   const intervalRef = useRef<NodeJS.Timeout | null>(null);
   const onTimeUpRef = useRef(onTimeUp);
+  const initialTimeRef = useRef(initialTime);
 
   // Keep onTimeUp callback ref up to date
   useEffect(() => {
     onTimeUpRef.current = onTimeUp;
   }, [onTimeUp]);
 
-  // Comprehensive timer effect: handles initialization, countdown, and pause/resume
+  // Reset timeLeft when initialTime changes
   useEffect(() => {
-    // Reset state when initialTime changes
-    setTimeLeft(initialTime);
-    setIsRunning(true);
+    if (initialTimeRef.current !== initialTime) {
+      initialTimeRef.current = initialTime;
+      queueMicrotask(() => setTimeLeft(initialTime));
+    }
+  }, [initialTime]);
 
+  // Comprehensive timer effect: handles countdown and pause/resume
+  useEffect(() => {
     // Clear any existing interval
     if (intervalRef.current) {
       clearInterval(intervalRef.current);
@@ -39,7 +43,7 @@ export function Timer({
     }
 
     // Don't start if paused or time is up
-    if (isPaused || initialTime <= 0) {
+    if (isPaused || timeLeft <= 0) {
       return;
     }
 
@@ -47,7 +51,6 @@ export function Timer({
     intervalRef.current = setInterval(() => {
       setTimeLeft((prev) => {
         if (prev <= 1) {
-          setIsRunning(false);
           onTimeUpRef.current?.();
           return 0;
         }
@@ -62,7 +65,7 @@ export function Timer({
         intervalRef.current = null;
       }
     };
-  }, [initialTime, isPaused]);
+  }, [isPaused, timeLeft]);
 
   const progress = (timeLeft / initialTime) * 100;
   const isWarning = timeLeft <= 10;

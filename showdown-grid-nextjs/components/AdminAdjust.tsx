@@ -8,27 +8,25 @@ import { Undo2, Info } from "lucide-react";
 export default function AdminAdjust() {
   const { teams, manualAdjustScore, adjustmentLog, undoLastAdjustment } = useGameStore();
 
-  const [teamId, setTeamId] = useState<string>(teams[0]?.id ?? "");
+  // Lazy initialize teamId to always have a valid value
+  const [teamId, setTeamId] = useState<string>(() => teams[0]?.id ?? "");
   const [amountText, setAmountText] = useState<string>("100");
   const [reason, setReason] = useState<string>("");
 
-  useMemo(() => {
-    if (!teams.find((t) => t.id === teamId)) {
-      setTeamId(teams[0]?.id ?? "");
-    }
-  }, [teams, teamId]);
+  // Ensure teamId is always valid - if current team doesn't exist, use first team
+  const validTeamId = teams.find((t) => t.id === teamId) ? teamId : (teams[0]?.id ?? "");
 
   const amount = useMemo(() => {
     const n = Number.parseInt(amountText, 10);
     return Number.isFinite(n) ? Math.max(0, n) : 0;
   }, [amountText]);
 
-  const canApply = teams.length > 0 && !!teamId && amount > 0;
+  const canApply = teams.length > 0 && !!validTeamId && amount > 0;
 
   const apply = (sign: 1 | -1) => {
     if (!canApply) return;
     const delta = sign * amount;
-    manualAdjustScore(teamId, delta, reason.trim() || undefined);
+    manualAdjustScore(validTeamId, delta, reason.trim() || undefined);
     setReason("");
   };
 
@@ -47,7 +45,7 @@ export default function AdminAdjust() {
           <Label htmlFor="admin-team">Lag</Label>
           <select
             id="admin-team"
-            value={teamId}
+            value={validTeamId}
             onChange={(e) => setTeamId(e.target.value)}
             className="mt-1 w-full rounded-md border border-border bg-popover text-foreground p-2"
           >
