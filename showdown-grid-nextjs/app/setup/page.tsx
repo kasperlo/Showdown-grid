@@ -67,7 +67,7 @@ export default function Setup() {
   const handleQuestionChange = (
     categoryIndex: number,
     questionIndex: number,
-    field: "question" | "answer" | "imageUrl" | "isJoker" | "jokerTask" | "points",
+    field: "question" | "answer" | "imageUrl" | "isJoker" | "jokerTask" | "jokerTimer" | "points",
     value: string | boolean | number
   ) => {
     const newCategories = [...categories];
@@ -79,9 +79,15 @@ export default function Setup() {
       [field]: value,
     };
 
-    // If we're turning off the joker, clear the task
+    // If we're turning off the joker, clear the task and reset timer
     if (field === "isJoker" && !value) {
       updatedQuestion.jokerTask = "";
+      updatedQuestion.jokerTimer = 10;
+    }
+
+    // If turning on joker, set default timer if not set
+    if (field === "isJoker" && value && !updatedQuestion.jokerTimer) {
+      updatedQuestion.jokerTimer = 10;
     }
 
     newCategories[categoryIndex].questions[questionIndex] = updatedQuestion;
@@ -379,7 +385,27 @@ export default function Setup() {
 
                   <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                     {category.questions.map((question, questionIndex) => (
-                      <div key={questionIndex} className="tile p-4 space-y-3">
+                      <div
+                        key={questionIndex}
+                        className={`tile p-4 space-y-3 transition-all duration-300 ${
+                          question.isJoker
+                            ? "ring-2 ring-yellow-400 bg-gradient-to-br from-yellow-500/10 via-red-500/10 to-purple-500/10"
+                            : ""
+                        }`}
+                      >
+                        {/* JOKER badge og bilde når aktivert */}
+                        {question.isJoker && (
+                          <div className="flex items-center gap-3 pb-3 border-b border-yellow-400/50">
+                            <img
+                              src="/JOKER.jpg"
+                              alt="JOKER"
+                              className="w-12 h-12 object-cover rounded-lg border-2 border-yellow-400 shadow-md"
+                            />
+                            <div className="bg-gradient-to-r from-yellow-400 via-red-500 to-purple-500 text-white px-4 py-1 rounded-full text-sm font-black tracking-wider shadow-md">
+                              JOKER
+                            </div>
+                          </div>
+                        )}
                         <div className="flex items-center gap-2 mb-2">
                           <Label className="text-sm font-semibold">Poeng:</Label>
                           <Input
@@ -399,52 +425,57 @@ export default function Setup() {
                           />
                         </div>
 
-                        <div>
-                          <Label>Spørsmål</Label>
-                          <Input
-                            type="text"
-                            value={question.question}
-                            onChange={(e) =>
-                              handleQuestionChange(
-                                categoryIndex,
-                                questionIndex,
-                                "question",
-                                e.target.value
-                              )
-                            }
-                            className="mt-1"
-                          />
-                        </div>
+                        {/* Skjul spørsmål/svar/bilde for joker-oppgaver */}
+                        {!question.isJoker && (
+                          <>
+                            <div>
+                              <Label>Spørsmål</Label>
+                              <Input
+                                type="text"
+                                value={question.question}
+                                onChange={(e) =>
+                                  handleQuestionChange(
+                                    categoryIndex,
+                                    questionIndex,
+                                    "question",
+                                    e.target.value
+                                  )
+                                }
+                                className="mt-1"
+                              />
+                            </div>
 
-                        <div>
-                          <Label>Svar</Label>
-                          <Input
-                            type="text"
-                            value={question.answer}
-                            onChange={(e) =>
-                              handleQuestionChange(
-                                categoryIndex,
-                                questionIndex,
-                                "answer",
-                                e.target.value
-                              )
-                            }
-                            className="mt-1"
-                          />
-                        </div>
+                            <div>
+                              <Label>Svar</Label>
+                              <Input
+                                type="text"
+                                value={question.answer}
+                                onChange={(e) =>
+                                  handleQuestionChange(
+                                    categoryIndex,
+                                    questionIndex,
+                                    "answer",
+                                    e.target.value
+                                  )
+                                }
+                                className="mt-1"
+                              />
+                            </div>
 
-                        <ImageUpload
-                          value={question.imageUrl}
-                          onChange={(url) =>
-                            handleQuestionChange(
-                              categoryIndex,
-                              questionIndex,
-                              "imageUrl",
-                              url
-                            )
-                          }
-                          label="Bilde"
-                        />
+                            <ImageUpload
+                              value={question.imageUrl}
+                              onChange={(url) =>
+                                handleQuestionChange(
+                                  categoryIndex,
+                                  questionIndex,
+                                  "imageUrl",
+                                  url
+                                )
+                              }
+                              label="Bilde"
+                            />
+                          </>
+                        )}
                         <div className="space-y-3 pt-3 border-t border-border">
                           <div className="flex items-center justify-between">
                             <Label
@@ -466,21 +497,90 @@ export default function Setup() {
                             />
                           </div>
                           {question.isJoker && (
-                            <div>
-                              <Label>Joker-oppgave</Label>
-                              <Textarea
-                                value={question.jokerTask}
-                                onChange={(e) =>
-                                  handleQuestionChange(
-                                    categoryIndex,
-                                    questionIndex,
-                                    "jokerTask",
-                                    e.target.value
-                                  )
-                                }
-                                placeholder="Beskriv oppgaven som må løses..."
-                                className="mt-1"
-                              />
+                            <div className="space-y-4 p-3 bg-gradient-to-br from-yellow-500/5 via-red-500/5 to-purple-500/5 rounded-lg border border-yellow-400/30">
+                              <div>
+                                <Label className="text-yellow-600 dark:text-yellow-400 font-semibold">
+                                  Joker-oppgave
+                                </Label>
+                                <Textarea
+                                  value={question.jokerTask}
+                                  onChange={(e) =>
+                                    handleQuestionChange(
+                                      categoryIndex,
+                                      questionIndex,
+                                      "jokerTask",
+                                      e.target.value
+                                    )
+                                  }
+                                  placeholder="Beskriv oppgaven som må løses..."
+                                  className="mt-1"
+                                />
+                              </div>
+                              <div>
+                                <Label className="text-yellow-600 dark:text-yellow-400 font-semibold">
+                                  Timer (sekunder)
+                                </Label>
+                                <div className="flex items-center gap-3 mt-1">
+                                  <Input
+                                    type="number"
+                                    min={3}
+                                    max={60}
+                                    value={question.jokerTimer || ""}
+                                    onChange={(e) => {
+                                      const inputValue = e.target.value;
+                                      // Allow empty string (will be treated as undefined)
+                                      if (inputValue === "") {
+                                        handleQuestionChange(
+                                          categoryIndex,
+                                          questionIndex,
+                                          "jokerTimer",
+                                          0 // Use 0 to represent "not set"
+                                        );
+                                        return;
+                                      }
+                                      const value = parseInt(inputValue);
+                                      if (!isNaN(value)) {
+                                        handleQuestionChange(
+                                          categoryIndex,
+                                          questionIndex,
+                                          "jokerTimer",
+                                          value
+                                        );
+                                      }
+                                    }}
+                                    placeholder="Standard"
+                                    className="w-20"
+                                  />
+                                  <div className="flex gap-1">
+                                    {[5, 10, 15, 20].map((sec) => (
+                                      <Button
+                                        key={sec}
+                                        type="button"
+                                        variant={
+                                          question.jokerTimer === sec
+                                            ? "default"
+                                            : "outline"
+                                        }
+                                        size="sm"
+                                        onClick={() =>
+                                          handleQuestionChange(
+                                            categoryIndex,
+                                            questionIndex,
+                                            "jokerTimer",
+                                            sec
+                                          )
+                                        }
+                                        className="px-2 py-1 text-xs"
+                                      >
+                                        {sec}s
+                                      </Button>
+                                    ))}
+                                  </div>
+                                </div>
+                                <p className="text-xs text-muted-foreground mt-1">
+                                  Tom = bruker global standard (10s)
+                                </p>
+                              </div>
                             </div>
                           )}
                         </div>

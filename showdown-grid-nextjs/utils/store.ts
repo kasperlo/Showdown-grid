@@ -31,6 +31,7 @@ const defaultQuestions = (): Question[] =>
     imageUrl: "",
     isJoker: false,
     jokerTask: "",
+    jokerTimer: 10,
     answered: false,
   }));
 
@@ -328,6 +329,8 @@ export const useGameStore = create<GameState>()((set, get) => {
       set({ quizDescription: description }),
     setQuizTimeLimit: (timeLimit: number | null) =>
       set({ quizTimeLimit: timeLimit }),
+    setJokerTimeLimit: (timeLimit: number | null) =>
+      set({ jokerTimeLimit: timeLimit }),
     setQuizTheme: (theme: QuizTheme) => set({ quizTheme: theme }),
     setQuizIsPublic: (isPublic: boolean) => set({ quizIsPublic: isPublic }),
 
@@ -401,6 +404,7 @@ export const useGameStore = create<GameState>()((set, get) => {
     quizTitle: "Showdown Grid",
     quizDescription: "A Jeopardy-style quiz game.",
     quizTimeLimit: null as number | null,
+    jokerTimeLimit: 10 as number | null,
     quizTheme: "classic" as QuizTheme,
     quizIsPublic: false,
     isLoading: true,
@@ -434,6 +438,7 @@ export const useGameStore = create<GameState>()((set, get) => {
     setQuizTitle: withUnsavedChanges(actions.setQuizTitle, set),
     setQuizDescription: withUnsavedChanges(actions.setQuizDescription, set),
     setQuizTimeLimit: withUnsavedChanges(actions.setQuizTimeLimit, set),
+    setJokerTimeLimit: withUnsavedChanges(actions.setJokerTimeLimit, set),
     setQuizTheme: withUnsavedChanges(actions.setQuizTheme, set),
     setQuizIsPublic: withUnsavedChanges(actions.setQuizIsPublic, set),
 
@@ -461,6 +466,7 @@ export const useGameStore = create<GameState>()((set, get) => {
           quizTitle,
           quizDescription,
           quizTimeLimit,
+          jokerTimeLimit,
           quizTheme,
           quizIsPublic,
           adjustmentLog,
@@ -472,6 +478,7 @@ export const useGameStore = create<GameState>()((set, get) => {
           quizTitle,
           quizDescription,
           quizTimeLimit,
+          jokerTimeLimit,
           quizTheme,
           quizIsPublic,
           adjustmentLog,

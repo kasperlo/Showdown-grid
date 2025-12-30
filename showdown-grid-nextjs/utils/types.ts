@@ -6,6 +6,7 @@ export interface Question {
   answered: boolean;
   isJoker?: boolean;
   jokerTask?: string;
+  jokerTimer?: number; // Timer in seconds for this joker question
 }
 
 export interface Category {
@@ -30,6 +31,7 @@ export interface LastQuestion {
   answered?: boolean;
   isJoker?: boolean;
   jokerTask?: string;
+  jokerTimer?: number;
 }
 
 export interface RoundProgress {
@@ -168,11 +170,13 @@ export interface GameState {
   quizTitle: string;
   quizDescription: string;
   quizTimeLimit: number | null;
+  jokerTimeLimit: number | null;
   quizTheme: QuizTheme;
   quizIsPublic: boolean;
   setQuizTitle: (title: string) => void;
   setQuizDescription: (description: string) => void;
   setQuizTimeLimit: (timeLimit: number | null) => void;
+  setJokerTimeLimit: (timeLimit: number | null) => void;
   setQuizTheme: (theme: QuizTheme) => void;
   setQuizIsPublic: (isPublic: boolean) => void;
 
