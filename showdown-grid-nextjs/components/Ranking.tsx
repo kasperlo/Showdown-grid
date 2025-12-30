@@ -1,9 +1,15 @@
-import React, { useMemo } from "react";
+"use client";
+
+import React, { useMemo, useState } from "react";
 import { useGameStore } from "@/utils/store";
+import type { Team } from "@/utils/types";
 import { Trophy } from "lucide-react";
+import { TeamAdjustmentModal } from "./TeamAdjustmentModal";
 
 export function Ranking() {
   const { teams } = useGameStore();
+  const [selectedTeam, setSelectedTeam] = useState<Team | null>(null);
+
   const sortedTeams = useMemo(
     () => [...teams].sort((a, b) => b.score - a.score),
     [teams]
@@ -18,27 +24,25 @@ export function Ranking() {
       </h2>
       <div className="space-y-4">
         {sortedTeams.map((team, index) => (
-          <div
+          <button
             key={team.id}
-            className="flex items-center justify-between tile p-4"
+            onClick={() => setSelectedTeam(team)}
+            className="flex items-center justify-between tile p-4 w-full hover:bg-accent/10 transition-colors cursor-pointer"
           >
             <div className="flex items-center">
-              <span className={`text-2xl font-bold w-8 ${rankColors[index] || "text-muted-foreground"}`}>
+              <span className="text-2xl font-bold w-8 text-muted-foreground">
                 {index + 1}
               </span>
               <p className="font-semibold text-lg ml-4">{team.name}</p>
             </div>
-            <div className="flex items-center">
-              <span className="text-2xl font-bold text-accent text-score">
-                {team.score}
-              </span>
-              {index < 3 && (
-                <Trophy className={`ml-4 h-6 w-6 ${rankColors[index] || "text-muted-foreground"}`} />
-              )}
-            </div>
-          </div>
+            {index < 3 && (
+              <Trophy className={`h-6 w-6 ${rankColors[index] || "text-muted-foreground"}`} />
+            )}
+          </button>
         ))}
       </div>
+
+      <TeamAdjustmentModal team={selectedTeam} onClose={() => setSelectedTeam(null)} />
     </div>
   );
 }

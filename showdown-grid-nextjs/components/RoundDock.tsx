@@ -1,7 +1,8 @@
-import React, { useMemo, useState } from "react";
+import React, { useMemo, useState, useEffect } from "react";
 import dynamic from "next/dynamic";
 import { useGameStore } from "@/utils/store";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { Plus, Minus, X } from "lucide-react";
 
 // Lazy load EmojiBurst to reduce initial bundle size
@@ -20,7 +21,7 @@ export function RoundDock() {
     awardPositive,
     awardNegative,
     endRound,
-    markQuestionAsAnswered
+    markQuestionAsAnswered,
   } = useGameStore();
 
   const POS_EMOJIS = ["🔥", "💥", "💣", "🤟", "😎", "🍻", "🍾"];
@@ -29,11 +30,31 @@ export function RoundDock() {
   const [mode, setMode] = useState<"plus" | "minus">("plus");
   const [showBurst, setShowBurst] = useState(false);
   const [burstEmojis, setBurstEmojis] = useState<string[]>(POS_EMOJIS);
+  const [customPointsText, setCustomPointsText] = useState<string>("0");
 
   const penaltyAbs = useMemo(
     () => (lastQuestion ? Math.round(lastQuestion.points * 0.5) : 0),
     [lastQuestion]
   );
+
+  const customPoints = useMemo(() => {
+    const n = Number.parseInt(customPointsText, 10);
+    return Number.isFinite(n) ? Math.max(0, n) : 0;
+  }, [customPointsText]);
+
+  // Update custom points when mode or lastQuestion changes
+  useEffect(() => {
+    if (!lastQuestion) {
+      setCustomPointsText("0");
+      return;
+    }
+
+    if (mode === "plus") {
+      setCustomPointsText(String(lastQuestion.points));
+    } else {
+      setCustomPointsText(String(penaltyAbs));
+    }
+  }, [mode, lastQuestion, penaltyAbs]);
 
   // Behold dokken hvis burst spiller, selv om runden er ferdig
   const disabled = isQuestionOpen || !lastQuestion;
@@ -48,14 +69,14 @@ export function RoundDock() {
       setShowBurst(true);
       // La canvas mounte før endRound via awardPositive
       setTimeout(() => {
-        awardPositive(teamId);
+        awardPositive(teamId, customPoints);
       }, 0);
-    } else {
+    } else if (mode === "minus") {
       if (round.positiveTeamId) return;
       if (round.negativeAwardedTo.includes(teamId)) return;
       setBurstEmojis(NEG_EMOJIS);
       setShowBurst(true);
-      awardNegative(teamId); // ingen endRound
+      awardNegative(teamId, -customPoints); // negative value for penalty
     }
   };
 
@@ -64,8 +85,8 @@ export function RoundDock() {
       <EmojiBurst
         show={showBurst}
         emojis={burstEmojis}
-        duration={1500}  // kort og crisp “regn”
-        intensity={1.1}  // færre elementer
+        duration={1500} // kort og crisp “regn”
+        intensity={1.1} // færre elementer
         onComplete={() => setShowBurst(false)}
       />
 
@@ -93,40 +114,52 @@ export function RoundDock() {
                   <button
                     type="button"
                     onClick={() => setMode("plus")}
-                    className={`px-3 py-1.5 text-sm inline-flex items-center gap-1 ${mode === "plus"
-                      ? "bg-success text-success-foreground"
-                      : "bg-transparent"
-                      }`}
-                    title={
-                      lastQuestion
-                        ? `Riktig svar (+${lastQuestion.points})`
-                        : "Riktig svar"
-                    }
+                    className={`px-3 py-1.5 text-sm inline-flex items-center gap-1 ${
+                      mode === "plus"
+                        ? "bg-success text-success-foreground"
+                        : "bg-transparent"
+                    }`}
+                    title="Riktig svar"
                     aria-pressed={mode === "plus"}
                     disabled={!lastQuestion}
                   >
                     <Plus className="h-4 w-4" />
-                    {lastQuestion ? lastQuestion.points : ""}
+                    <span className="hidden sm:inline">Riktig</span>
                   </button>
                   <button
                     type="button"
                     onClick={() => setMode("minus")}
-                    className={`px-3 py-1.5 text-sm inline-flex items-center gap-1 ${mode === "minus"
-                      ? "bg-destructive text-destructive-foreground"
-                      : "bg-transparent"
-                      }`}
-                    title={
-                      lastQuestion
-                        ? `Feil svar (−${penaltyAbs})`
-                        : "Feil svar"
-                    }
+                    className={`px-3 py-1.5 text-sm inline-flex items-center gap-1 ${
+                      mode === "minus"
+                        ? "bg-destructive text-destructive-foreground"
+                        : "bg-transparent"
+                    }`}
+                    title="Feil svar"
                     aria-pressed={mode === "minus"}
                     disabled={!lastQuestion}
                   >
                     <Minus className="h-4 w-4" />
-                    {lastQuestion ? penaltyAbs : ""}
+                    <span className="hidden sm:inline">Feil</span>
                   </button>
                 </div>
+
+                {lastQuestion && (
+                  <div className="flex items-center gap-1">
+                    <span className="text-xs text-muted-foreground hidden md:inline">
+                      Poeng:
+                    </span>
+                    <Input
+                      type="number"
+                      inputMode="numeric"
+                      min={0}
+                      step={50}
+                      value={customPointsText}
+                      onChange={(e) => setCustomPointsText(e.target.value)}
+                      className="w-20 h-8 text-sm"
+                      disabled={!lastQuestion || isQuestionOpen}
+                    />
+                  </div>
+                )}
 
                 {isQuestionOpen && lastQuestion && (
                   <span className="text-xs text-muted-foreground">
@@ -142,8 +175,7 @@ export function RoundDock() {
                 const isWinner = round.positiveTeamId === team.id;
                 const hasNeg = round.negativeAwardedTo.includes(team.id);
                 const chipActive =
-                  (mode === "plus" && isWinner) ||
-                  (mode === "minus" && hasNeg);
+                  (mode === "plus" && isWinner) || (mode === "minus" && hasNeg);
 
                 const chipDisabled =
                   isQuestionOpen ||
@@ -172,8 +204,8 @@ export function RoundDock() {
                     title={
                       lastQuestion
                         ? mode === "plus"
-                          ? `Tildel +${lastQuestion.points} til ${team.name}`
-                          : `Tildel −${penaltyAbs} til ${team.name}`
+                          ? `Tildel +${customPoints} til ${team.name}`
+                          : `Tildel −${customPoints} til ${team.name}`
                         : undefined
                     }
                   >
@@ -183,19 +215,21 @@ export function RoundDock() {
               })}
             </div>
 
-            {/* Høyre: avslutt */}
-            <div className="flex items-center">
+            {/* Høyre: skip/avslutt */}
+            <div className="flex items-center gap-2">
               <Button
                 onClick={() => {
                   if (lastQuestion) {
-                    markQuestionAsAnswered(lastQuestion.categoryName, lastQuestion.questionIndex);
+                    markQuestionAsAnswered(
+                      lastQuestion.categoryName,
+                      lastQuestion.questionIndex
+                    );
                   }
                   endRound();
-                }
-                }
+                }}
                 variant="ghost"
                 size="icon"
-                title="Avslutt runden (uten riktig svar)"
+                title="Avslutt runden"
                 aria-label="Avslutt runden"
                 disabled={!lastQuestion}
               >
