@@ -67,8 +67,8 @@ export default function Setup() {
   const handleQuestionChange = (
     categoryIndex: number,
     questionIndex: number,
-    field: "question" | "answer" | "imageUrl" | "isJoker" | "jokerTask",
-    value: string | boolean
+    field: "question" | "answer" | "imageUrl" | "isJoker" | "jokerTask" | "points",
+    value: string | boolean | number
   ) => {
     const newCategories = [...categories];
     const question = newCategories[categoryIndex].questions[questionIndex];
@@ -358,7 +358,7 @@ export default function Setup() {
                       <AlertDialogContent>
                         <AlertDialogHeader>
                           <AlertDialogTitle>
-                            Fjerne kategorien "{category.name}"?
+                            Fjerne kategorien &ldquo;{category.name}&rdquo;?
                           </AlertDialogTitle>
                           <AlertDialogDescription>
                             Dette vil slette kategorien og alle tilhørende
@@ -380,9 +380,24 @@ export default function Setup() {
                   <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                     {category.questions.map((question, questionIndex) => (
                       <div key={questionIndex} className="tile p-4 space-y-3">
-                        <h3 className="font-bold text-lg">
-                          Spørsmål for {question.points} poeng
-                        </h3>
+                        <div className="flex items-center gap-2 mb-2">
+                          <Label className="text-sm font-semibold">Poeng:</Label>
+                          <Input
+                            type="number"
+                            min={0}
+                            step={50}
+                            value={question.points}
+                            onChange={(e) =>
+                              handleQuestionChange(
+                                categoryIndex,
+                                questionIndex,
+                                "points",
+                                parseInt(e.target.value) || 0
+                              )
+                            }
+                            className="w-24 h-8"
+                          />
+                        </div>
 
                         <div>
                           <Label>Spørsmål</Label>

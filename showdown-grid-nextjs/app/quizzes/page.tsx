@@ -264,7 +264,7 @@ export default function QuizzesPage() {
                   <AlertDialogHeader>
                     <AlertDialogTitle>Er du sikker?</AlertDialogTitle>
                     <AlertDialogDescription>
-                      Dette vil permanent slette quizzen "{quiz.title}". Denne
+                      Dette vil permanent slette quizzen &ldquo;{quiz.title}&rdquo;. Denne
                       handlingen kan ikke angres.
                     </AlertDialogDescription>
                   </AlertDialogHeader>

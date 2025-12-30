@@ -6,14 +6,15 @@ import { Ranking } from "@/components/Ranking";
 import { RoundDock } from "@/components/RoundDock";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
-import { Settings, History, UserPlus } from "lucide-react";
+import { Settings, History } from "lucide-react";
 import { useGameStore } from "@/utils/store";
 import { QuizSelector } from "@/components/QuizSelector";
 import { TurnIndicator } from "@/components/TurnIndicator";
+import { UserMenu } from "@/components/UserMenu";
 import { createClient } from "@/lib/supabase";
 import { useAuth } from "@/hooks/useAuth";
 import { useActiveQuiz, useQuizzesList } from "@/hooks/queries/useQuizzes";
-import type { QuizTheme } from "@/utils/types";
+import type { QuizTheme, Category, Team, AdjustmentEntry } from "@/utils/types";
 
 export default function Home() {
   const router = useRouter();
@@ -46,6 +47,7 @@ export default function Home() {
     useQuizzesList();
 
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
+  const [currentUserEmail, setCurrentUserEmail] = useState<string | undefined>(undefined);
   const [isAnonymous, setIsAnonymous] = useState<boolean>(false);
   const [isInitialized, setIsInitialized] = useState(false);
 
@@ -61,6 +63,7 @@ export default function Home() {
         data: { user },
       } = await supabase.auth.getUser();
       setCurrentUserId(user?.id || null);
+      setCurrentUserEmail(user?.email);
       setIsAnonymous(user?.is_anonymous || false);
     };
 
@@ -69,7 +72,18 @@ export default function Home() {
 
   // Stable callback to sync quiz data from query to Zustand store
   const syncQuizDataToStore = useCallback(
-    (quizData: any) => {
+    (quizData: {
+      categories?: Category[];
+      teams?: Team[];
+      adjustmentLog?: AdjustmentEntry[];
+      quizId: string;
+      quizOwnerId: string;
+      quizTitle: string;
+      quizDescription: string;
+      quizTimeLimit: number | null;
+      quizTheme: string;
+      quizIsPublic: boolean;
+    }) => {
       setCategories(quizData.categories || []);
       useGameStore.setState({
         teams: quizData.teams || [],
@@ -101,7 +115,7 @@ export default function Home() {
 
     // If playing a public quiz, don't sync from query (data is already in Zustand)
     if (isPlayingPublicQuiz) {
-      setIsInitialized(true);
+      queueMicrotask(() => setIsInitialized(true));
       return;
     }
 
@@ -121,10 +135,10 @@ export default function Home() {
         });
       }
 
-      setIsInitialized(true);
+      queueMicrotask(() => setIsInitialized(true));
     } else {
       // No active quiz found
-      setIsInitialized(true);
+      queueMicrotask(() => setIsInitialized(true));
     }
   }, [
     isAuthReady,
@@ -173,17 +187,7 @@ export default function Home() {
             {quizDescription}
           </p>
           <div className="absolute top-0 right-0 flex items-center gap-2">
-            {isAnonymous && (
-              <Button
-                variant="default"
-                size="sm"
-                onClick={() => router.push("/signup")}
-                className="bg-primary hover:bg-primary/90"
-              >
-                <UserPlus className="mr-2 h-4 w-4" />
-                Opprett konto
-              </Button>
-            )}
+            <UserMenu userEmail={currentUserEmail} isAnonymous={isAnonymous} />
             <Button
               variant="ghost"
               size="icon"
