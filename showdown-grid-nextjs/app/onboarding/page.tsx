@@ -12,6 +12,7 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { Sparkles, User } from "lucide-react";
+import Link from "next/link";
 
 export default function OnboardingPage() {
   const router = useRouter();
@@ -166,9 +167,20 @@ export default function OnboardingPage() {
           </Card>
         </div>
 
-        <p className="text-center text-sm text-muted-foreground mt-6">
-          Du kan også registrere bruker senere
-        </p>
+        <div className="text-center mt-6 space-y-2">
+          <p className="text-sm text-muted-foreground">
+            Du kan også registrere bruker senere
+          </p>
+          <p className="text-sm text-muted-foreground">
+            Har du allerede konto?{" "}
+            <Link
+              href="/login"
+              className="text-primary hover:underline font-medium"
+            >
+              Logg inn
+            </Link>
+          </p>
+        </div>
       </div>
     </div>
   );

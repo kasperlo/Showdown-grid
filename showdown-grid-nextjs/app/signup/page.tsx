@@ -15,6 +15,7 @@ import {
 } from "@/components/ui/card";
 import { ArrowLeft, Loader2 } from "lucide-react";
 import Link from "next/link";
+import { toast } from "@/hooks/use-toast";
 
 export default function SignupPage() {
   const router = useRouter();
@@ -61,13 +62,53 @@ export default function SignupPage() {
         password,
       });
 
+      console.log("[Signup] Result:", { data, error: signupError });
+
       if (signupError) {
+        console.error("[Signup] Error:", signupError);
         setError(signupError.message);
         return;
       }
 
       if (!data.user) {
+        console.error("[Signup] No user created");
         setError("Kunne ikke opprette bruker");
+        return;
+      }
+
+      console.log("[Signup] User created:", data.user.id, "Session exists:", !!data.session);
+
+      // Check if email confirmation is required
+      // In production, Supabase often requires email confirmation before session is established
+      const requiresEmailConfirmation =
+        !data.session && !data.user.email_confirmed_at;
+
+      console.log("[Signup] Email confirmation required:", requiresEmailConfirmation);
+
+      if (requiresEmailConfirmation) {
+        // Email confirmation required - show success message
+        setError(null);
+        console.warn("[Signup] E-postbekreftelse er påkrevd. Bruker må sjekke e-post.");
+        toast({
+          title: "Konto opprettet!",
+          description:
+            "Sjekk din e-post for bekreftelseslenken. Du kan logge inn etter at du har bekreftet e-posten din.",
+        });
+
+        // Show additional info in development
+        if (process.env.NODE_ENV === 'development') {
+          console.info(`
+            ⚠️  E-POSTBEKREFTELSE ER AKTIVERT
+
+            For å deaktivere i Supabase Dashboard:
+            1. Gå til Authentication → Providers → Email
+            2. Deaktiver "Confirm email"
+
+            Alternativt: Sjekk e-posten din for bekreftelseslenken.
+          `);
+        }
+
+        router.push("/onboarding");
         return;
       }
 
@@ -92,18 +133,26 @@ export default function SignupPage() {
         }
       }
 
-      // Wait for session to be established and verify it exists
-      // Poll for session up to 3 seconds
+      // Session should exist if email confirmation is not required
+      // But wait a bit for it to be established (especially in production)
       let sessionEstablished = false;
-      for (let i = 0; i < 30; i++) {
-        const {
-          data: { session },
-        } = await supabase.auth.getSession();
-        if (session) {
-          sessionEstablished = true;
-          break;
+      const sessionToCheck = data.session;
+
+      if (sessionToCheck) {
+        // Session already exists from signup
+        sessionEstablished = true;
+      } else {
+        // Poll for session (may take a moment in production)
+        for (let i = 0; i < 30; i++) {
+          const {
+            data: { session },
+          } = await supabase.auth.getSession();
+          if (session) {
+            sessionEstablished = true;
+            break;
+          }
+          await new Promise((resolve) => setTimeout(resolve, 100));
         }
-        await new Promise((resolve) => setTimeout(resolve, 100));
       }
 
       if (!sessionEstablished) {
@@ -114,9 +163,11 @@ export default function SignupPage() {
       // Redirect to home
       router.push("/");
       router.refresh();
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error("Signup error:", error);
-      setError(error.message || "Noe gikk galt. Prøv igjen.");
+      const errorMessage =
+        error instanceof Error ? error.message : "Noe gikk galt. Prøv igjen.";
+      setError(errorMessage);
     } finally {
       setIsLoading(false);
     }
