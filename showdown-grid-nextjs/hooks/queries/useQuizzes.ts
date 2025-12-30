@@ -1,5 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
-import type { QuizMetadata } from "@/utils/types";
+import type { QuizMetadata, Category, Team, AdjustmentEntry } from "@/utils/types";
 
 // Query keys
 export const quizKeys = {
@@ -21,9 +21,9 @@ interface ActiveQuizData {
   quizTimeLimit: number | null;
   quizTheme: string;
   quizIsPublic: boolean;
-  categories: any[];
-  teams: any[];
-  adjustmentLog: any[];
+  categories: Category[];
+  teams: Team[];
+  adjustmentLog: AdjustmentEntry[];
 }
 
 interface QuizListResponse {

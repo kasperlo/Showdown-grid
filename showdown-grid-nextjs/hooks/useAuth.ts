@@ -21,8 +21,8 @@ export function useAuth(): UseAuthReturn {
   useEffect(() => {
     const initAuth = async () => {
       try {
-        // Skip auth check on onboarding and signup pages
-        if (pathname === "/onboarding" || pathname === "/signup") {
+        // Skip auth check on onboarding, signup, and login pages
+        if (pathname === "/onboarding" || pathname === "/signup" || pathname === "/login") {
           setIsAuthReady(true);
           return;
         }

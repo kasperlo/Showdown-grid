@@ -1,26 +1,18 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { quizRunKeys } from "../queries/useQuizRuns";
-import type { QuizRun, QuizRunSummary } from "@/utils/types";
+import type { QuizRun, QuizRunSummary, QuizRunFinalState } from "@/utils/types";
 
 // Types
 interface StartSessionData {
   quizId: string;
   startedAt: string;
-  finalState: {
-    categories: any[];
-    teams: any[];
-    adjustmentLog: any[];
-  };
+  finalState: QuizRunFinalState;
 }
 
 interface CompleteSessionData {
   runId: string;
   quizId: string; // Added to fix race condition - needed to get active run
-  finalState: {
-    categories: any[];
-    teams: any[];
-    adjustmentLog: any[];
-  };
+  finalState: QuizRunFinalState;
 }
 
 interface StartSessionResponse {

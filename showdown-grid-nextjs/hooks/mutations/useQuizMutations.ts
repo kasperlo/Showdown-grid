@@ -1,25 +1,34 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { quizKeys } from '../queries/useQuizzes';
-import type { QuizMetadata } from '@/utils/types';
+import type { QuizMetadata, Category, Team, AdjustmentEntry, QuizTheme } from '@/utils/types';
 
 // Types
 interface CreateQuizData {
   title: string;
   description?: string;
-  quizData?: any;
+  quizData?: {
+    categories: Category[];
+    teams: Team[];
+    quizTitle: string;
+    quizDescription: string;
+    quizTimeLimit: number | null;
+    quizTheme: QuizTheme;
+    quizIsPublic: boolean;
+    adjustmentLog: AdjustmentEntry[];
+  };
   setAsActive?: boolean;
 }
 
 interface UpdateQuizData {
   data: {
-    categories: any[];
-    teams: any[];
+    categories: Category[];
+    teams: Team[];
     quizTitle: string;
     quizDescription: string;
     quizTimeLimit: number | null;
     quizTheme: string;
     quizIsPublic: boolean;
-    adjustmentLog: any[];
+    adjustmentLog: AdjustmentEntry[];
   };
 }
 
@@ -140,10 +149,10 @@ export function useUpdateQuiz() {
       const previousQuiz = queryClient.getQueryData(quizKeys.active());
 
       // Optimistically update active quiz
-      queryClient.setQueryData(quizKeys.active(), (old: any) => {
+      queryClient.setQueryData(quizKeys.active(), (old: unknown) => {
         if (!old) return old;
         return {
-          ...old,
+          ...(old as Record<string, unknown>),
           ...updatedData.data,
         };
       });
@@ -210,4 +219,5 @@ export function useDeleteQuiz() {
     },
   });
 }
+
 
