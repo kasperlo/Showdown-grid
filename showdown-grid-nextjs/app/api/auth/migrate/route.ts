@@ -149,12 +149,14 @@ export async function POST(request: NextRequest) {
       quizzesMigrated,
       sessionsMigrated,
     });
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error("[Migration] Unexpected error:", error);
+    const errorMessage = error instanceof Error ? error.message : "Migration failed";
     return NextResponse.json(
-      { error: error.message || "Migration failed" },
+      { error: errorMessage },
       { status: 500 }
     );
   }
 }
+
 

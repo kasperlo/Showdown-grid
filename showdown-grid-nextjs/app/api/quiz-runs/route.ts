@@ -47,7 +47,7 @@ export async function POST(request: NextRequest) {
     // Statistics will be calculated when the session is completed
     const isLiveSession = !endedAt;
 
-    let insertData: any = {
+    const insertData: Record<string, unknown> = {
       quiz_id: quizId,
       user_id: user.id,
       started_at: startedAt,

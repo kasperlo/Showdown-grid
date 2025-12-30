@@ -22,7 +22,7 @@ export async function PATCH(
     const body = await request.json();
     const { title, description } = body;
 
-    const updateData: any = {
+    const updateData: Record<string, unknown> = {
       updated_at: new Date().toISOString(),
     };
 

@@ -14,7 +14,7 @@ export async function GET(
     const { data: { user } } = await supabase.auth.getUser();
 
     // Get the quiz - either public or owned by the user
-    let query = supabase
+    const query = supabase
       .from('quizzes')
       .select('*')
       .eq('id', quizId);
