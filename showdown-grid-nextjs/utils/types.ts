@@ -182,7 +182,6 @@ export interface GameState {
   updateTeamName: (id: string, name: string) => void;
   updateTeamPlayers: (id: string, players: string[]) => void;
 
-  updateScore: (teamId: string, points: number) => void;
   setCategories: (categories: Category[]) => void;
   addCategory: () => void;
   removeCategory: (index: number) => void;
@@ -203,7 +202,6 @@ export interface GameState {
 
   manualAdjustScore: (teamId: string, delta: number, reason?: string) => void;
   undoLastAdjustment: () => void;
-  clearAdjustmentLog?: () => void;
 
   // Database sync
   hasUnsavedChanges: boolean;
@@ -263,7 +261,6 @@ export interface GameState {
   // Quiz run tracking
   currentRunStartTime: number | null;
   setRunStartTime: (time: number | null) => void;
-  saveQuizRun: () => Promise<void>;
 
   // Session management
   activeRunId: string | null;

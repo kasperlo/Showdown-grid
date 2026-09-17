@@ -4,7 +4,6 @@ import {
   countCompleteQuestions,
   extractLiveState,
   extractTemplate,
-  findTemplateIssues,
   isQuestionComplete,
   liveStateFromRunState,
   mergeLiveIntoTemplate,
@@ -250,7 +249,7 @@ describe("completeness", () => {
     expect(isQuestionComplete(historie.questions[0])).toBe(true);
   });
 
-  it("flags a missing answer and zero points", () => {
+  it("flags a missing answer and zero points as incomplete", () => {
     const categories: Category[] = [
       {
         name: "Tom",
@@ -269,8 +268,7 @@ describe("completeness", () => {
       },
     ];
 
-    const issues = findTemplateIssues(categories);
-    expect(issues.map((i) => i.field).sort()).toEqual(["answer", "points"]);
+    expect(isQuestionComplete(categories[0].questions[0])).toBe(false);
     expect(countCompleteQuestions(categories)).toBe(0);
   });
 });

@@ -80,7 +80,7 @@ export default function Setup() {
           </div>
 
           <div className="flex items-center gap-3">
-            <SaveIndicator />
+            <SaveIndicator showIdle />
             {/* Autosave covers the normal case; this is for when it failed and
                 the host wants to try again before leaving the page. */}
             <Button variant="outline" size="sm" onClick={() => saveQuizToDB()}>

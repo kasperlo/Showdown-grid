@@ -271,32 +271,6 @@ export function templateFingerprint(template: QuizTemplate): string {
   return JSON.stringify(template);
 }
 
-export interface QuestionIssue {
-  categoryIndex: number;
-  questionIndex: number;
-  field: "question" | "answer" | "jokerTask" | "points";
-}
-
-/** What is missing before the board is playable. Drives the editor badges. */
-export function findTemplateIssues(categories: Category[]): QuestionIssue[] {
-  const issues: QuestionIssue[] = [];
-  categories.forEach((category, categoryIndex) => {
-    category.questions.forEach((question, questionIndex) => {
-      const add = (field: QuestionIssue["field"]) =>
-        issues.push({ categoryIndex, questionIndex, field });
-
-      if (!Number.isFinite(question.points) || question.points <= 0) add("points");
-      if (question.isJoker) {
-        if (!question.jokerTask?.trim()) add("jokerTask");
-      } else {
-        if (!question.question.trim()) add("question");
-        if (!question.answer.trim()) add("answer");
-      }
-    });
-  });
-  return issues;
-}
-
 export function isQuestionComplete(question: Question): boolean {
   if (!Number.isFinite(question.points) || question.points <= 0) return false;
   if (question.isJoker) return Boolean(question.jokerTask?.trim());

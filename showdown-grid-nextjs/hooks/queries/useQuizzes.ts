@@ -85,25 +85,6 @@ async function fetchPublicQuizzes(): Promise<QuizMetadata[]> {
   return result.quizzes || [];
 }
 
-async function fetchQuiz(quizId: string): Promise<ActiveQuizData> {
-  const response = await fetch(`/api/quizzes/${quizId}/load`);
-
-  if (response.status === 404) {
-    throw new Error("Quiz not found");
-  }
-
-  if (response.status === 401 || response.status === 403) {
-    throw new Error("Unauthorized");
-  }
-
-  if (!response.ok) {
-    throw new Error(`Failed to load quiz: ${response.status}`);
-  }
-
-  const result: QuizDataResponse = await response.json();
-  return result.data;
-}
-
 // Query hooks
 export function useActiveQuiz(enabled: boolean = true) {
   return useQuery({
@@ -148,23 +129,5 @@ export function usePublicQuizzes() {
     queryKey: quizKeys.public(),
     queryFn: fetchPublicQuizzes,
     staleTime: 2 * 60 * 1000, // Public quizzes can be cached longer
-  });
-}
-
-export function useQuiz(quizId: string | null) {
-  return useQuery({
-    queryKey: quizKeys.detail(quizId!),
-    queryFn: () => fetchQuiz(quizId!),
-    enabled: !!quizId, // Only fetch if quizId is provided
-    retry: (failureCount, error) => {
-      // Don't retry on 404 or 401/403
-      if (
-        error instanceof Error &&
-        (error.message === "Quiz not found" || error.message === "Unauthorized")
-      ) {
-        return false;
-      }
-      return failureCount < 1;
-    },
   });
 }

@@ -9,7 +9,6 @@ import type {
   LoadQuizInput,
 } from "./types";
 import {
-  defaultQuestions,
   defaultTeams,
   emptyCategory,
   emptyQuestion,
@@ -18,7 +17,6 @@ import {
   liveStateFromRunState,
   mergeLiveIntoTemplate,
   starterCategories,
-  answeredKey,
   DEFAULT_POINTS,
 } from "./quiz-template";
 import {
@@ -264,13 +262,6 @@ export const useGameStore = create<GameState>()((set, get) => {
     updateTeamPlayers: (id: string, players: string[]) =>
       set((state) => ({
         teams: state.teams.map((t) => (t.id === id ? { ...t, players } : t)),
-      })),
-
-    updateScore: (teamId: string, points: number) =>
-      set((state) => ({
-        teams: state.teams.map((t) =>
-          t.id === teamId ? { ...t, score: t.score + points } : t
-        ),
       })),
 
     setLastQuestion: (question: LastQuestion | null) => {
@@ -600,7 +591,6 @@ export const useGameStore = create<GameState>()((set, get) => {
     removeTeam: withUnsavedChanges(actions.removeTeam, set),
     updateTeamName: withUnsavedChanges(actions.updateTeamName, set),
     updateTeamPlayers: withUnsavedChanges(actions.updateTeamPlayers, set),
-    updateScore: withUnsavedChanges(actions.updateScore, set),
     markQuestionAsAnswered: withUnsavedChanges(
       actions.markQuestionAsAnswered,
       set
@@ -723,13 +713,6 @@ export const useGameStore = create<GameState>()((set, get) => {
 
     setRunStartTime: (time: number | null) => {
       set({ currentRunStartTime: time });
-    },
-
-    saveQuizRun: async () => {
-      const state = get();
-      if (state.activeRunId) {
-        await get().completeSession(state.activeRunId);
-      }
     },
 
     startSession: async () => {
@@ -943,4 +926,3 @@ export const useGameStore = create<GameState>()((set, get) => {
   };
 });
 
-export { answeredKey, defaultQuestions };

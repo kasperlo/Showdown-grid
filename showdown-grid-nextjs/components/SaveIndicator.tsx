@@ -12,7 +12,18 @@ import { cn } from "@/lib/utils";
  * The "Lagret" flash fades via the store (see reportSaved), which keeps this a
  * pure render with no timers of its own.
  */
-export function SaveIndicator({ className }: { className?: string }) {
+export function SaveIndicator({
+  className,
+  showIdle = false,
+}: {
+  className?: string;
+  /**
+   * Show "Autolagrer" when nothing has been saved yet. On by default in the
+   * editor, off while hosting: there, the thing being stored is the running
+   * session, not the quiz, and saying "autolagrer" would point at the wrong one.
+   */
+  showIdle?: boolean;
+}) {
   const saveStatus = useGameStore((s) => s.saveStatus);
   const saveError = useGameStore((s) => s.saveError);
   const lastSavedAt = useGameStore((s) => s.lastSavedAt);
@@ -59,16 +70,14 @@ export function SaveIndicator({ className }: { className?: string }) {
     );
   }
 
-  if (lastSavedAt) {
-    return (
-      <span className={cn(base, "text-muted-foreground", className)}>
-        <Cloud className="h-3.5 w-3.5" aria-hidden />
-        Lagret {formatClock(lastSavedAt)}
-      </span>
-    );
-  }
+  if (!lastSavedAt && !showIdle) return null;
 
-  return null;
+  return (
+    <span className={cn(base, "text-muted-foreground", className)}>
+      <Cloud className="h-3.5 w-3.5" aria-hidden />
+      {lastSavedAt ? `Lagret ${formatClock(lastSavedAt)}` : "Autolagrer"}
+    </span>
+  );
 }
 
 function formatClock(timestamp: number): string {

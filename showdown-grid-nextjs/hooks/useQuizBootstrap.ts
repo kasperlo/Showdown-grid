@@ -29,11 +29,11 @@ interface RawQuizPayload {
  * Both the game page and the editor need the same thing: the stored template,
  * plus whatever live session is running on top of it. Doing it in one hook is
  * also what keeps a refetch from overwriting a running game — the fetch happens
- * exactly once per mount, not on every focus change.
+ * once per mount, not on every focus change.
  *
- * The cancel flag is a ref rather than a per-effect local: loading the quiz
- * updates the store, which re-renders, which would re-run the effect and cancel
- * the load that was still finishing.
+ * Cancellation uses a run counter rather than a boolean: React's development
+ * double-mount would otherwise let the first, abandoned load see the flag reset
+ * by the second mount and apply its result as well, loading the quiz twice.
  */
 export function useQuizBootstrap(): BootstrapState {
   const [state, setState] = useState<BootstrapState>(() => {
@@ -42,18 +42,17 @@ export function useQuizBootstrap(): BootstrapState {
       ? { status: "ready", quizId: store.activeQuizId }
       : { status: "loading" };
   });
-  const aliveRef = useRef(true);
+  const runCounter = useRef(0);
 
   useEffect(() => {
-    aliveRef.current = true;
+    const myRun = ++runCounter.current;
+    const isCurrent = () => runCounter.current === myRun;
     const store = useGameStore.getState();
 
     // Already loaded in this tab, for example navigating editor → game.
     if (store.isHydrated && store.activeQuizId) {
       setState({ status: "ready", quizId: store.activeQuizId });
-      return () => {
-        aliveRef.current = false;
-      };
+      return;
     }
 
     const run = async () => {
@@ -64,7 +63,7 @@ export function useQuizBootstrap(): BootstrapState {
 
       try {
         const response = await fetch(url);
-        if (!aliveRef.current) return;
+        if (!isCurrent()) return;
 
         if (response.status === 404 || response.status === 403) {
           useGameStore.getState().setHydrated(true);
@@ -80,7 +79,7 @@ export function useQuizBootstrap(): BootstrapState {
         }
 
         const { data } = (await response.json()) as { data: RawQuizPayload };
-        if (!aliveRef.current) return;
+        if (!isCurrent()) return;
 
         const isPublicPlay = Boolean(publicQuizId);
         const template = templateFromQuizData(
@@ -110,7 +109,7 @@ export function useQuizBootstrap(): BootstrapState {
         setState({ status: "ready", quizId: data.quizId });
         await useGameStore.getState().restoreActiveSession(data.quizId);
       } catch (error) {
-        if (!aliveRef.current) return;
+        if (!isCurrent()) return;
         useGameStore.getState().setHydrated(true);
         setState({
           status: "error",
@@ -120,10 +119,6 @@ export function useQuizBootstrap(): BootstrapState {
     };
 
     void run();
-
-    return () => {
-      aliveRef.current = false;
-    };
   }, []);
 
   return state;

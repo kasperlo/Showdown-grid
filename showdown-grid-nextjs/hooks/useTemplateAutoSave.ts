@@ -12,11 +12,13 @@ import { useSaveTemplate } from "@/hooks/mutations/useQuizMutations";
 /**
  * Saves the quiz template when it actually changes.
  *
- * Two things this gets right that the previous version did not: it only reacts
- * to the debounced value (the old effect listed the raw state in its dependency
- * array as well, so the debounce never held anything back), and it compares a
- * fingerprint of the template, so playing a game — which changes scores and
- * answered flags but not the template — writes nothing at all.
+ * Three rules, each of which was broken before:
+ *
+ * 1. It compares a fingerprint of the TEMPLATE, so playing a game — which
+ *    changes scores and answered flags but not the template — writes nothing.
+ * 2. It only writes once the debounce has settled. The old effect listed the raw
+ *    state in its dependency array too, so the debounce held nothing back.
+ * 3. Loading a quiz is not an edit, and neither is switching between them.
  */
 export function useTemplateAutoSave() {
   const categories = useGameStore((s) => s.categories);
@@ -49,6 +51,16 @@ export function useTemplateAutoSave() {
   );
   const { mutate: save } = useSaveTemplate();
 
+  // The baseline has to come from the CURRENT fingerprint, not the debounced
+  // one. Loading a quiz changes both the id and the board in the same update,
+  // and the debounced value still holds the previous board for another 1200 ms —
+  // so taking the baseline from it made every load write the quiz straight back.
+  useEffect(() => {
+    if (baseline.current.quizId !== activeQuizId) {
+      baseline.current = { quizId: activeQuizId, fingerprint };
+    }
+  }, [activeQuizId, fingerprint]);
+
   useEffect(() => {
     if (!isHydrated || !activeQuizId) return;
 
@@ -61,18 +73,21 @@ export function useTemplateAutoSave() {
       return;
     }
 
-    // Switching quiz adopts the first fingerprint as already stored; otherwise
-    // loading a quiz would immediately write it straight back.
+    // The effect above owns the baseline; until it has one for this quiz there
+    // is nothing to compare against.
     if (
       baseline.current.quizId !== activeQuizId ||
       baseline.current.fingerprint === null
     ) {
-      baseline.current = {
-        quizId: activeQuizId,
-        fingerprint: debouncedFingerprint,
-      };
       return;
     }
+
+    // The debounced value can be OLDER than the baseline, not just newer:
+    // loading a quiz changes the board instantly while the debounce still holds
+    // the previous one for 1200 ms. Saving then wrote the state the app had
+    // before the load — an empty board with an empty title, which the server
+    // rejected with 400. Only a settled debounce is a real edit.
+    if (debouncedFingerprint !== fingerprint) return;
 
     if (baseline.current.fingerprint === debouncedFingerprint) return;
 
@@ -96,5 +111,5 @@ export function useTemplateAutoSave() {
         },
       }
     );
-  }, [debouncedFingerprint, activeQuizId, isHydrated, save]);
+  }, [debouncedFingerprint, fingerprint, activeQuizId, isHydrated, save]);
 }
