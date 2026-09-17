@@ -332,3 +332,70 @@ avklart med eier før bygging:
   prettier-dependency, så `npx` henter v3 med andre defaults enn koden rundt.
   Én reell endring i store.ts ble +80/−42 av ren formatering. Etter
   tilbakestilling: +13/−1.
+
+## 2026-09-17 — Stillingen ble en kolonne ved siden av brettet
+
+- **Beslutning:** der det er plass står stillingen som et panel til høyre for
+  brettet, og poengdokken får bunnraden for seg selv. Under den bredden er det
+  én bunnrad, og dokken tar den over mens en runde går.
+- **Begrunnelse:** forrige runde la stillingen i en vannrett stripe nederst.
+  Den fikk plass, men åtte lag ble to rader med klemte piller og klippede navn
+  — det leste som en bokmerkelinje, ikke en tabell. Kolonnen bruker den tomme
+  marginen ved siden av et firekolonners brett, og gir hvert lag en full rad
+  med et tall salen kan lese.
+- **Vurdert og forkastet:** å beholde stripa og bare gjøre pillene større. Det
+  løser ikke at bredden må deles på antall lag.
+- **Konsekvens:** med kolonnen står poengsummene synlige mens poeng deles ut,
+  som er det som ble etterspurt.
+
+## 2026-09-17 — Terskelen for kolonnen følger antall kategorier
+
+- **Beslutning:** `min-width` regnes ut fra `kategorier × 150px + panel og
+  marger`, med 1024px som gulv. Fire kategorier gir kolonne fra ~1030px, syv
+  fra ~1515px.
+- **Begrunnelse:** et fast brytepunkt på 1024px ville presset syv kolonner ned
+  til 85px hver for å få plass til panelet — under bredden der et rom kan lese
+  dem. Brettet har førsteprioritet på plassen.
+- **Verifisert:** 1020px gir rad, 1040px gir kolonne, brettet får 163px
+  kolonner og siden skroller ikke.
+
+## 2026-09-17 — Ingen bryting i rader med lag
+
+- **Beslutning:** både stillingsraden og dokkens lagbrikker er én rad som
+  skroller sidelengs. De brytes ikke.
+- **Begrunnelse:** bryting er nettopp det som lagde de klemte radene. En rad
+  som skroller holder navnene lesbare uansett antall lag.
+- **Felle underveis:** `justify-center` på en skrollbar rad skyver første
+  element utenfor venstre kant, der ingen scrolling når det. Løst med `mx-auto`
+  på en indre rad i stedet.
+
+## 2026-09-17 — Stillingskolonnen er et panel, ikke løse rader
+
+- **Beslutning:** kolonnen har `glass`-bakgrunn og radene beholder naturlig
+  høyde.
+- **Begrunnelse:** to varianter ble prøvd og forkastet visuelt. Løse rader mot
+  bakgrunnen etterlot 570px bart felt under fire lag, som leste som en
+  layoutfeil. Rader som strakk seg for å fylle høyden ble 160px høye med én
+  tekstlinje midt i — verre. Et panel med kant gjør at romslig plass leser som
+  et panel med plass til flere lag.
+
+## 2026-09-17 — Tilleggsinfo på kortet
+
+- **Beslutning:** nytt felt `explanation` på spørsmålet. Vises under svaret når
+  det avsløres, dempet og mindre enn svaret. Kolonne 6 i lim-inn. Kollapset bak
+  en knapp i kortredigeringen.
+- **Begrunnelse:** noen kort trenger en setning etter svaret — «true false» er
+  riktig, men Integer-cachen er det man lærer noe av. Å legge den i
+  spørsmålsteksten gjør spørsmålet langt for alle de andre kortene.
+- **Vurdert og forkastet:** å vise den samtidig med spørsmålet. Da er den en
+  ledetråd.
+- **Merk:** feltet påvirker ikke om et kort regnes som ferdig.
+
+## 2026-09-17 — Visuell verifisering, ikke bare måling
+
+- **Beslutning:** skjermbilder tas nå i full ruteoppløsning (`scale: 1`).
+- **Begrunnelse:** forrige runde ble verifisert med tall — «får plass i
+  vindushøyden, ingen overflow» — og skjermbilder på 440×248px av en
+  1920-visning. Tallene var riktige og layouten var likevel dårlig. Detaljene
+  som avslørte det (klemte piller, klippede navn, tomt panel) var usynlige på
+  den oppløsningen.

@@ -150,7 +150,8 @@ function QuestionModalContent() {
               )}
 
               {revealed && !isJoker && (
-                <div className="w-full max-w-5xl rounded-lg border border-border bg-muted p-4">
+                <div className="flex w-full max-w-5xl flex-col gap-3">
+                <div className="w-full rounded-lg border border-border bg-muted p-4">
                   {/* The answer to a code card is usually code itself —
                       `"object"`, `[1, NaN, NaN]` — and the quotes and brackets
                       have to survive. */}
@@ -163,6 +164,15 @@ function QuestionModalContent() {
                   >
                     {lastQuestion.answer || "(Ingen svartekst)"}
                   </p>
+                </div>
+
+                {lastQuestion.explanation?.trim() && (
+                  /* Smaller than the answer on purpose: the answer is what the
+                     room shouts, this is what the host reads out after. */
+                  <p className="whitespace-pre-wrap px-2 text-center text-[clamp(0.95rem,2.6vh,1.7rem)] leading-snug text-muted-foreground">
+                    {lastQuestion.explanation}
+                  </p>
+                )}
                 </div>
               )}
             </>

@@ -260,51 +260,60 @@ function DockBody() {
               <AddTeamInline autoFocus />
             </div>
           ) : (
-            <div className="flex flex-wrap items-center justify-center gap-2">
-              {teams.map((team, index) => {
-                const isWinner = round.positiveTeamId === team.id;
-                const hasNeg = round.negativeAwardedTo.includes(team.id);
-                const chipActive =
-                  (mode === "plus" && isWinner) || (mode === "minus" && hasNeg);
-                const chipDisabled =
-                  (mode === "plus" && !!round.positiveTeamId) ||
-                  (mode === "minus" && (hasNeg || !!round.positiveTeamId));
+            <div className="flex overflow-x-auto pb-0.5">
+              {/* mx-auto on an inner row, not justify-center on the scroller:
+                  centering a flex row wider than its container pushes the first
+                  item past the left edge, where no amount of scrolling reaches
+                  it. */}
+              <div className="mx-auto flex items-center gap-2">
+                {teams.map((team, index) => {
+                  const isWinner = round.positiveTeamId === team.id;
+                  const hasNeg = round.negativeAwardedTo.includes(team.id);
+                  const chipActive =
+                    (mode === "plus" && isWinner) ||
+                    (mode === "minus" && hasNeg);
+                  const chipDisabled =
+                    (mode === "plus" && !!round.positiveTeamId) ||
+                    (mode === "minus" && (hasNeg || !!round.positiveTeamId));
 
-                return (
-                  <button
-                    key={team.id}
-                    onClick={() => awardTo(team.id)}
-                    disabled={chipDisabled}
-                    className={[
-                      "inline-flex items-center gap-2 rounded-full border border-border px-3 py-1.5 text-[clamp(0.85rem,2.1vh,1.3rem)] transition-colors",
-                      chipDisabled
-                        ? "cursor-not-allowed opacity-50"
-                        : "hover:bg-muted",
-                      chipActive
-                        ? mode === "plus"
-                          ? "bg-success text-success-foreground"
-                          : "bg-destructive text-destructive-foreground"
-                        : "bg-popover",
-                    ].join(" ")}
-                    aria-pressed={chipActive}
-                    title={
-                      mode === "plus"
-                        ? `Tildel +${customPoints} til ${team.name} (${index + 1})`
-                        : `Tildel −${customPoints} til ${team.name} (${index + 1})`
-                    }
-                  >
-                    {index < 9 && (
-                      <kbd className="rounded bg-muted px-1 text-[0.65rem] text-muted-foreground">
-                        {index + 1}
-                      </kbd>
-                    )}
-                    <span className="max-w-[8rem] truncate">{team.name}</span>
-                    <span className="text-[clamp(0.95rem,2.6vh,1.6rem)] font-bold tabular-nums">
-                      {team.score}
-                    </span>
-                  </button>
-                );
-              })}
+                  return (
+                    <button
+                      key={team.id}
+                      onClick={() => awardTo(team.id)}
+                      disabled={chipDisabled}
+                      className={[
+                        "inline-flex shrink-0 items-center gap-2 rounded-full border border-border px-3 py-1.5 text-[clamp(0.85rem,2.1vh,1.3rem)] transition-colors",
+                        chipDisabled
+                          ? "cursor-not-allowed opacity-50"
+                          : "hover:bg-muted",
+                        chipActive
+                          ? mode === "plus"
+                            ? "bg-success text-success-foreground"
+                            : "bg-destructive text-destructive-foreground"
+                          : "bg-popover",
+                      ].join(" ")}
+                      aria-pressed={chipActive}
+                      title={
+                        mode === "plus"
+                          ? `Tildel +${customPoints} til ${team.name} (${index + 1})`
+                          : `Tildel −${customPoints} til ${team.name} (${index + 1})`
+                      }
+                    >
+                      {index < 9 && (
+                        <kbd className="rounded bg-muted px-1 text-[0.65rem] text-muted-foreground">
+                          {index + 1}
+                        </kbd>
+                      )}
+                      <span className="max-w-[10rem] truncate">
+                        {team.name}
+                      </span>
+                      <span className="text-[clamp(0.95rem,2.6vh,1.6rem)] font-bold tabular-nums">
+                        {team.score}
+                      </span>
+                    </button>
+                  );
+                })}
+              </div>
             </div>
           )}
         </div>

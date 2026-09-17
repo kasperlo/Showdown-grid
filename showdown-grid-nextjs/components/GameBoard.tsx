@@ -80,7 +80,7 @@ export function GameBoard() {
           // Jeopardy board. Seven columns still fill a 1920px screen.
           className="grid min-h-0 w-full min-w-[36rem] flex-1 justify-center gap-1.5 sm:min-w-0 sm:gap-3"
           style={{
-            gridTemplateColumns: `repeat(${categories.length}, minmax(6rem, 16rem))`,
+            gridTemplateColumns: `repeat(${categories.length}, minmax(6rem, 18rem))`,
             gridTemplateRows: `auto repeat(${rowCount}, minmax(2.75rem, 1fr))`,
           }}
         >
