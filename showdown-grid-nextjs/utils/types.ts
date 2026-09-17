@@ -11,6 +11,12 @@ export interface Question {
    * fences out of free text guesses at intent.
    */
   code?: string;
+  /**
+   * Shown to the room under the answer, once it has been revealed. A place for
+   * the sentence that turns "true false" into something the room learns from,
+   * without lengthening the question itself.
+   */
+  explanation?: string;
   imageUrl?: string;
   answered: boolean;
   isJoker?: boolean;
@@ -37,6 +43,7 @@ export interface LastQuestion {
   question: string;
   answer: string;
   code?: string;
+  explanation?: string;
   imageUrl?: string;
   answered?: boolean;
   isJoker?: boolean;

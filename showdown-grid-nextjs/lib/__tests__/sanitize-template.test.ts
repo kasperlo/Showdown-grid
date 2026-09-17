@@ -34,6 +34,39 @@ describe("sanitizeQuizData", () => {
     expect(result.jokerTimeLimit).toBeNull();
   });
 
+  it("keeps the code snippet and the explanation, capped", () => {
+    const result = sanitizeQuizData({
+      categories: [
+        {
+          name: "Kode",
+          questions: [
+            {
+              points: 500,
+              question: "Hva printes?",
+              answer: "true false",
+              code: "c".repeat(5000),
+              explanation: "e".repeat(3000),
+            },
+          ],
+        },
+      ],
+    });
+
+    const card = result.categories[0].questions[0];
+    expect(card.code).toHaveLength(4000);
+    expect(card.explanation).toHaveLength(2000);
+  });
+
+  it("returns an empty string rather than dropping the explanation", () => {
+    const result = sanitizeQuizData({
+      categories: [{ name: "Mat", questions: [{ points: 100 }] }],
+    });
+
+    // An absent key reads as undefined in an older client; an empty string does
+    // not. This is why the field went missing from the database once already.
+    expect(result.categories[0].questions[0].explanation).toBe("");
+  });
+
   it("returns an empty board for a missing payload", () => {
     expect(sanitizeQuizData(undefined)).toEqual({
       categories: [],

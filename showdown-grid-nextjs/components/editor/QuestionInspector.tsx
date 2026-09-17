@@ -14,6 +14,7 @@ import {
   ChevronRight,
   CircleAlert,
   Code2,
+  Lightbulb,
   ImagePlus,
   ListChecks,
   Trash2,
@@ -65,6 +66,7 @@ function InspectorBody() {
   const counts = readiness(categories);
   const [imageOpen, setImageOpen] = useState(false);
   const [codeOpen, setCodeOpen] = useState(false);
+  const [explanationOpen, setExplanationOpen] = useState(false);
 
   // Keyboard flow. Skipped while typing, so the shortcuts never eat text.
   useEffect(() => {
@@ -316,7 +318,32 @@ function InspectorBody() {
               </Field>
             ) : null}
 
+            {question.explanation?.trim() || explanationOpen ? (
+              <Field label="Tilleggsinfo">
+                <Textarea
+                  value={question.explanation ?? ""}
+                  onChange={(e) => patch({ explanation: e.target.value })}
+                  rows={3}
+                  placeholder="Vises under svaret når du avslører det"
+                  className="text-sm leading-snug"
+                />
+              </Field>
+            ) : null}
+
             <div className="flex flex-wrap gap-1">
+              {!question.explanation?.trim() && !explanationOpen && (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="gap-2 text-muted-foreground"
+                  onClick={() => setExplanationOpen(true)}
+                  title="En setning som vises under svaret — for kort som trenger en forklaring"
+                >
+                  <Lightbulb className="h-4 w-4" />
+                  Tilleggsinfo
+                </Button>
+              )}
+
               {!question.code?.trim() && !codeOpen && (
                 <Button
                   variant="ghost"

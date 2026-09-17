@@ -70,6 +70,21 @@ describe("parseBoardText", () => {
     expect(card.code).toBe("console.log(typeof null)");
   });
 
+  it("reads a sixth column as the explanation", () => {
+    const result = parseBoardText(
+      "Kode\t500\tHva printes?\ttrue false\tInteger a = 127;\tInteger-cachen dekker -128 til 127"
+    );
+
+    const card = result.categories[0].questions[0];
+    expect(card.code).toBe("Integer a = 127;");
+    expect(card.explanation).toBe("Integer-cachen dekker -128 til 127");
+  });
+
+  it("leaves the explanation empty when the column is missing", () => {
+    const result = parseBoardText("Mat\t100\tA\ta");
+    expect(result.categories[0].questions[0].explanation).toBe("");
+  });
+
   it("turns \\n in the code column into real line breaks", () => {
     const result = parseBoardText(
       "Kode;100;Hva printes?;1 4 3 2;console.log('1')\\nconsole.log('4')"
