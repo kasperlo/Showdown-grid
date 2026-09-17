@@ -3,6 +3,35 @@
 Kontekst, antakelse, beslutning, begrunnelse og oppfølging for valg som ikke er
 åpenbare fra koden. Nyeste først.
 
+## 2026-09-17 — Brukerbytte tømmer store, og kontomenyen finnes på alle sider
+
+- **Kontekst:** Kasper prøvde å logge ut av gjestebrukeren og inn på en ekte
+  konto, og kom ikke fram. Tre ting stod i veien samtidig.
+- **Feil 1, den alvorligste:** utlogging kalte `resetGame()`, som nullstiller
+  poeng men beholder quizen. Store overlever klientside-navigasjon, så neste
+  gjest — eller den ekte kontoen du nettopp logget inn på — åpnet rett i forrige
+  brukers quiz, og `useQuizBootstrap` kortsluttet på den gamle `activeQuizId` i
+  stedet for å laste riktig quiz. Verifisert i nettleseren: etter utlogging og
+  «Fortsett som gjest» sto forrige gjests quiz på skjermen.
+- **Beslutning:** `resetForNewUser()` i store tømmer alt som hører til en bruker,
+  og kalles ved innlogging, registrering, gjestestart og utlogging. Query-cachen
+  tømmes samtidig.
+- **Feil 2:** kontomenyen fantes bare i spillhodet. En gjest uten quizzer havner
+  alltid på `/quizzes`, og der fantes ingen vei til utlogging eller innlogging.
+  Menyen leser nå brukeren fra store i stedet for props, og ligger på både
+  spillsiden og biblioteket.
+- **Feil 3:** gjestemenyen hadde bare «Opprett konto». Har du alt en konto, var
+  det ingen inngang. Lagt inn «Logg inn på konto», som logger ut gjesten og går
+  til `/login`.
+- **Tilbake-knappen:** pilen på `/quizzes` pekte til `/`, som sender deg rett
+  tilbake til `/quizzes` når du ikke har en aktiv quiz. Den vises nå bare når det
+  finnes et brett å gå tilbake til.
+- **Detalj:** `session.user.is_anonymous` mangler i objektet fra
+  `onAuthStateChange`. Med `?? false` ble gjester merket «Bruker» og mistet
+  innloggingsvalget. Faller nå tilbake på at en bruker uten e-post er gjest.
+- **Antakelse:** hver ekte konto i denne appen har e-post (e-post/passord er
+  eneste registreringsvei). Holder det ikke lenger, må gjestesjekken gjøres om.
+
 ## 2026-09-17 — Malen og spillet er to ting, lagret hver for seg
 
 - **Kontekst:** `quizzes.quiz_data` inneholdt både quizen og tilstanden fra

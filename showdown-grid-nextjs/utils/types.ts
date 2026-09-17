@@ -238,7 +238,18 @@ export interface GameState {
   activeQuizOwnerId: string | null;
   /** Set once auth resolves, so ownership can be decided without a round trip. */
   currentUserId: string | null;
-  setCurrentUserId: (userId: string | null) => void;
+  currentUserEmail: string | null;
+  isAnonymousUser: boolean;
+  setCurrentUser: (user: {
+    id: string | null;
+    email?: string | null;
+    isAnonymous?: boolean;
+  }) => void;
+  /**
+   * Wipes everything belonging to the signed-in user. Must run on every login
+   * and logout: navigation is client-side, so the store outlives the session.
+   */
+  resetForNewUser: () => void;
   addQuestionToCategory: (categoryIndex: number) => void;
   removeQuestionFromCategory: (
     categoryIndex: number,

@@ -55,6 +55,7 @@ import {
   Trash2,
 } from "lucide-react";
 import { toast } from "@/hooks/use-toast";
+import { UserMenu } from "@/components/UserMenu";
 import { rememberPublicPlay } from "@/utils/live-snapshot";
 import type { QuizMetadata } from "@/utils/types";
 
@@ -90,6 +91,7 @@ export default function QuizzesPage() {
   );
 
   const filteredMine = useMemo(() => filter(myQuizzes), [filter, myQuizzes]);
+  const hasActiveQuiz = Boolean(activeQuizId) || myQuizzes.some((q) => q.is_active);
   const filteredPublic = useMemo(
     () => filter(publicQuizzes),
     [filter, publicQuizzes]
@@ -300,14 +302,19 @@ export default function QuizzesPage() {
       <div className="container mx-auto max-w-5xl p-4 md:p-8">
         <div className="mb-6 flex flex-wrap items-center justify-between gap-3">
           <div className="flex items-center gap-3">
-            <Button
-              variant="ghost"
-              size="icon"
-              onClick={() => router.push("/")}
-              aria-label="Tilbake"
-            >
-              <ArrowLeft className="h-5 w-5" />
-            </Button>
+            {/* Only shown when there is somewhere to go back TO. Without an
+                active quiz, "/" bounces straight back here, so the arrow looked
+                broken. */}
+            {hasActiveQuiz && (
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={() => router.push("/")}
+                aria-label="Tilbake til brettet"
+              >
+                <ArrowLeft className="h-5 w-5" />
+              </Button>
+            )}
             <div>
               <h1 className="text-2xl font-bold sm:text-3xl">Bibliotek</h1>
               <p className="text-sm text-muted-foreground">
@@ -316,10 +323,15 @@ export default function QuizzesPage() {
             </div>
           </div>
 
-          <Button className="gap-2" onClick={() => setCreateOpen(true)}>
-            <Plus className="h-4 w-4" />
-            Ny quiz
-          </Button>
+          <div className="flex items-center gap-2">
+            <Button className="gap-2" onClick={() => setCreateOpen(true)}>
+              <Plus className="h-4 w-4" />
+              Ny quiz
+            </Button>
+            {/* A guest with no quizzes always lands here, and this used to be
+                the one page with no way to sign out or sign in. */}
+            <UserMenu />
+          </div>
         </div>
 
         <div className="relative mb-6">
@@ -403,44 +415,54 @@ export default function QuizzesPage() {
               Du får et tomt brett med fem kategorier og fem spørsmål i hver.
             </DialogDescription>
           </DialogHeader>
-          <div className="space-y-4 py-2">
-            <div className="space-y-1">
-              <label htmlFor="new-title" className="text-sm font-medium">
-                Tittel
-              </label>
-              <Input
-                id="new-title"
-                value={newTitle}
-                onChange={(e) => setNewTitle(e.target.value)}
-                placeholder="Julequiz 2026"
-                // The dialog opens with the cursor here, so the name can be
-                // typed without aiming at the field first.
-                autoFocus
-                onKeyDown={(e) => {
-                  if (e.key === "Enter") void handleCreate();
-                }}
-              />
+          {/* A real form, so Enter submits the way it does in every other
+              dialog. A keydown handler on the input only looked like it did. */}
+          <form
+            onSubmit={(event) => {
+              event.preventDefault();
+              void handleCreate();
+            }}
+          >
+            <div className="space-y-4 py-2">
+              <div className="space-y-1">
+                <label htmlFor="new-title" className="text-sm font-medium">
+                  Tittel
+                </label>
+                <Input
+                  id="new-title"
+                  value={newTitle}
+                  onChange={(e) => setNewTitle(e.target.value)}
+                  placeholder="Julequiz 2026"
+                  // The dialog opens with the cursor here, so the name can be
+                  // typed without aiming at the field first.
+                  autoFocus
+                />
+              </div>
+              <div className="space-y-1">
+                <label htmlFor="new-description" className="text-sm font-medium">
+                  Beskrivelse (valgfritt)
+                </label>
+                <Textarea
+                  id="new-description"
+                  value={newDescription}
+                  onChange={(e) => setNewDescription(e.target.value)}
+                  rows={2}
+                />
+              </div>
             </div>
-            <div className="space-y-1">
-              <label htmlFor="new-description" className="text-sm font-medium">
-                Beskrivelse (valgfritt)
-              </label>
-              <Textarea
-                id="new-description"
-                value={newDescription}
-                onChange={(e) => setNewDescription(e.target.value)}
-                rows={2}
-              />
-            </div>
-          </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setCreateOpen(false)}>
-              Avbryt
-            </Button>
-            <Button onClick={handleCreate} disabled={createQuiz.isPending}>
-              {createQuiz.isPending ? "Oppretter…" : "Opprett og rediger"}
-            </Button>
-          </DialogFooter>
+            <DialogFooter>
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => setCreateOpen(false)}
+              >
+                Avbryt
+              </Button>
+              <Button type="submit" disabled={createQuiz.isPending}>
+                {createQuiz.isPending ? "Oppretter…" : "Opprett og rediger"}
+              </Button>
+            </DialogFooter>
+          </form>
         </DialogContent>
       </Dialog>
 

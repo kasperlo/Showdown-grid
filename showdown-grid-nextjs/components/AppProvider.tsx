@@ -26,27 +26,49 @@ const AUTH_PATHS = new Set(["/onboarding", "/signup", "/login"]);
 export const AppProvider = ({ children }: { children: ReactNode }) => {
   const { isAuthReady } = useAuth();
   const pathname = usePathname();
-  const setCurrentUserId = useGameStore((s) => s.setCurrentUserId);
+  const setCurrentUser = useGameStore((s) => s.setCurrentUser);
 
-  // Ownership decides whether anything may be written at all, so the user id is
-  // resolved once here rather than per page.
+  // Ownership decides whether anything may be written at all, and the user menu
+  // needs the same facts, so the user is resolved once here rather than per page.
+  //
+  // It also has to follow auth changes, not just read the user on mount: signing
+  // in is a client-side navigation, so without the subscription the new account
+  // kept a null user id until a full reload — and a null id means
+  // canEditActiveQuiz() is false, which silently turned off saving.
   useEffect(() => {
     if (!isAuthReady) return;
+    const supabase = createClient();
     let cancelled = false;
 
-    createClient()
-      .auth.getUser()
-      .then(({ data }) => {
-        if (!cancelled) setCurrentUserId(data.user?.id ?? null);
-      })
-      .catch(() => {
-        if (!cancelled) setCurrentUserId(null);
+    const apply = (
+      user: { id: string; email?: string; is_anonymous?: boolean } | null
+    ) => {
+      if (cancelled) return;
+      setCurrentUser({
+        id: user?.id ?? null,
+        email: user?.email ?? null,
+        // The session object from onAuthStateChange does not always carry
+        // is_anonymous, and defaulting it to false labelled guests "Bruker" and
+        // hid the sign-in entry from them. Every real account here signs up with
+        // an email, so a user without one is a guest.
+        isAnonymous: user ? (user.is_anonymous ?? !user.email) : false,
       });
+    };
+
+    supabase.auth
+      .getUser()
+      .then(({ data }) => apply(data.user ?? null))
+      .catch(() => apply(null));
+
+    const { data: subscription } = supabase.auth.onAuthStateChange(
+      (_event, session) => apply(session?.user ?? null)
+    );
 
     return () => {
       cancelled = true;
+      subscription.subscription.unsubscribe();
     };
-  }, [isAuthReady, setCurrentUserId]);
+  }, [isAuthReady, setCurrentUser]);
 
   useSessionAutoSave();
   useTemplateAutoSave();

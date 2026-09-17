@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { GameBoard } from "@/components/GameBoard";
 import { Scoreboard } from "@/components/Scoreboard";
@@ -8,7 +8,6 @@ import { RoundDock } from "@/components/RoundDock";
 import { TurnIndicator } from "@/components/TurnIndicator";
 import { GameHeader } from "@/components/GameHeader";
 import { Button } from "@/components/ui/button";
-import { createClient } from "@/lib/supabase";
 import { useAuth } from "@/hooks/useAuth";
 import { useQuizBootstrap } from "@/hooks/useQuizBootstrap";
 import { useGameStore } from "@/utils/store";
@@ -16,32 +15,11 @@ import { countCompleteQuestions, countQuestions } from "@/utils/quiz-template";
 
 export default function Home() {
   const router = useRouter();
-  const { isAuthReady, isAuthError } = useAuth();
+  useAuth();
   const bootstrap = useQuizBootstrap();
 
   const categories = useGameStore((s) => s.categories);
   const canEdit = useGameStore((s) => s.canEditActiveQuiz());
-
-  const [userEmail, setUserEmail] = useState<string | undefined>(undefined);
-  const [isAnonymous, setIsAnonymous] = useState(false);
-
-  useEffect(() => {
-    if (!isAuthReady || isAuthError) return;
-    let cancelled = false;
-
-    createClient()
-      .auth.getUser()
-      .then(({ data }) => {
-        if (cancelled) return;
-        setUserEmail(data.user?.email);
-        setIsAnonymous(data.user?.is_anonymous ?? false);
-      })
-      .catch(() => undefined);
-
-    return () => {
-      cancelled = true;
-    };
-  }, [isAuthReady, isAuthError]);
 
   // No quiz at all means there is nothing to host; the library is the only
   // useful place to be.
@@ -90,7 +68,7 @@ export default function Home() {
   return (
     <main className="stage min-h-screen pb-40">
       <div className="container mx-auto p-4 md:p-8">
-        <GameHeader userEmail={userEmail} isAnonymous={isAnonymous} />
+        <GameHeader />
 
         <div className="mb-8 flex justify-center">
           <TurnIndicator />

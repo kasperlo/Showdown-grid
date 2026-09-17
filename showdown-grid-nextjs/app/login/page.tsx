@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase";
+import { useGameStore } from "@/utils/store";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -55,13 +56,16 @@ export default function LoginPage() {
         return;
       }
 
-      // Success - redirect to home page
+      // The store survives client-side navigation, so without this the new
+      // account opens straight into the previous (guest) user's quiz.
+      useGameStore.getState().resetForNewUser();
+
       toast({
         title: "Velkommen tilbake!",
         description: "Du er nå logget inn.",
       });
 
-      router.push("/");
+      router.replace("/");
     } catch (err) {
       console.error("Login error:", err);
       setError("En uventet feil oppstod. Prøv igjen.");
@@ -86,7 +90,8 @@ export default function LoginPage() {
         return;
       }
 
-      router.push("/");
+      useGameStore.getState().resetForNewUser();
+      router.replace("/");
     } catch (err) {
       console.error("Guest login error:", err);
     } finally {

@@ -22,6 +22,7 @@ import {
 import {
   clearSnapshot,
   readSnapshot,
+  rememberPublicPlay,
   snapshotIsAhead,
   writeSnapshot,
 } from "./live-snapshot";
@@ -571,6 +572,8 @@ export const useGameStore = create<GameState>()((set, get) => {
     activeQuizId: null as string | null,
     activeQuizOwnerId: null as string | null,
     currentUserId: null as string | null,
+    currentUserEmail: null as string | null,
+    isAnonymousUser: false,
     currentRunStartTime: null as number | null,
     activeRunId: null as string | null,
 
@@ -622,7 +625,64 @@ export const useGameStore = create<GameState>()((set, get) => {
     setHydrated: (hydrated: boolean) =>
       set({ isHydrated: hydrated, isLoading: !hydrated }),
 
-    setCurrentUserId: (userId: string | null) => set({ currentUserId: userId }),
+    setCurrentUser: ({
+      id,
+      email = null,
+      isAnonymous = false,
+    }: {
+      id: string | null;
+      email?: string | null;
+      isAnonymous?: boolean;
+    }) =>
+      set({
+        currentUserId: id,
+        currentUserEmail: email,
+        isAnonymousUser: isAnonymous,
+      }),
+
+    /**
+     * Signing out used to call resetGame(), which clears scores but keeps the
+     * quiz. The store survives client-side navigation, so the next guest — or
+     * the real account you just signed in to — opened straight into the previous
+     * user's quiz, and useQuizBootstrap short-circuited on the stale
+     * activeQuizId instead of loading the right one.
+     */
+    resetForNewUser: () => {
+      const { activeQuizId } = get();
+      if (activeQuizId) clearSnapshot(activeQuizId);
+      rememberPublicPlay(null);
+
+      set({
+        categories: starterCategories(),
+        teams: defaultTeams(),
+        lastQuestion: null,
+        isQuestionOpen: false,
+        round: initialRoundState(),
+        adjustmentLog: [],
+        currentTurnTeamId: null,
+        isInitialTurnSelection: false,
+        isPlayingPublicQuiz: false,
+        quizTitle: "",
+        quizDescription: "",
+        quizTimeLimit: null,
+        jokerTimeLimit: 10,
+        quizTheme: "classic",
+        quizIsPublic: false,
+        activeQuizId: null,
+        activeQuizOwnerId: null,
+        currentUserId: null,
+        currentUserEmail: null,
+        isAnonymousUser: false,
+        activeRunId: null,
+        currentRunStartTime: null,
+        isHydrated: false,
+        isLoading: true,
+        hasUnsavedChanges: false,
+        saveStatus: "idle",
+        saveError: null,
+        lastSavedAt: null,
+      });
+    },
 
     canEditActiveQuiz: () => {
       const { currentUserId, activeQuizOwnerId, isPlayingPublicQuiz } = get();

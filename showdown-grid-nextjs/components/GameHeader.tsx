@@ -8,17 +8,12 @@ import { UserMenu } from "@/components/UserMenu";
 import { SaveIndicator } from "@/components/SaveIndicator";
 import { countQuestions } from "@/utils/quiz-template";
 
-interface GameHeaderProps {
-  userEmail?: string;
-  isAnonymous: boolean;
-}
-
 /**
  * One row of controls at the top instead of icons absolutely positioned over
  * the title, which collided with long quiz names on anything narrower than a
  * laptop.
  */
-export function GameHeader({ userEmail, isAnonymous }: GameHeaderProps) {
+export function GameHeader() {
   const router = useRouter();
   const quizTitle = useGameStore((s) => s.quizTitle);
   const quizDescription = useGameStore((s) => s.quizDescription);
@@ -78,7 +73,7 @@ export function GameHeader({ userEmail, isAnonymous }: GameHeaderProps) {
             <Trophy className="h-4 w-4" />
             Resultater
           </Button>
-          <UserMenu userEmail={userEmail} isAnonymous={isAnonymous} />
+          <UserMenu />
         </div>
       </div>
 

@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase";
 import { useGameStore } from "@/utils/store";
 import { useQueryClient } from "@tanstack/react-query";
-import { User, LogOut, UserPlus } from "lucide-react";
+import { LogIn, LogOut, User, UserPlus } from "lucide-react";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -25,40 +25,37 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 
-interface UserMenuProps {
-  userEmail?: string;
-  isAnonymous: boolean;
-}
-
-export function UserMenu({ userEmail, isAnonymous }: UserMenuProps) {
+/**
+ * Reads the signed-in user from the store rather than taking it as props, so it
+ * can sit on any page. It has to be on every page a user can end up on: a guest
+ * with no quizzes lands on the library, and when the menu was only in the game
+ * header there was no way from there to sign out or sign in.
+ */
+export function UserMenu({ className }: { className?: string }) {
   const router = useRouter();
   const queryClient = useQueryClient();
-  const resetGame = useGameStore((state) => state.resetGame);
+  const email = useGameStore((s) => s.currentUserEmail);
+  const isAnonymous = useGameStore((s) => s.isAnonymousUser);
+  const resetForNewUser = useGameStore((s) => s.resetForNewUser);
   const [showLogoutDialog, setShowLogoutDialog] = useState(false);
   const [isLoggingOut, setIsLoggingOut] = useState(false);
 
-  const displayName = isAnonymous ? "Gjest" : userEmail || "Bruker";
+  const displayName = isAnonymous ? "Gjest" : email || "Bruker";
+
+  const leaveSession = async (destination: "/onboarding" | "/login") => {
+    const supabase = createClient();
+    await supabase.auth.signOut();
+    // Both of these matter: the store keeps the quiz across client-side
+    // navigation, and the query cache keeps the previous account's lists.
+    resetForNewUser();
+    queryClient.clear();
+    router.replace(destination);
+  };
 
   const handleLogout = async () => {
     try {
       setIsLoggingOut(true);
-      const supabase = createClient();
-
-      // Sign out from Supabase
-      await supabase.auth.signOut();
-
-      // Reset Zustand store
-      resetGame();
-
-      // Clear TanStack Query cache
-      queryClient.clear();
-
-      // Redirect based on user type
-      if (isAnonymous) {
-        router.push("/onboarding");
-      } else {
-        router.push("/login");
-      }
+      await leaveSession(isAnonymous ? "/onboarding" : "/login");
     } catch (error) {
       console.error("Logout error:", error);
     } finally {
@@ -71,22 +68,26 @@ export function UserMenu({ userEmail, isAnonymous }: UserMenuProps) {
     <>
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
-          <Button variant="ghost" className="flex items-center gap-2">
-            <User className="h-4 w-4" />
-            <span className="max-w-[150px] truncate">{displayName}</span>
+          <Button variant="ghost" className={className}>
+            <User className="mr-2 h-4 w-4" />
+            <span className="max-w-[10rem] truncate">{displayName}</span>
           </Button>
         </DropdownMenuTrigger>
-        <DropdownMenuContent align="end" className="w-56">
-          {isAnonymous ? (
+        <DropdownMenuContent align="end" className="w-60">
+          {isAnonymous && (
             <>
               <DropdownMenuItem onClick={() => router.push("/signup")}>
                 <UserPlus className="mr-2 h-4 w-4" />
                 Opprett konto
               </DropdownMenuItem>
+              {/* A guest who already has an account had no way in: the only
+                  options were "opprett konto" and "logg ut". */}
+              <DropdownMenuItem onClick={() => void leaveSession("/login")}>
+                <LogIn className="mr-2 h-4 w-4" />
+                Logg inn på konto
+              </DropdownMenuItem>
               <DropdownMenuSeparator />
             </>
-          ) : (
-            <></>
           )}
           <DropdownMenuItem onClick={() => setShowLogoutDialog(true)}>
             <LogOut className="mr-2 h-4 w-4" />
@@ -98,23 +99,17 @@ export function UserMenu({ userEmail, isAnonymous }: UserMenuProps) {
       <AlertDialog open={showLogoutDialog} onOpenChange={setShowLogoutDialog}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Er du sikker på at du vil logge ut?</AlertDialogTitle>
+            <AlertDialogTitle>Logge ut?</AlertDialogTitle>
             <AlertDialogDescription>
               {isAnonymous
-                ? "Du vil bli sendt tilbake til velkomstsiden."
-                : "Du kan logge inn igjen når som helst med din e-post og passord."
-              }
+                ? "Du er gjest. Quizzene du har laget er knyttet til denne gjestebrukeren, og du kommer ikke tilbake til dem etter utlogging. Vil du beholde dem, opprett en konto først."
+                : "Du kan logge inn igjen når som helst med e-post og passord."}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel disabled={isLoggingOut}>
-              Avbryt
-            </AlertDialogCancel>
-            <AlertDialogAction
-              onClick={handleLogout}
-              disabled={isLoggingOut}
-            >
-              {isLoggingOut ? "Logger ut..." : "Logg ut"}
+            <AlertDialogCancel disabled={isLoggingOut}>Avbryt</AlertDialogCancel>
+            <AlertDialogAction onClick={handleLogout} disabled={isLoggingOut}>
+              {isLoggingOut ? "Logger ut…" : "Logg ut"}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase";
+import { useGameStore } from "@/utils/store";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -49,7 +50,8 @@ export default function OnboardingPage() {
         return;
       }
 
-      router.push("/");
+      useGameStore.getState().resetForNewUser();
+      router.replace("/");
       router.refresh();
     } catch (error) {
       console.error("Error during anonymous sign-in:", error);
