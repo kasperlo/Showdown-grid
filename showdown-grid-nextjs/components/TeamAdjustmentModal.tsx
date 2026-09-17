@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useMemo, useState } from "react";
 import { useGameStore } from "@/utils/store";
 import type { Team } from "@/utils/types";
 import {
@@ -14,42 +14,77 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Trash2 } from "lucide-react";
 
 interface TeamAdjustmentModalProps {
   team: Team | null;
   onClose: () => void;
 }
 
-export function TeamAdjustmentModal({ team, onClose }: TeamAdjustmentModalProps) {
-  const [pointsText, setPointsText] = useState<string>("100");
-  const [reason, setReason] = useState("");
+export function TeamAdjustmentModal({
+  team,
+  onClose,
+}: TeamAdjustmentModalProps) {
+  if (!team) return null;
+  // Keyed per team so the name field and the amount reset by remounting rather
+  // than by an effect that has to undo the previous team's values.
+  return <AdjustmentBody key={team.id} team={team} onClose={onClose} />;
+}
+
+function AdjustmentBody({
+  team,
+  onClose,
+}: {
+  team: Team;
+  onClose: () => void;
+}) {
   const manualAdjustScore = useGameStore((state) => state.manualAdjustScore);
+  const updateTeamName = useGameStore((state) => state.updateTeamName);
+  const removeTeam = useGameStore((state) => state.removeTeam);
+
+  const [pointsText, setPointsText] = useState("100");
+  const [reason, setReason] = useState("");
+  const [name, setName] = useState(team.name);
+  const [confirmingRemove, setConfirmingRemove] = useState(false);
 
   const points = useMemo(() => {
     const n = Number.parseInt(pointsText, 10);
     return Number.isFinite(n) ? Math.max(0, n) : 0;
   }, [pointsText]);
 
-  if (!team) return null;
+  const commitName = () => {
+    const next = name.trim();
+    if (next && next !== team.name) updateTeamName(team.id, next);
+  };
 
   const handleAdjust = (delta: number) => {
+    commitName();
     manualAdjustScore(team.id, delta, reason || undefined);
-    setPointsText("100");
-    setReason("");
     onClose();
   };
 
   return (
-    <Dialog open={!!team} onOpenChange={onClose}>
+    <Dialog open onOpenChange={onClose}>
       <DialogContent>
         <DialogHeader>
-          <DialogTitle>Juster poeng for {team.name}</DialogTitle>
-          <DialogDescription>
-            Legg til eller trekk fra poeng manuelt
+          <DialogTitle>{team.name}</DialogTitle>
+          <DialogDescription className="sr-only">
+            Endre lagnavn, juster poeng manuelt, eller fjern laget.
           </DialogDescription>
         </DialogHeader>
 
         <div className="space-y-4">
+          <div>
+            <Label htmlFor="team-name">Lagnavn</Label>
+            <Input
+              id="team-name"
+              value={name}
+              onChange={(event) => setName(event.target.value)}
+              onBlur={commitName}
+              maxLength={80}
+            />
+          </div>
+
           <div>
             <Label htmlFor="points">Poeng</Label>
             <Input
@@ -57,7 +92,7 @@ export function TeamAdjustmentModal({ team, onClose }: TeamAdjustmentModalProps)
               type="number"
               inputMode="numeric"
               value={pointsText}
-              onChange={(e) => setPointsText(e.target.value)}
+              onChange={(event) => setPointsText(event.target.value)}
               min={0}
               step={50}
             />
@@ -68,26 +103,48 @@ export function TeamAdjustmentModal({ team, onClose }: TeamAdjustmentModalProps)
             <Input
               id="reason"
               value={reason}
-              onChange={(e) => setReason(e.target.value)}
+              onChange={(event) => setReason(event.target.value)}
               placeholder="F.eks. bonus for kreativitet"
             />
           </div>
         </div>
 
-        <DialogFooter className="gap-2 flex-col sm:flex-row">
+        <DialogFooter className="flex-col gap-2 sm:flex-row">
+          {confirmingRemove ? (
+            <Button
+              variant="destructive"
+              className="w-full gap-2 sm:mr-auto sm:w-auto"
+              onClick={() => {
+                removeTeam(team.id);
+                onClose();
+              }}
+            >
+              <Trash2 className="h-4 w-4" />
+              Fjern {team.name} for godt
+            </Button>
+          ) : (
+            <Button
+              variant="ghost"
+              className="w-full gap-2 sm:mr-auto sm:w-auto"
+              onClick={() => setConfirmingRemove(true)}
+              title="Fjerner laget og poengsummen dets"
+            >
+              <Trash2 className="h-4 w-4" />
+              Fjern laget
+            </Button>
+          )}
           <Button
-            variant="destructive"
+            variant="secondary"
             onClick={() => handleAdjust(-points)}
             className="w-full sm:w-auto"
           >
-            − Trekk {points} poeng
+            − {points}
           </Button>
           <Button
-            variant="default"
             onClick={() => handleAdjust(points)}
             className="w-full sm:w-auto"
           >
-            + Legg til {points} poeng
+            + {points}
           </Button>
         </DialogFooter>
       </DialogContent>

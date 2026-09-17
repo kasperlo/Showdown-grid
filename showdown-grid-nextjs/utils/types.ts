@@ -200,7 +200,7 @@ export interface GameState {
   setLastQuestion: (question: LastQuestion | null) => void;
   setQuestionOpen: (open: boolean) => void;
 
-  addTeam: () => void;
+  addTeam: (name?: string) => void;
   removeTeam: (id: string) => void;
   updateTeamName: (id: string, name: string) => void;
   updateTeamPlayers: (id: string, players: string[]) => void;
@@ -214,7 +214,6 @@ export interface GameState {
 
   awardPositive: (teamId: string, customPoints?: number) => void;
   awardNegative: (teamId: string, customPoints?: number) => void;
-  skipQuestion: () => void;
   endRound: () => void;
   toggleQuestionAnswered: (categoryName: string, questionIndex: number, answered: boolean) => void;
 

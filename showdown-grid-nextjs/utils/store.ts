@@ -275,30 +275,41 @@ export const useGameStore = create<GameState>()((set, get) => {
         }),
       })),
 
-    addTeam: () =>
+    addTeam: (name?: string) => {
       set((state) => ({
         teams: [
           ...state.teams,
           {
             id: genId(),
-            name: `Lag ${state.teams.length + 1}`,
+            name: name?.trim().slice(0, 80) || `Lag ${state.teams.length + 1}`,
             score: 0,
             players: [],
           },
         ],
-      })),
+      }));
+      // Teams are usually typed in while the room finds its tables, before the
+      // first question has created a run. Until then the snapshot is the only
+      // thing holding them, so a refresh would otherwise lose the lot.
+      snapshotLiveState();
+    },
 
-    removeTeam: (id: string) =>
+    removeTeam: (id: string) => {
       set((state) => ({
         teams: state.teams.filter((t) => t.id !== id),
         currentTurnTeamId:
           state.currentTurnTeamId === id ? null : state.currentTurnTeamId,
-      })),
+      }));
+      snapshotLiveState();
+    },
 
-    updateTeamName: (id: string, name: string) =>
+    updateTeamName: (id: string, name: string) => {
       set((state) => ({
-        teams: state.teams.map((t) => (t.id === id ? { ...t, name } : t)),
-      })),
+        teams: state.teams.map((t) =>
+          t.id === id ? { ...t, name: name.slice(0, 80) } : t
+        ),
+      }));
+      snapshotLiveState();
+    },
 
     updateTeamPlayers: (id: string, players: string[]) =>
       set((state) => ({
@@ -450,24 +461,6 @@ export const useGameStore = create<GameState>()((set, get) => {
           lastQuestion.questionIndex
         );
       }
-      set({
-        lastQuestion: null,
-        isQuestionOpen: false,
-        round: initialRoundState(),
-      });
-      get().nextTurn();
-      snapshotLiveState();
-    },
-
-    skipQuestion: () => {
-      const { lastQuestion } = get();
-      if (!lastQuestion) return;
-
-      get().markQuestionAsAnswered(
-        lastQuestion.categoryName,
-        lastQuestion.questionIndex
-      );
-
       set({
         lastQuestion: null,
         isQuestionOpen: false,
@@ -645,7 +638,6 @@ export const useGameStore = create<GameState>()((set, get) => {
     resetGame: withUnsavedChanges(actions.resetGame, set),
     awardPositive: withUnsavedChanges(actions.awardPositive, set),
     awardNegative: withUnsavedChanges(actions.awardNegative, set),
-    skipQuestion: withUnsavedChanges(actions.skipQuestion, set),
     toggleQuestionAnswered: withUnsavedChanges(
       actions.toggleQuestionAnswered,
       set

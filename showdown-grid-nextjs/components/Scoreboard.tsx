@@ -3,7 +3,9 @@
 import { useMemo, useState } from "react";
 import { useGameStore } from "@/utils/store";
 import type { Team } from "@/utils/types";
-import { Crown, Medal, Pencil } from "lucide-react";
+import { Crown, Medal, Pencil, UserPlus } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { AddTeamInline } from "./AddTeamInline";
 import { TeamAdjustmentModal } from "./TeamAdjustmentModal";
 import { rankTeams } from "@/utils/ranking";
 
@@ -15,26 +17,42 @@ export function Scoreboard() {
   const teams = useGameStore((state) => state.teams);
   const currentTurnTeamId = useGameStore((state) => state.currentTurnTeamId);
   const [selectedTeam, setSelectedTeam] = useState<Team | null>(null);
+  const [adding, setAdding] = useState(false);
 
   const ranked = useMemo(() => rankTeams(teams), [teams]);
   const leaderScore = ranked[0]?.score ?? 0;
 
   if (!teams.length) {
     return (
-      <div className="glass rounded-2xl p-6 text-center text-muted-foreground">
-        Ingen lag enda. Legg dem til i oppsettet.
+      <div className="glass space-y-3 rounded-2xl p-6">
+        <h2 className="text-2xl font-bold tracking-wide text-accent">Lag</h2>
+        <AddTeamInline autoFocus />
       </div>
     );
   }
 
   return (
     <div className="glass w-full rounded-2xl p-4 sm:p-6">
-      <div className="mb-4 flex items-baseline justify-between">
+      <div className="mb-4 flex items-center justify-between gap-2">
         <h2 className="text-2xl font-bold tracking-wide text-accent">Stilling</h2>
-        <span className="text-xs text-muted-foreground">
-          Trykk på et lag for å justere
-        </span>
+        <Button
+          variant="ghost"
+          size="sm"
+          className="gap-2"
+          onClick={() => setAdding((open) => !open)}
+          aria-expanded={adding}
+          title="Legg til et lag som kom for sent"
+        >
+          <UserPlus className="h-4 w-4" />
+          Lag
+        </Button>
       </div>
+
+      {adding && (
+        <div className="mb-4">
+          <AddTeamInline autoFocus />
+        </div>
+      )}
 
       <ol className="space-y-2">
         {ranked.map((team) => {
@@ -51,6 +69,7 @@ export function Scoreboard() {
                 onClick={() =>
                   setSelectedTeam(teams.find((t) => t.id === team.id) ?? null)
                 }
+                title={`Juster poeng eller endre navn for ${team.name}`}
                 className={`tile group relative flex w-full items-center gap-3 overflow-hidden p-3 text-left transition-colors hover:bg-accent/10 ${
                   team.id === currentTurnTeamId ? "ring-2 ring-accent" : ""
                 }`}

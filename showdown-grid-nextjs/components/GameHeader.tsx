@@ -18,7 +18,6 @@ import { countQuestions } from "@/utils/quiz-template";
 export function GameHeader() {
   const router = useRouter();
   const categories = useGameStore((s) => s.categories);
-  const canEdit = useGameStore((s) => s.canEditActiveQuiz());
   const isPublicPlay = useGameStore((s) => s.isPlayingPublicQuiz);
 
   const total = countQuestions(categories);

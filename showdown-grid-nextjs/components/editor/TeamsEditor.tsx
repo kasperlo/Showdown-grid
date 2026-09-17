@@ -36,7 +36,7 @@ export function TeamsEditor() {
           <Users className="h-5 w-5" />
           Lag ({teams.length})
         </h2>
-        <Button onClick={addTeam} size="sm" className="gap-2">
+        <Button onClick={() => addTeam()} size="sm" className="gap-2">
           <Plus className="h-4 w-4" />
           Legg til lag
         </Button>
