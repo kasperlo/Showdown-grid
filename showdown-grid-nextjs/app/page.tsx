@@ -2,11 +2,7 @@
 
 import { useEffect } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { GameBoard } from "@/components/GameBoard";
-import { Scoreboard } from "@/components/Scoreboard";
-import { RoundDock } from "@/components/RoundDock";
-import { TurnIndicator } from "@/components/TurnIndicator";
-import { GameHeader } from "@/components/GameHeader";
+import { GameStage } from "@/components/GameStage";
 import { EditorBar } from "@/components/editor/EditorBar";
 import { EditableBoard } from "@/components/editor/EditableBoard";
 import { EditableQuizTitle } from "@/components/editor/EditableQuizTitle";
@@ -58,7 +54,10 @@ export default function Home() {
             <div className="h-10 w-1/2 animate-pulse rounded bg-muted" />
             <div className="grid grid-cols-2 gap-3 sm:grid-cols-5">
               {Array.from({ length: 10 }).map((_, i) => (
-                <div key={i} className="h-16 animate-pulse rounded-xl bg-muted" />
+                <div
+                  key={i}
+                  className="h-16 animate-pulse rounded-xl bg-muted"
+                />
               ))}
             </div>
           </div>
@@ -150,43 +149,28 @@ export default function Home() {
     );
   }
 
-  return (
-    <main className="stage min-h-screen pb-40">
-      <div className="container mx-auto p-4 md:p-8">
-        <GameHeader />
-
-        <div className="mb-8 flex justify-center">
-          <TurnIndicator />
-        </div>
-
-        {boardIsEmpty ? (
-          <div className="glass mx-auto max-w-xl rounded-2xl p-8 text-center">
-            <h2 className="text-xl font-bold">Ingen spørsmål enda</h2>
-            <p className="mt-2 text-muted-foreground">
-              {total === 0
-                ? "Denne quizen har ingen kategorier."
-                : `${total} kort står tomme.`}
-            </p>
+  if (boardIsEmpty) {
+    return (
+      <main className="stage flex min-h-dvh items-center justify-center p-6">
+        <div className="glass w-full max-w-xl rounded-2xl p-8 text-center">
+          <h2 className="text-xl font-bold">Ingen spørsmål enda</h2>
+          <p className="mt-2 text-muted-foreground">
+            {total === 0
+              ? "Denne quizen har ingen kategorier."
+              : `${total} kort står tomme.`}
+          </p>
+          <div className="mt-4 flex justify-center gap-2">
             {canEdit && (
-              <Button className="mt-4" onClick={() => setEditMode(true)}>
-                Rediger brettet
-              </Button>
+              <Button onClick={() => setEditMode(true)}>Rediger brettet</Button>
             )}
+            <Button variant="outline" onClick={() => router.push("/quizzes")}>
+              Til biblioteket
+            </Button>
           </div>
-        ) : (
-          <>
-            <section className="mb-10">
-              <GameBoard />
-            </section>
+        </div>
+      </main>
+    );
+  }
 
-            <section className="mx-auto max-w-3xl">
-              <Scoreboard />
-            </section>
-          </>
-        )}
-      </div>
-
-      <RoundDock />
-    </main>
-  );
+  return <GameStage />;
 }

@@ -3,7 +3,7 @@
 import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useGameStore } from "@/utils/store";
-import { ArrowLeft, CheckCircle, Crown, Medal } from "lucide-react";
+import { ArrowLeft, CheckCircle, Crown, Minimize2, Tv } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   AlertDialog,
@@ -19,12 +19,25 @@ import { toast } from "@/hooks/use-toast";
 import { rankTeams } from "@/utils/ranking";
 import { countQuestions } from "@/utils/quiz-template";
 import { useQuizBootstrap } from "@/hooks/useQuizBootstrap";
+import { usePresentationMode } from "@/hooks/usePresentationMode";
 
+/** Names printed on one podium step before it collapses to a count. */
+const PODIUM_NAMES = 3;
+
+/**
+ * The finale, sized for the room rather than for the host's screen.
+ *
+ * The winning team used to be announced at 14px, once in a "Vinner" section and
+ * again on the podium below it. The podium is now the announcement, the names on
+ * it scale with the viewport, and the medal legend under it is gone — it
+ * explained the numbers 1, 2 and 3, which were already printed above it.
+ */
 export default function Results() {
   const router = useRouter();
   // Opening /results directly, or refreshing it, used to render the store's
   // default empty board: "Uten navn", 0 of 25 questions and every team on zero.
   const bootstrap = useQuizBootstrap();
+  const presentation = usePresentationMode();
   const teams = useGameStore((s) => s.teams);
   const categories = useGameStore((s) => s.categories);
   const activeRunId = useGameStore((s) => s.activeRunId);
@@ -39,7 +52,7 @@ export default function Results() {
   const total = countQuestions(categories);
   const answered = categories.reduce(
     (sum, c) => sum + c.questions.filter((q) => q.answered).length,
-    0
+    0,
   );
 
   const groups = useMemo(() => {
@@ -76,21 +89,31 @@ export default function Results() {
     }
   };
 
+  // Heights in vh so the podium keeps its proportions on a projector instead of
+  // shrinking to a fifth of the screen.
   const heightForRank = (rank: number) => {
     const score = groups[rank]?.[0]?.score ?? 0;
-    const min = 72;
-    const max = 220;
-    if (topScore <= 0) return min;
+    const min = 8;
+    const max = 26;
+    if (topScore <= 0) return `${min}vh`;
     const fraction = Math.max(0, Math.min(1, score / topScore));
-    return Math.round(min + (max - min) * fraction);
+    return `${(min + (max - min) * fraction).toFixed(1)}vh`;
   };
 
   const colorForRank = (rank: number) =>
     rank === 1 ? "bg-accent" : rank === 2 ? "bg-muted" : "bg-secondary";
 
+  // The classic silver-gold-bronze arrangement only reads as a podium when all
+  // three steps are there. With two, it put the winner on the right and the
+  // runner-up on the left, which reads as the opposite of what happened.
+  const orderForRank = (rank: number) => {
+    if (ranksToShow.length < 3) return "order-none";
+    return rank === 1 ? "order-2" : rank === 2 ? "order-1" : "order-3";
+  };
+
   if (bootstrap.status === "loading") {
     return (
-      <div className="min-h-screen bg-background p-8">
+      <div className="stage min-h-dvh p-8">
         <div className="mx-auto max-w-3xl space-y-4">
           <div className="mx-auto h-12 w-64 animate-pulse rounded bg-muted" />
           <div className="h-48 animate-pulse rounded-2xl bg-muted" />
@@ -100,163 +123,184 @@ export default function Results() {
   }
 
   return (
-    <div className="min-h-screen bg-background px-4 py-8 text-foreground sm:px-6">
-      <header className="mx-auto mb-8 max-w-3xl">
-        <div className="mb-6 flex flex-wrap items-center justify-between gap-2">
-          <Button variant="ghost" onClick={() => router.push("/")}>
-            <ArrowLeft className="mr-2 h-4 w-4" />
-            Tilbake til brettet
+    <div className="stage min-h-dvh px-4 pb-10 pt-3 text-foreground sm:px-6">
+      <div className="mb-2 flex items-center justify-between gap-2">
+        {presentation.active ? (
+          <Button
+            variant="ghost"
+            size="sm"
+            className="ml-auto gap-2"
+            onClick={presentation.exit}
+            title="Tilbake til vertens visning"
+          >
+            <Minimize2 className="h-4 w-4" />
+            <span className="hidden sm:inline">Avslutt</span>
           </Button>
-
-          {hasTeams && activeRunId ? (
-            <Button onClick={() => setConfirmOpen(true)} disabled={isCompleting}>
-              <CheckCircle className="mr-2 h-4 w-4" />
-              {isCompleting ? "Fullfører…" : "Fullfør og lagre økten"}
+        ) : (
+          <>
+            <Button variant="ghost" size="sm" onClick={() => router.push("/")}>
+              <ArrowLeft className="mr-2 h-4 w-4" />
+              Tilbake til brettet
             </Button>
-          ) : (
-            hasTeams && (
-              <span className="text-sm text-muted-foreground">
-                Ingen aktiv økt å lagre
-              </span>
-            )
-          )}
-        </div>
 
-        <div className="text-center">
-          <p className="text-sm uppercase tracking-widest text-muted-foreground">
-            {quizTitle || "Uten navn"}
+            <div className="flex items-center gap-2">
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={presentation.enter}
+                className="gap-2"
+                title="Fullskjerm uten verktøylinje — for projektoren"
+              >
+                <Tv className="h-4 w-4" />
+                <span className="hidden sm:inline">Salen</span>
+              </Button>
+              {hasTeams && activeRunId ? (
+                <Button
+                  size="sm"
+                  onClick={() => setConfirmOpen(true)}
+                  disabled={isCompleting}
+                >
+                  <CheckCircle className="mr-2 h-4 w-4" />
+                  {isCompleting ? "Fullfører…" : "Fullfør og lagre"}
+                </Button>
+              ) : (
+                hasTeams && (
+                  <span className="text-sm text-muted-foreground">
+                    Ingen aktiv økt å lagre
+                  </span>
+                )
+              )}
+            </div>
+          </>
+        )}
+      </div>
+
+      <header className="mb-6 text-center">
+        <p className="text-xs uppercase tracking-widest text-muted-foreground sm:text-sm">
+          {quizTitle || "Uten navn"}
+        </p>
+        <h1 className="text-[clamp(2rem,7vh,4.5rem)] font-extrabold tracking-tight text-accent drop-shadow-sm">
+          RESULTATER
+        </h1>
+        {total > 0 && (
+          <p className="text-xs text-muted-foreground sm:text-sm">
+            {answered} av {total} spørsmål spilt
           </p>
-          <h1 className="display-xl text-accent drop-shadow-sm">RESULTATER</h1>
-          {total > 0 && (
-            <p className="mt-2 text-sm text-muted-foreground">
-              {answered} av {total} spørsmål spilt
-            </p>
-          )}
-        </div>
+        )}
       </header>
 
       {!hasTeams ? (
         <p className="text-center text-muted-foreground">
-          Ingen lag enda — legg dem til i oppsettet.
+          Ingen lag i denne økten.
         </p>
       ) : (
         <>
-          <section className="mb-10 text-center">
-            {groups[1]?.length ? (
-              <>
-                <div className="mb-3 flex items-center justify-center gap-3">
-                  <Crown className="h-10 w-10 text-accent" />
-                  <h2 className="text-2xl font-semibold sm:text-3xl">
-                    {groups[1].length > 1 ? "Vinnere (uavgjort)" : "Vinner"}
-                  </h2>
-                </div>
-                <div className="flex flex-wrap items-center justify-center gap-2">
-                  {groups[1].map((team) => (
-                    <span
-                      key={team.id}
-                      className="inline-flex items-center rounded-full border border-border bg-popover px-3 py-1.5 text-sm"
-                    >
-                      {team.name}
-                      <span className="ml-2 font-bold text-accent">
-                        {team.score} p
-                      </span>
-                    </span>
-                  ))}
-                </div>
-              </>
-            ) : null}
-          </section>
-
-          <section className="mb-14">
-            <div className="mx-auto flex w-full max-w-4xl items-end justify-center gap-3">
+          <section className="mb-10">
+            <div className="mx-auto flex w-full max-w-5xl items-end justify-center gap-3 sm:gap-6">
               {ranksToShow.map((rank) => (
                 <div
                   key={`rank-${rank}`}
-                  className={`flex flex-col items-center ${
-                    rank === 1 ? "order-2" : rank === 2 ? "order-1" : "order-3"
-                  }`}
+                  className={`flex min-w-0 flex-1 flex-col items-center ${orderForRank(rank)}`}
                 >
-                  <div className="z-10 mb-3 text-center">
-                    <p className="text-3xl font-bold sm:text-4xl">{rank}</p>
-                    <div className="mt-1 flex max-w-[10rem] flex-wrap justify-center gap-1.5 sm:max-w-[14rem]">
-                      {groups[rank].map((team) => (
-                        <span
-                          key={team.id}
-                          className="inline-flex items-center gap-1 rounded-full border border-border bg-popover px-2.5 py-1 text-xs"
-                        >
-                          <span className="max-w-[7rem] truncate">
+                  <div className="z-10 mb-2 w-full text-center">
+                    {rank === 1 && (
+                      <Crown
+                        className="mx-auto mb-1 h-[clamp(1.5rem,4vh,3rem)] w-[clamp(1.5rem,4vh,3rem)] text-accent"
+                        aria-hidden
+                      />
+                    )}
+                    <div className="flex flex-col items-center gap-1">
+                      {/* Capped: eight teams on nil all share rank 2, and
+                          naming every one of them on the step made the column
+                          taller than the podium it stood on. The rest are in
+                          the standings underneath. */}
+                      {groups[rank].slice(0, PODIUM_NAMES).map((team) => (
+                        <div key={team.id} className="w-full min-w-0">
+                          <p
+                            className={`truncate font-bold leading-tight ${
+                              rank === 1
+                                ? "text-[clamp(1.1rem,3.6vh,2.6rem)]"
+                                : "text-[clamp(0.9rem,2.5vh,1.6rem)]"
+                            }`}
+                            title={team.name}
+                          >
                             {team.name}
-                          </span>
-                          <span className="font-bold text-accent tabular-nums">
+                          </p>
+                          <p
+                            className={`font-extrabold tabular-nums text-accent ${
+                              rank === 1
+                                ? "text-[clamp(1.3rem,4.4vh,3.2rem)]"
+                                : "text-[clamp(1rem,3vh,2rem)]"
+                            }`}
+                          >
                             {team.score}
-                          </span>
-                        </span>
+                          </p>
+                        </div>
                       ))}
-                    </div>
-                  </div>
-                  <div
-                    className={`w-24 rounded-t-xl border border-border shadow-2xl sm:w-40 ${colorForRank(
-                      rank
-                    )}`}
-                    style={{ height: heightForRank(rank) }}
-                  />
-                </div>
-              ))}
-            </div>
-            <div className="mt-4 flex items-center justify-center gap-6 text-sm text-muted-foreground">
-              <span className="inline-flex items-center gap-1">
-                <Crown className="h-4 w-4 text-accent" /> 1.
-              </span>
-              <span className="inline-flex items-center gap-1">
-                <Medal className="h-4 w-4 text-muted-foreground" /> 2.
-              </span>
-              <span className="inline-flex items-center gap-1">
-                <Medal className="h-4 w-4 text-secondary" /> 3.
-              </span>
-            </div>
-          </section>
-
-          <section className="mx-auto max-w-3xl">
-            <h3 className="mb-4 text-center text-xl font-semibold">
-              Full stilling
-            </h3>
-            <ol className="divide-y divide-border rounded-2xl border border-border bg-card shadow-sm">
-              {ranked.map((team) => (
-                <li
-                  key={team.id}
-                  className="flex items-center justify-between gap-3 bg-popover/40 px-4 py-3"
-                >
-                  <div className="flex min-w-0 items-center gap-3">
-                    <span
-                      className={[
-                        "w-9 shrink-0 text-center text-lg font-bold tabular-nums",
-                        team.rank === 1
-                          ? "text-accent"
-                          : team.rank === 2
-                          ? "text-muted-foreground"
-                          : team.rank === 3
-                          ? "text-secondary"
-                          : "text-foreground/70",
-                      ].join(" ")}
-                    >
-                      {team.rank}
-                    </span>
-                    <div className="min-w-0">
-                      <p className="truncate font-medium">{team.name}</p>
-                      {team.players.length > 0 && (
-                        <p className="truncate text-xs text-muted-foreground">
-                          {team.players.join(", ")}
+                      {groups[rank].length > PODIUM_NAMES && (
+                        <p className="text-xs text-muted-foreground sm:text-sm">
+                          +{groups[rank].length - PODIUM_NAMES} flere
                         </p>
                       )}
                     </div>
                   </div>
-                  <span className="shrink-0 font-semibold tabular-nums text-accent">
-                    {team.score} p
-                  </span>
-                </li>
+                  <div
+                    className={`flex w-full items-start justify-center rounded-t-xl border border-border pt-2 shadow-2xl ${colorForRank(
+                      rank,
+                    )}`}
+                    style={{ height: heightForRank(rank) }}
+                  >
+                    <span className="text-[clamp(1.25rem,3.6vh,2.75rem)] font-black text-background/70">
+                      {rank}
+                    </span>
+                  </div>
+                </div>
               ))}
-            </ol>
+            </div>
           </section>
+
+          {ranked.length > ranksToShow.length && (
+            <section className="mx-auto max-w-3xl">
+              <ol className="divide-y divide-border overflow-hidden rounded-2xl border border-border bg-card shadow-sm">
+                {ranked.map((team) => (
+                  <li
+                    key={team.id}
+                    className="flex items-center justify-between gap-3 bg-popover/40 px-4 py-2.5"
+                  >
+                    <div className="flex min-w-0 items-center gap-3">
+                      <span
+                        className={[
+                          "w-8 shrink-0 text-center text-lg font-bold tabular-nums",
+                          team.rank === 1
+                            ? "text-accent"
+                            : team.rank === 2
+                              ? "text-muted-foreground"
+                              : team.rank === 3
+                                ? "text-secondary"
+                                : "text-foreground/70",
+                        ].join(" ")}
+                      >
+                        {team.rank}
+                      </span>
+                      <div className="min-w-0">
+                        <p className="truncate text-base font-medium sm:text-lg">
+                          {team.name}
+                        </p>
+                        {team.players.length > 0 && (
+                          <p className="truncate text-xs text-muted-foreground">
+                            {team.players.join(", ")}
+                          </p>
+                        )}
+                      </div>
+                    </div>
+                    <span className="shrink-0 text-xl font-bold tabular-nums text-accent sm:text-2xl">
+                      {team.score}
+                    </span>
+                  </li>
+                ))}
+              </ol>
+            </section>
+          )}
         </>
       )}
 

@@ -233,3 +233,102 @@ avklart med eier før bygging:
   dokkens vindus-lytter monteres. Å lukke vinduet med Escape lot samme
   tastetrykk nå lytteren og kalle `endRound()` — kortet ble markert spilt og
   poengtildelingen hoppet over. Verifisert i nettleser før og etter.
+
+## 2026-09-17 — Spillmodus er én skjerm, ikke en side som skrolles
+
+- **Beslutning:** spillsiden er tre rader som til sammen er nøyaktig
+  vindushøyden: topplinje, brett, stilling. Brettet får det de to andre lar
+  være igjen, og flisene skalerer etter det.
+- **Målt før:** på 1920×1080 var siden 1622 px høy. Toppen tok 236 px,
+  brettet 656 px, og «Stilling» begynte på y=1101 — 21 px under folden. Salen
+  så aldri poengene mens brettet var oppe.
+- **Målt etter:** topplinje 68 px, brett 923 px, stilling 89 px, sum 1080,
+  ingen skroll. Flishøyden gikk fra 96 til 160 px. Verifisert på 1280×800,
+  1440×900, 1600×900, 1920×1080, 375×812, 812×375 og 320×568.
+- **Vurdert og forkastet:** stillingen som en kolonne til høyre for brettet.
+  Et Jeopardy-brett er bredt, og et sidepanel på 300 px spiser av
+  kolonnebredden der den betyr mest.
+
+## 2026-09-17 — Dokken og stillingen deler samme rad
+
+- **Beslutning:** nederste rad viser stillingen mellom spørsmål og
+  poengdokken under en runde — aldri begge.
+- **Begrunnelse:** dokken lister hvert lag med poengsummen sin, så salen mister
+  ingenting mens den er oppe. Da dokken var `fixed`, dekket den øverste lagrad
+  i stillingen den skulle stå ved siden av.
+- **Oppfølging:** raden har tak på 45vh og skroller internt. Med ti lag på
+  320 px er brettet nede i 257 px — trangt, men ingenting er utilgjengelig.
+
+## 2026-09-17 — «Salen»: fullskjerm uten verktøylinje
+
+- **Beslutning:** én knapp skjuler bibliotek, historikk, modusbryter,
+  lagringsindikator, resultatknapp og kontomeny, og ber om fullskjerm samtidig.
+  Finnes både på brettet og på resultatsiden.
+- **Begrunnelse:** grunnen til å skjule verktøylinja er at en projektor viser
+  den til tretti mennesker — og nettleserens egne faner og adressefelt er på
+  samme projektor. Å løse én av dem er å løse halve problemet.
+- **Vurdert og forkastet:** å lagre valget i localStorage. Verten vil ikke at
+  appen skal starte uten verktøylinje neste gang de åpner den alene.
+- **Kjent begrensning:** fullskjerm kan avslås (iOS Safari, policy). Da skjules
+  verktøylinja likevel — verifisert, det er nettopp det som skjer i
+  forhåndsvisningsruten.
+
+## 2026-09-17 — Laget som tar kortet beholder turen
+
+- **Beslutning:** `endRound` gir turen til laget som fikk poengene. Rotasjon i
+  lagrekkefølge er nå bare reserven for kort ingen vant.
+- **Begrunnelse:** slik spilles Jeopardy ved bordet. Før roterte turen uansett
+  hvem som svarte, så verten måtte si «nei, det er fortsatt din tur» høyt etter
+  hvert kort.
+- **I tillegg:** lagmodalen har fått «Gi turen til X», så verten kan overstyre
+  uten å vente på rotasjonen.
+
+## 2026-09-17 — Typografi som skalerer mot vindushøyden
+
+- **Beslutning:** poeng, kategorinavn, spørsmål, svar og poengsummer bruker
+  `clamp(min, Nvh, max)` i stedet for faste brytepunkter. Spørsmålet er 58 px på
+  1920×1080, svaret 67 px, kodeblokken 33 px.
+- **Begrunnelse:** det samme oppsettet må leses fra bakerste bord på projektor
+  og fra sofaen på en laptop. Faste `sm:`/`md:`-størrelser følger bredden, og
+  det er høyden som avgjør hvor stort noe kan være her.
+- **Unntak:** stillingens tall skalerer først fra `sm`. På 375 px ga
+  høydeskaleringen 28 px poengsum i en 144 px pille, og lagnavnet ble klippet.
+
+## 2026-09-17 — Kolonnene har tak på bredden
+
+- **Beslutning:** `minmax(6rem, 16rem)` i stedet for `1fr`, og brettet
+  sentreres.
+- **Begrunnelse:** med fire kategorier strakk `1fr` hver flis til 468 px på en
+  projektor, som leser som en meny og ikke som et brett. Syv kolonner fyller
+  fortsatt 1920 px (256 px hver).
+
+## 2026-09-17 — Resultatsiden er finalen, ikke en rapport
+
+- **Beslutning:** podiet ER kunngjøringen. Den separate «Vinner»-seksjonen er
+  fjernet, navnene på podiet skalerer med vindushøyden, medaljeforklaringen
+  under er borte, og trinnene måles i vh.
+- **Begrunnelse:** vinnerlaget ble kunngjort i 14 px, to ganger på samme side.
+  Forklaringen under podiet forklarte tallene 1, 2 og 3, som sto rett over den.
+- **Oppdaget underveis:** åtte lag på null poeng deler plass 2, og å navngi
+  alle på trinnet gjorde kolonnen høyere enn podiet. Maks tre navn, så
+  «+N flere». Med færre enn tre trinn droppes sølv-gull-bronse-rekkefølgen —
+  med to trinn plasserte den vinneren til høyre.
+
+## 2026-09-17 — Topplinja rydder seg selv under sm
+
+- **Beslutning:** under 640 px skjules bibliotek, historikk, «Salen» og
+  tur-pillen. Modusbryteren og kontomenyen blir ikon uten tekst. Bibliotek og
+  historikk er lagt inn i kontomenyen så de aldri blir utilgjengelige.
+- **Begrunnelse:** på 320 px var det flere kontroller enn plass — tittelen ble
+  presset til null bredde og kontomenyen lå 21 px utenfor skjermkanten.
+- **Vurdert og forkastet:** å la linja brytes til to rader. Det er høyde
+  brettet trenger mer.
+
+## 2026-09-17 — Prettier ble kjørt og rullet tilbake på store.ts
+
+- **Beslutning:** `npx prettier` er ikke brukt på filer jeg bare endret noen
+  linjer i. `utils/store.ts` ble tilbakestilt og endringen lagt inn på nytt.
+- **Begrunnelse:** prosjektet har ingen prettier-config og ingen
+  prettier-dependency, så `npx` henter v3 med andre defaults enn koden rundt.
+  Én reell endring i store.ts ble +80/−42 av ren formatering. Etter
+  tilbakestilling: +13/−1.
