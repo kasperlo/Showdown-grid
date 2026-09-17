@@ -3,6 +3,53 @@
 Kontekst, antakelse, beslutning, begrunnelse og oppfølging for valg som ikke er
 åpenbare fra koden. Nyeste først.
 
+## 2026-09-17 — Redigering flyttet ut på brettet (design 2a)
+
+Bygget etter handoffen i `design_handoff_quiz_admin`, retning 2a, med fire valg
+avklart med eier før bygging:
+
+- **`/setup` er erstattet.** Ruta ligger igjen som en redirect til
+  `/?mode=edit`, så gamle lenker og tannhjulet lander riktig. Lag og
+  innstillinger (tema, tid, offentlig, lim-inn, JSON) ligger nå i «Lag»- og
+  «Regler»-sheets fra redigeringslinja.
+- **Ingen dra-og-slipp i denne runden.** Omrekkefølge gjøres fra
+  kategorimenyen. Håndrullet dra-og-slipp er den største enkeltbiten i designet,
+  og upresis på mobil; kan legges på senere uten å røre datamodellen.
+- **Poeng følger posisjonen, ikke kortet** (`normalizePoints`). En kolonne leser
+  alltid stigende. Flytter du et kort, arver det poengene til plassen det
+  havner på. Alternativet gir kolonner som 100-200-200-400, og da ser brettet
+  ødelagt ut for laget.
+- **Live-linjen er utsatt** til en egen runde. Live-retting fungerer i
+  mellomtiden gjennom samme panel.
+
+**Avvik fra handoffen, etter «så lite støy som mulig»:**
+
+- Hjelpetekstene er ute. Det som var verdt å beholde ligger i `title`-attributter
+  (tooltips): maksstørrelse på bilde, hva nullstilling gjør, hva tastene gjør.
+  Handoffens «Kolonnen blir en kategori når du gir den navn», «Bytter kortet til
+  en oppgave», «Overstyrer 60s for dette kortet» og tastaturhint-raden er fjernet.
+- Tittelen har ingen ramme før du peker på den. En permanent stiplet boks rundt
+  den største teksten på siden er det høyeste elementet i rommet.
+- Bildefeltet er kollapset til en liten «Bilde»-knapp til det brukes.
+- Bare kortet du står på får nummer-merke. Handoffen viser «1 AV 3» på alle i
+  køen, men med 29 mangler blir det 29 etiketter som konkurrerer med spørsmålene.
+- Fremdriftslinja er én strek når køen er over 12 kort, ellers ett segment per
+  kort.
+- Modusbryteren ligger i spillhodet, ikke i en egen rad, så spillmodus har
+  nøyaktig én rad med kontroller.
+
+**Beslutninger som ikke stod i handoffen:**
+
+- «Neste» går videre til neste kategori når kolonnen er tom — køen er en flat
+  liste i lesretning, så det skjer av seg selv.
+- Køen huskes ikke når panelet lukkes; den bygges på nytt. En kø som peker på
+  kort du har endret i mellomtiden er verre enn å starte om.
+- Gjennomgang kan startes fra en kategori-header («Gå gjennom kolonnen»).
+- Panelet monteres bare for ett brekkpunkt av gangen. `hidden xl:block` er ikke
+  nok når de to variantene er et panel og en Sheet: Sheet-ens overlay dimmer
+  siden bak skrivebordspanelet, og begge kopiene registrerer de samme
+  tastatursnarveiene.
+
 ## 2026-09-17 — Brukerbytte tømmer store, og kontomenyen finnes på alle sider
 
 - **Kontekst:** Kasper prøvde å logge ut av gjestebrukeren og inn på en ekte

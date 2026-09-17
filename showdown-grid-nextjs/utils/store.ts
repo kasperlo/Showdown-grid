@@ -9,6 +9,13 @@ import type {
   LoadQuizInput,
 } from "./types";
 import {
+  buildQueue,
+  normalizePoints,
+  sameCard,
+  type CardRef,
+  type QueueFilter,
+} from "./card-status";
+import {
   defaultTeams,
   emptyCategory,
   emptyQuestion,
@@ -169,30 +176,29 @@ export const useGameStore = create<GameState>()((set, get) => {
 
     addQuestionToCategory: (categoryIndex: number) =>
       set((state) => ({
-        categories: state.categories.map((cat, i) => {
-          if (i !== categoryIndex) return cat;
-          const last = cat.questions[cat.questions.length - 1];
-          const step =
-            cat.questions.length >= 2
-              ? cat.questions[cat.questions.length - 1].points -
-                cat.questions[cat.questions.length - 2].points
-              : 100;
-          const nextPoints = last
-            ? Math.max(0, last.points + (step > 0 ? step : 100))
-            : DEFAULT_POINTS[0];
-          return { ...cat, questions: [...cat.questions, emptyQuestion(nextPoints)] };
-        }),
+        categories: normalizePoints(
+          state.categories.map((cat, i) =>
+            i === categoryIndex
+              ? {
+                  ...cat,
+                  questions: [...cat.questions, emptyQuestion(DEFAULT_POINTS[0])],
+                }
+              : cat
+          )
+        ),
       })),
 
     removeQuestionFromCategory: (categoryIndex: number, questionIndex: number) =>
       set((state) => ({
-        categories: state.categories.map((cat, i) =>
-          i === categoryIndex
-            ? {
-                ...cat,
-                questions: cat.questions.filter((_, qi) => qi !== questionIndex),
-              }
-            : cat
+        categories: normalizePoints(
+          state.categories.map((cat, i) =>
+            i === categoryIndex
+              ? {
+                  ...cat,
+                  questions: cat.questions.filter((_, qi) => qi !== questionIndex),
+                }
+              : cat
+          )
         ),
       })),
 
@@ -212,9 +218,43 @@ export const useGameStore = create<GameState>()((set, get) => {
           questions[questionIndex],
         ];
         return {
-          categories: state.categories.map((cat, i) =>
-            i === categoryIndex ? { ...cat, questions } : cat
+          categories: normalizePoints(
+            state.categories.map((cat, i) =>
+              i === categoryIndex ? { ...cat, questions } : cat
+            )
           ),
+        };
+      }),
+
+    /**
+     * Moves a card. The points ladder is re-applied afterwards, so the card
+     * takes on the points of wherever it lands — see normalizePoints.
+     */
+    moveCard: (from: CardRef, to: CardRef) =>
+      set((state) => {
+        const source = state.categories[from.categoryIndex];
+        const question = source?.questions[from.questionIndex];
+        if (!question) return state;
+        if (sameCard(from, to)) return state;
+
+        const categories = state.categories.map((cat) => ({
+          ...cat,
+          questions: [...cat.questions],
+        }));
+
+        categories[from.categoryIndex].questions.splice(from.questionIndex, 1);
+
+        const target = categories[to.categoryIndex];
+        if (!target) return state;
+        const index = Math.max(
+          0,
+          Math.min(to.questionIndex, target.questions.length)
+        );
+        target.questions.splice(index, 0, question);
+
+        return {
+          categories: normalizePoints(categories),
+          selectedCard: { categoryIndex: to.categoryIndex, questionIndex: index },
         };
       }),
 
@@ -556,6 +596,9 @@ export const useGameStore = create<GameState>()((set, get) => {
     currentTurnTeamId: null as string | null,
     isInitialTurnSelection: false,
     isPlayingPublicQuiz: false,
+    editMode: false,
+    selectedCard: null as CardRef | null,
+    queue: null,
     quizTitle: "",
     quizDescription: "",
     quizTimeLimit: null as number | null,
@@ -589,6 +632,7 @@ export const useGameStore = create<GameState>()((set, get) => {
       set
     ),
     moveQuestion: withUnsavedChanges(actions.moveQuestion, set),
+    moveCard: withUnsavedChanges(actions.moveCard, set),
     updateQuestion: withUnsavedChanges(actions.updateQuestion, set),
     addTeam: withUnsavedChanges(actions.addTeam, set),
     removeTeam: withUnsavedChanges(actions.removeTeam, set),
@@ -614,6 +658,109 @@ export const useGameStore = create<GameState>()((set, get) => {
     setJokerTimeLimit: withUnsavedChanges(actions.setJokerTimeLimit, set),
     setQuizTheme: withUnsavedChanges(actions.setQuizTheme, set),
     setQuizIsPublic: withUnsavedChanges(actions.setQuizIsPublic, set),
+
+    setEditMode: (on: boolean) => {
+      // Leaving edit mode closes the panel with it; a selected card with no
+      // panel visible is state nothing can act on.
+      set(
+        on
+          ? { editMode: true, lastQuestion: null, isQuestionOpen: false }
+          : { editMode: false, selectedCard: null, queue: null }
+      );
+    },
+
+    selectCard: (ref: CardRef | null) => {
+      if (!ref) {
+        set({ selectedCard: null, queue: null });
+        return;
+      }
+
+      const state = get();
+      const inActiveQueue =
+        state.queue?.active &&
+        state.queue.ids.some((id) => sameCard(id, ref));
+
+      if (inActiveQueue && state.queue) {
+        // Clicking a card that is part of the running review moves the review
+        // to it rather than dropping out of it.
+        const position = state.queue.ids.findIndex((id) => sameCard(id, ref));
+        set({
+          selectedCard: ref,
+          queue: { ...state.queue, position: Math.max(0, position) },
+        });
+        return;
+      }
+
+      // Plain inspect: the queue is the whole board in reading order, so
+      // "Lagre og neste" always has somewhere to go. No queue header.
+      const ids = buildQueue(state.categories, "all");
+      const position = ids.findIndex((id) => sameCard(id, ref));
+      set({
+        selectedCard: ref,
+        queue: {
+          filter: "all",
+          ids,
+          position: Math.max(0, position),
+          active: false,
+        },
+      });
+    },
+
+    startQueue: (filter: QueueFilter, categoryIndex?: number) => {
+      const state = get();
+      const ids = buildQueue(state.categories, filter, categoryIndex);
+      if (!ids.length) {
+        set({ queue: null, selectedCard: null });
+        return;
+      }
+      set({
+        editMode: true,
+        queue: { filter, categoryIndex, ids, position: 0, active: true },
+        selectedCard: ids[0],
+      });
+    },
+
+    closeQueue: () => {
+      const state = get();
+      const current = state.selectedCard;
+      if (!current) {
+        set({ queue: null });
+        return;
+      }
+      // Drops back to plain inspect on the same card instead of closing the
+      // panel: the card you were looking at is still the card you want.
+      const ids = buildQueue(state.categories, "all");
+      const position = ids.findIndex((id) => sameCard(id, current));
+      set({
+        queue: {
+          filter: "all",
+          ids,
+          position: Math.max(0, position),
+          active: false,
+        },
+      });
+    },
+
+    queueNext: () => {
+      const { queue } = get();
+      if (!queue) return;
+      const next = queue.position + 1;
+      if (next >= queue.ids.length) {
+        // End of the queue. For a review that means done; the header turns into
+        // the ready state on its own because the filter no longer matches.
+        if (queue.active) set({ queue: { ...queue, position: queue.position } });
+        return;
+      }
+      set({ queue: { ...queue, position: next }, selectedCard: queue.ids[next] });
+    },
+
+    queuePrev: () => {
+      const { queue } = get();
+      if (!queue) return;
+      const prev = queue.position - 1;
+      if (prev < 0) return;
+      set({ queue: { ...queue, position: prev }, selectedCard: queue.ids[prev] });
+    },
 
     setLastQuestion: actions.setLastQuestion,
     setQuestionOpen: actions.setQuestionOpen,
@@ -662,6 +809,9 @@ export const useGameStore = create<GameState>()((set, get) => {
         currentTurnTeamId: null,
         isInitialTurnSelection: false,
         isPlayingPublicQuiz: false,
+        editMode: false,
+        selectedCard: null,
+        queue: null,
         quizTitle: "",
         quizDescription: "",
         quizTimeLimit: null,
@@ -717,6 +867,9 @@ export const useGameStore = create<GameState>()((set, get) => {
         activeRunId: runId,
         currentRunStartTime: runStartedAt,
         isPlayingPublicQuiz: isPublicPlay,
+        editMode: false,
+        selectedCard: null,
+        queue: null,
         lastQuestion: null,
         isQuestionOpen: false,
         round: initialRoundState(),

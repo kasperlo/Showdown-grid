@@ -2,10 +2,12 @@
 
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
-import { History, Library, Settings, Trophy } from "lucide-react";
+import { History, Library, Trophy } from "lucide-react";
 import { useGameStore } from "@/utils/store";
 import { UserMenu } from "@/components/UserMenu";
 import { SaveIndicator } from "@/components/SaveIndicator";
+import { EditableQuizTitle } from "@/components/editor/EditableQuizTitle";
+import { EditModeToggle } from "@/components/editor/EditModeToggle";
 import { countQuestions } from "@/utils/quiz-template";
 
 /**
@@ -15,8 +17,6 @@ import { countQuestions } from "@/utils/quiz-template";
  */
 export function GameHeader() {
   const router = useRouter();
-  const quizTitle = useGameStore((s) => s.quizTitle);
-  const quizDescription = useGameStore((s) => s.quizDescription);
   const categories = useGameStore((s) => s.categories);
   const canEdit = useGameStore((s) => s.canEditActiveQuiz());
   const isPublicPlay = useGameStore((s) => s.isPlayingPublicQuiz);
@@ -41,17 +41,6 @@ export function GameHeader() {
             <Library className="h-4 w-4" />
             <span className="hidden sm:inline">Bibliotek</span>
           </Button>
-          {canEdit && (
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={() => router.push("/setup")}
-              className="gap-2"
-            >
-              <Settings className="h-4 w-4" />
-              <span className="hidden sm:inline">Rediger</span>
-            </Button>
-          )}
           <Button
             variant="ghost"
             size="sm"
@@ -61,6 +50,7 @@ export function GameHeader() {
             <History className="h-4 w-4" />
             <span className="hidden sm:inline">Historikk</span>
           </Button>
+          <EditModeToggle />
         </div>
 
         <div className="flex items-center gap-2">
@@ -78,14 +68,7 @@ export function GameHeader() {
       </div>
 
       <div className="text-center">
-        <h1 className="display-xl break-words text-accent drop-shadow-sm">
-          {quizTitle || "Uten navn"}
-        </h1>
-        {quizDescription && (
-          <p className="mt-2 text-base text-muted-foreground sm:text-lg">
-            {quizDescription}
-          </p>
-        )}
+        <EditableQuizTitle />
 
         <div className="mx-auto mt-4 flex max-w-sm items-center gap-3">
           <div

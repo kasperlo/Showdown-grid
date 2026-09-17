@@ -1,3 +1,5 @@
+import type { CardRef, QueueFilter } from "./card-status";
+
 export interface Question {
   points: number;
   question: string;
@@ -76,6 +78,19 @@ export interface LiveGameState {
 }
 
 export type SaveStatus = "idle" | "saving" | "saved" | "error" | "readonly";
+
+/**
+ * The review queue behind the side panel. `active` is what separates the two
+ * ways into the panel: clicking a card gives a silent queue over the whole
+ * board, while "Gå gjennom N mangler" shows the counter and the progress bar.
+ */
+export interface CardQueue {
+  filter: QueueFilter;
+  categoryIndex?: number;
+  ids: CardRef[];
+  position: number;
+  active: boolean;
+}
 
 export interface QuizMetadata {
   id: string;
@@ -268,6 +283,19 @@ export interface GameState {
     patch: Partial<Question>
   ) => void;
   renameCategory: (categoryIndex: number, name: string) => void;
+
+  // On-board editing
+  editMode: boolean;
+  selectedCard: CardRef | null;
+  queue: CardQueue | null;
+  setEditMode: (on: boolean) => void;
+  selectCard: (ref: CardRef | null) => void;
+  startQueue: (filter: QueueFilter, categoryIndex?: number) => void;
+  closeQueue: () => void;
+  queueNext: () => void;
+  queuePrev: () => void;
+  /** Moves a card to another position, re-applying the points ladder. */
+  moveCard: (from: CardRef, to: CardRef) => void;
 
   // Quiz run tracking
   currentRunStartTime: number | null;

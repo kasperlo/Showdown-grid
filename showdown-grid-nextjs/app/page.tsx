@@ -1,28 +1,46 @@
 "use client";
 
 import { useEffect } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { GameBoard } from "@/components/GameBoard";
 import { Scoreboard } from "@/components/Scoreboard";
 import { RoundDock } from "@/components/RoundDock";
 import { TurnIndicator } from "@/components/TurnIndicator";
 import { GameHeader } from "@/components/GameHeader";
+import { EditorBar } from "@/components/editor/EditorBar";
+import { EditableBoard } from "@/components/editor/EditableBoard";
+import { EditableQuizTitle } from "@/components/editor/EditableQuizTitle";
+import { QuestionInspector } from "@/components/editor/QuestionInspector";
+import { BoardLegend } from "@/components/editor/BoardLegend";
 import { Button } from "@/components/ui/button";
+import { Sheet, SheetContent } from "@/components/ui/sheet";
 import { useAuth } from "@/hooks/useAuth";
+import { useIsWideScreen } from "@/hooks/useMediaQuery";
 import { useQuizBootstrap } from "@/hooks/useQuizBootstrap";
 import { useGameStore } from "@/utils/store";
 import { countCompleteQuestions, countQuestions } from "@/utils/quiz-template";
 
 export default function Home() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   useAuth();
   const bootstrap = useQuizBootstrap();
 
   const categories = useGameStore((s) => s.categories);
   const canEdit = useGameStore((s) => s.canEditActiveQuiz());
+  const editMode = useGameStore((s) => s.editMode);
+  const setEditMode = useGameStore((s) => s.setEditMode);
+  const selectedCard = useGameStore((s) => s.selectedCard);
+  const selectCard = useGameStore((s) => s.selectCard);
+  const isWide = useIsWideScreen();
 
-  // No quiz at all means there is nothing to host; the library is the only
-  // useful place to be.
+  // ?mode=edit makes the editor a shareable link and gives /setup somewhere to
+  // redirect to.
+  useEffect(() => {
+    if (bootstrap.status !== "ready" || !canEdit) return;
+    if (searchParams.get("mode") === "edit") setEditMode(true);
+  }, [bootstrap.status, canEdit, searchParams, setEditMode]);
+
   useEffect(() => {
     if (bootstrap.status === "empty") router.replace("/quizzes");
   }, [bootstrap.status, router]);
@@ -65,6 +83,62 @@ export default function Home() {
   const complete = countCompleteQuestions(categories);
   const boardIsEmpty = total === 0 || complete === 0;
 
+  if (editMode) {
+    return (
+      <main className="stage min-h-screen">
+        {/* Board left, inspector right. The panel is a fixed 404px so the board
+            keeps the same column widths while you work in it. */}
+        <div
+          className={
+            isWide
+              ? "grid min-h-screen grid-cols-[minmax(0,1fr)_404px]"
+              : undefined
+          }
+        >
+          <div className="container mx-auto p-4 md:p-8 xl:mx-0 xl:max-w-none">
+            <EditorBar />
+            <div className="mb-8">
+              <EditableQuizTitle />
+            </div>
+            <EditableBoard />
+            <BoardLegend />
+          </div>
+
+          {isWide && (
+            <div className="sticky top-0 h-screen border-l border-border">
+              {selectedCard ? (
+                <QuestionInspector />
+              ) : (
+                <p className="flex h-full items-center justify-center px-8 text-center text-sm text-muted-foreground">
+                  Velg et kort
+                </p>
+              )}
+            </div>
+          )}
+        </div>
+
+        {/* Below xl the panel is a sheet, so the board keeps the full width.
+            Mounted only for that breakpoint: rendering both would put two
+            inspectors on the page and dim the desktop layout with the sheet's
+            own overlay. */}
+        {!isWide && (
+          <Sheet
+            open={!!selectedCard}
+            onOpenChange={(open) => !open && selectCard(null)}
+          >
+            <SheetContent
+              side="right"
+              className="w-full p-0 sm:max-w-md"
+              hideCloseButton
+            >
+              <QuestionInspector />
+            </SheetContent>
+          </Sheet>
+        )}
+      </main>
+    );
+  }
+
   return (
     <main className="stage min-h-screen pb-40">
       <div className="container mx-auto p-4 md:p-8">
@@ -80,11 +154,11 @@ export default function Home() {
             <p className="mt-2 text-muted-foreground">
               {total === 0
                 ? "Denne quizen har ingen kategorier."
-                : `${total} felter står tomme. Fyll dem ut før du spiller.`}
+                : `${total} kort står tomme.`}
             </p>
             {canEdit && (
-              <Button className="mt-4" onClick={() => router.push("/setup")}>
-                Åpne redigering
+              <Button className="mt-4" onClick={() => setEditMode(true)}>
+                Rediger brettet
               </Button>
             )}
           </div>
@@ -93,13 +167,6 @@ export default function Home() {
             <section className="mb-10">
               <GameBoard />
             </section>
-
-            {complete < total && (
-              <p className="mb-8 text-center text-xs text-muted-foreground">
-                {total - complete} av {total} felter mangler innhold. De er
-                markert på brettet.
-              </p>
-            )}
 
             <section className="mx-auto max-w-3xl">
               <Scoreboard />

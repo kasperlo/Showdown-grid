@@ -51,9 +51,11 @@ export function TeamsEditor() {
           {teams.map((team, index) => (
             <div key={team.id} className="tile space-y-3 p-4">
               <div className="flex items-center justify-between gap-2">
-                <span className="text-xs text-muted-foreground">
+                <span
+                  className="text-xs text-muted-foreground"
+                  title={index < 9 ? `Tast ${index + 1} gir poeng til dette laget` : undefined}
+                >
                   Lag {index + 1}
-                  {index < 9 && ` • tast ${index + 1} i spillet`}
                 </span>
                 <div className="flex items-center gap-2">
                   <span className="text-sm font-bold tabular-nums text-accent">
@@ -83,8 +85,11 @@ export function TeamsEditor() {
               </div>
 
               <div>
-                <Label htmlFor={`team-players-${team.id}`}>
-                  Spillere (komma mellom navn)
+                <Label
+                  htmlFor={`team-players-${team.id}`}
+                  title="Komma mellom navn"
+                >
+                  Spillere
                 </Label>
                 <Input
                   id={`team-players-${team.id}`}
@@ -108,15 +113,14 @@ export function TeamsEditor() {
       )}
 
       <div className="border-t border-border pt-6">
-        <h3 className="font-semibold">Nullstill spillet</h3>
-        <p className="mt-1 text-sm text-muted-foreground">
-          Setter alle poeng til 0 og gjør alle spørsmål spillbare igjen. Lag,
-          kategorier og spørsmål beholdes. En pågående økt blir avsluttet og
-          lagret i historikken.
-        </p>
         <AlertDialog>
           <AlertDialogTrigger asChild>
-            <Button variant="destructive" size="sm" className="mt-3 gap-2">
+            <Button
+              variant="destructive"
+              size="sm"
+              className="gap-2"
+              title="Setter poeng til 0 og gjør alle kort spillbare igjen. Pågående økt lagres i historikken."
+            >
               <RotateCcw className="h-4 w-4" />
               Nullstill poeng og svar
             </Button>

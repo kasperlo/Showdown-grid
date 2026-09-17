@@ -1,3 +1,4 @@
+import { cardStatus } from "./card-status";
 import type {
   AdjustmentEntry,
   Category,
@@ -271,10 +272,13 @@ export function templateFingerprint(template: QuizTemplate): string {
   return JSON.stringify(template);
 }
 
+/**
+ * One definition of "finished", shared with the editor: see cardStatus. The
+ * play board and the review queue disagreeing about which cards are done would
+ * be the kind of bug you only notice mid-quiz.
+ */
 export function isQuestionComplete(question: Question): boolean {
-  if (!Number.isFinite(question.points) || question.points <= 0) return false;
-  if (question.isJoker) return Boolean(question.jokerTask?.trim());
-  return Boolean(question.question.trim() && question.answer.trim());
+  return cardStatus(question) === "complete";
 }
 
 export function countQuestions(categories: Category[]): number {

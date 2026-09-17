@@ -52,9 +52,7 @@ export function QuizSettings() {
             className="mt-1"
           />
           {!quizTitle.trim() && (
-            <p className="mt-1 text-xs text-destructive">
-              Tittelen kan ikke være tom — den lagres ikke uten.
-            </p>
+            <p className="mt-1 text-xs text-destructive">Tittelen mangler</p>
           )}
         </div>
 
@@ -75,12 +73,12 @@ export function QuizSettings() {
 
       <div className="space-y-4 border-t border-border pt-6">
         <div className="flex items-center justify-between gap-4">
-          <div>
-            <Label className="text-base font-semibold">Tid per spørsmål</Label>
-            <p className="mt-1 text-sm text-muted-foreground">
-              Nedtelling som vises i spørsmålsvinduet
-            </p>
-          </div>
+          <Label
+            className="text-base font-semibold"
+            title="Nedtelling som vises i spørsmålsvinduet"
+          >
+            Tid per spørsmål
+          </Label>
           <Switch
             checked={quizTimeLimit !== null}
             onCheckedChange={(checked) =>
@@ -123,12 +121,12 @@ export function QuizSettings() {
       </div>
 
       <div className="space-y-3 border-t border-border pt-6">
-        <Label className="text-base font-semibold">
+        <Label
+          className="text-base font-semibold"
+          title="Brukes av joker-oppgaver uten egen tid"
+        >
           Standard joker-tid
         </Label>
-        <p className="text-sm text-muted-foreground">
-          Brukes av joker-oppgaver som ikke har satt sin egen tid.
-        </p>
         <div className="flex flex-wrap items-center gap-2">
           <Input
             type="number"
@@ -162,12 +160,12 @@ export function QuizSettings() {
 
       <div className="border-t border-border pt-6">
         <div className="flex items-center justify-between gap-4">
-          <div>
-            <Label className="text-base font-semibold">Offentlig quiz</Label>
-            <p className="mt-1 text-sm text-muted-foreground">
-              Alle kan finne og spille quizen. De kan ikke endre den.
-            </p>
-          </div>
+          <Label
+            className="text-base font-semibold"
+            title="Alle kan finne og spille quizen, men ikke endre den"
+          >
+            Offentlig quiz
+          </Label>
           <Switch
             checked={quizIsPublic}
             onCheckedChange={setQuizIsPublic}

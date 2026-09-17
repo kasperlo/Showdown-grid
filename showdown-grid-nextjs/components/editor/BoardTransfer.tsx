@@ -113,10 +113,12 @@ export function BoardTransfer() {
 
   return (
     <div className="space-y-3">
-      <Label className="text-base font-semibold">Importer og eksporter</Label>
-      <p className="text-sm text-muted-foreground">
-        Lim inn spørsmål fra et regneark, eller ta en sikkerhetskopi av brettet.
-      </p>
+      <Label
+        className="text-base font-semibold"
+        title="Lim inn fra regneark, eller ta en sikkerhetskopi av brettet"
+      >
+        Importer og eksporter
+      </Label>
 
       <div className="flex flex-wrap gap-2">
         <Dialog open={pasteOpen} onOpenChange={setPasteOpen}>
