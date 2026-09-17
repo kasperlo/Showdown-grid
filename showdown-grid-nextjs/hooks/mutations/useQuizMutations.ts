@@ -1,174 +1,152 @@
-import { useMutation, useQueryClient } from '@tanstack/react-query';
-import { quizKeys } from '../queries/useQuizzes';
-import type { QuizMetadata, Category, Team, AdjustmentEntry, QuizTheme } from '@/utils/types';
+import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { quizKeys } from "../queries/useQuizzes";
+import type { QuizMetadata, QuizTemplate } from "@/utils/types";
 
-// Types
 interface CreateQuizData {
   title: string;
   description?: string;
-  quizData?: {
-    categories: Category[];
-    teams: Team[];
-    quizTitle: string;
-    quizDescription: string;
-    quizTimeLimit: number | null;
-    quizTheme: QuizTheme;
-    quizIsPublic: boolean;
-    adjustmentLog: AdjustmentEntry[];
-  };
   setAsActive?: boolean;
+  /** Copy the board from another quiz the user can read. */
+  copyFromQuizId?: string;
 }
 
-interface UpdateQuizData {
-  data: {
-    categories: Category[];
-    teams: Team[];
-    quizTitle: string;
-    quizDescription: string;
-    quizTimeLimit: number | null;
-    quizTheme: string;
-    quizIsPublic: boolean;
-    adjustmentLog: AdjustmentEntry[];
-  };
+interface SaveTemplateData {
+  quizId: string;
+  template: QuizTemplate;
+}
+
+interface RenameQuizData {
+  quizId: string;
+  title: string;
+  description?: string;
 }
 
 interface CreateQuizResponse {
   quiz: QuizMetadata;
 }
 
-// Mutation functions
 async function createQuiz(data: CreateQuizData): Promise<QuizMetadata> {
-  const response = await fetch('/api/quizzes', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+  const response = await fetch("/api/quizzes", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
     body: JSON.stringify(data),
   });
 
   if (!response.ok) {
-    const error = await response.json().catch(() => ({ error: 'Failed to create quiz' }));
-    throw new Error(error.error || 'Failed to create quiz');
+    const error = await response
+      .json()
+      .catch(() => ({ error: "Kunne ikke opprette quiz" }));
+    throw new Error(error.error || "Kunne ikke opprette quiz");
   }
 
   const result: CreateQuizResponse = await response.json();
   return result.quiz;
 }
 
-async function updateQuiz(data: UpdateQuizData): Promise<void> {
-  const response = await fetch('/api/quiz', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(data),
+/**
+ * Saves the board. Goes to PATCH /api/quizzes/[id] with template fields only —
+ * the old POST /api/quiz took the whole game state and wrote scores and
+ * answered questions into the quiz itself.
+ */
+async function saveTemplate({ quizId, template }: SaveTemplateData): Promise<void> {
+  const response = await fetch(`/api/quizzes/${quizId}`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      title: template.quizTitle,
+      description: template.quizDescription,
+      timeLimit: template.quizTimeLimit,
+      theme: template.quizTheme,
+      isPublic: template.quizIsPublic,
+      quizData: {
+        categories: template.categories,
+        teams: template.teams,
+        jokerTimeLimit: template.jokerTimeLimit,
+      },
+    }),
   });
 
   if (!response.ok) {
-    throw new Error('Failed to update quiz');
+    const error = await response.json().catch(() => ({}));
+    throw new Error(error.error || `Lagring feilet (${response.status})`);
+  }
+}
+
+async function renameQuiz({
+  quizId,
+  title,
+  description,
+}: RenameQuizData): Promise<void> {
+  const response = await fetch(`/api/quizzes/${quizId}`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ title, description }),
+  });
+
+  if (!response.ok) {
+    const error = await response.json().catch(() => ({}));
+    throw new Error(error.error || "Kunne ikke endre navn");
   }
 }
 
 async function activateQuiz(quizId: string): Promise<void> {
   const response = await fetch(`/api/quizzes/${quizId}/activate`, {
-    method: 'POST',
+    method: "POST",
   });
 
   if (!response.ok) {
-    throw new Error('Failed to activate quiz');
+    throw new Error("Kunne ikke bytte quiz");
   }
 }
 
 async function deleteQuiz(quizId: string): Promise<void> {
   const response = await fetch(`/api/quizzes/${quizId}`, {
-    method: 'DELETE',
+    method: "DELETE",
   });
 
   if (!response.ok) {
-    throw new Error('Failed to delete quiz');
+    throw new Error("Kunne ikke slette quiz");
   }
 }
 
-// Mutation hooks
 export function useCreateQuiz() {
   const queryClient = useQueryClient();
 
   return useMutation({
     mutationFn: createQuiz,
-    onMutate: async (newQuiz) => {
-      // Cancel outgoing refetches
-      await queryClient.cancelQueries({ queryKey: quizKeys.lists() });
-
-      // Snapshot previous value
-      const previousQuizzes = queryClient.getQueryData<QuizMetadata[]>(quizKeys.lists());
-
-      // Optimistically update to the new value
-      const optimisticQuiz: QuizMetadata = {
-        id: `temp-${Date.now()}`,
-        title: newQuiz.title,
-        description: newQuiz.description || '',
-        is_public: false,
-        time_limit: null,
-        theme: 'classic',
-        created_at: new Date().toISOString(),
-        updated_at: new Date().toISOString(),
-      };
-
-      queryClient.setQueryData<QuizMetadata[]>(quizKeys.lists(), (old = []) => [
-        optimisticQuiz,
-        ...old,
-      ]);
-
-      return { previousQuizzes };
-    },
-    onError: (err, newQuiz, context) => {
-      // Rollback on error
-      if (context?.previousQuizzes) {
-        queryClient.setQueryData(quizKeys.lists(), context.previousQuizzes);
-      }
-    },
-    onSuccess: (data, variables) => {
-      // If setAsActive, invalidate active quiz query
+    onSuccess: (_data, variables) => {
       if (variables.setAsActive) {
         queryClient.invalidateQueries({ queryKey: quizKeys.active() });
       }
     },
     onSettled: () => {
-      // Always refetch after error or success
       queryClient.invalidateQueries({ queryKey: quizKeys.lists() });
     },
   });
 }
 
-export function useUpdateQuiz() {
+export function useSaveTemplate() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: updateQuiz,
-    onMutate: async (updatedData) => {
-      // Cancel outgoing refetches
-      await queryClient.cancelQueries({ queryKey: quizKeys.active() });
-
-      // Snapshot previous value
-      const previousQuiz = queryClient.getQueryData(quizKeys.active());
-
-      // Optimistically update active quiz
-      queryClient.setQueryData(quizKeys.active(), (old: unknown) => {
-        if (!old) return old;
-        return {
-          ...(old as Record<string, unknown>),
-          ...updatedData.data,
-        };
-      });
-
-      return { previousQuiz };
-    },
-    onError: (err, variables, context) => {
-      // Rollback on error
-      if (context?.previousQuiz) {
-        queryClient.setQueryData(quizKeys.active(), context.previousQuiz);
-      }
-    },
-    onSettled: () => {
-      // Invalidate to refetch fresh data
-      queryClient.invalidateQueries({ queryKey: quizKeys.active() });
+    mutationFn: saveTemplate,
+    onSuccess: () => {
+      // The list shows title and counts, so it goes stale on every save. The
+      // active-quiz query is deliberately NOT invalidated: refetching it mid-game
+      // would overwrite the board the host is playing on.
       queryClient.invalidateQueries({ queryKey: quizKeys.lists() });
+    },
+  });
+}
+
+export function useRenameQuiz() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: renameQuiz,
+    onSettled: () => {
+      queryClient.invalidateQueries({ queryKey: quizKeys.lists() });
+      queryClient.invalidateQueries({ queryKey: quizKeys.active() });
     },
   });
 }
@@ -179,7 +157,6 @@ export function useActivateQuiz() {
   return useMutation({
     mutationFn: activateQuiz,
     onSuccess: () => {
-      // Invalidate active quiz and list to refetch
       queryClient.invalidateQueries({ queryKey: quizKeys.active() });
       queryClient.invalidateQueries({ queryKey: quizKeys.lists() });
     },
@@ -192,32 +169,23 @@ export function useDeleteQuiz() {
   return useMutation({
     mutationFn: deleteQuiz,
     onMutate: async (quizId) => {
-      // Cancel outgoing refetches
       await queryClient.cancelQueries({ queryKey: quizKeys.lists() });
-
-      // Snapshot previous value
-      const previousQuizzes = queryClient.getQueryData<QuizMetadata[]>(quizKeys.lists());
-
-      // Optimistically remove from list
+      const previousQuizzes = queryClient.getQueryData<QuizMetadata[]>(
+        quizKeys.lists()
+      );
       queryClient.setQueryData<QuizMetadata[]>(quizKeys.lists(), (old = []) =>
         old.filter((quiz) => quiz.id !== quizId)
       );
-
       return { previousQuizzes };
     },
-    onError: (err, quizId, context) => {
-      // Rollback on error
+    onError: (_err, _quizId, context) => {
       if (context?.previousQuizzes) {
         queryClient.setQueryData(quizKeys.lists(), context.previousQuizzes);
       }
     },
     onSettled: () => {
-      // Always refetch after error or success
       queryClient.invalidateQueries({ queryKey: quizKeys.lists() });
-      // Also invalidate active quiz in case we deleted the active one
       queryClient.invalidateQueries({ queryKey: quizKeys.active() });
     },
   });
 }
-
-

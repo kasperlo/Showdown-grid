@@ -1,99 +1,59 @@
 "use client";
 
 import { ReactNode, useEffect } from "react";
+import { usePathname } from "next/navigation";
 import { useGameStore } from "@/utils/store";
-import { useDebounce } from "@/utils/useDebounce";
 import { useAuth } from "@/hooks/useAuth";
 import { useSessionAutoSave } from "@/hooks/useSessionAutoSave";
-import { useUpdateQuiz } from "@/hooks/mutations/useQuizMutations";
+import { useTemplateAutoSave } from "@/hooks/useTemplateAutoSave";
+import { createClient } from "@/lib/supabase";
 
 function FullScreenLoader({ message }: { message: string }) {
   return (
     <div className="fixed inset-0 bg-background z-50 flex flex-col items-center justify-center gap-4">
-      <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary"></div>
+      <div
+        className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary"
+        role="status"
+        aria-label={message}
+      />
       <p className="text-lg text-muted-foreground">{message}</p>
     </div>
   );
 }
 
+const AUTH_PATHS = new Set(["/onboarding", "/signup", "/login"]);
+
 export const AppProvider = ({ children }: { children: ReactNode }) => {
-  const {
-    isLoading,
-    categories,
-    teams,
-    quizTitle,
-    quizDescription,
-    adjustmentLog,
-    quizTimeLimit,
-    quizTheme,
-    quizIsPublic,
-  } = useGameStore();
-
-  // Use custom auth hook for authentication
   const { isAuthReady } = useAuth();
+  const pathname = usePathname();
+  const setCurrentUserId = useGameStore((s) => s.setCurrentUserId);
 
-  // Use TanStack Query mutation for autosave
-  // Destructure to get stable references for useEffect dependencies
-  const { mutate: saveQuiz, isPending: isSaving } = useUpdateQuiz();
-
-  // Auto-save sessions (for both own and public quizzes)
-  useSessionAutoSave();
-
-  // Debounce state changes for autosave
-  const debouncedState = useDebounce(
-    { categories, teams, quizTitle, quizDescription, adjustmentLog },
-    1500
-  );
-
-  // Autosave when debounced state changes (but not during initial loading)
+  // Ownership decides whether anything may be written at all, so the user id is
+  // resolved once here rather than per page.
   useEffect(() => {
-    // Only save if:
-    // 1. Not currently loading (avoid saving initial state)
-    // 2. Auth is ready
-    // 3. No mutation is currently pending (avoid concurrent saves)
-    if (!isLoading && isAuthReady && !isSaving) {
-      saveQuiz({
-        data: {
-          categories,
-          teams,
-          quizTitle,
-          quizDescription,
-          quizTimeLimit,
-          quizTheme,
-          quizIsPublic,
-          adjustmentLog,
-        },
-      });
-    }
-  }, [
-    debouncedState,
-    isLoading,
-    isAuthReady,
-    isSaving,
-    saveQuiz,
-    categories,
-    teams,
-    quizTitle,
-    quizDescription,
-    quizTimeLimit,
-    quizTheme,
-    quizIsPublic,
-    adjustmentLog,
-  ]);
+    if (!isAuthReady) return;
+    let cancelled = false;
 
-  // Show loading screen while auth is initializing
-  if (!isAuthReady) {
-    return <FullScreenLoader message="Laster din quiz..." />;
+    createClient()
+      .auth.getUser()
+      .then(({ data }) => {
+        if (!cancelled) setCurrentUserId(data.user?.id ?? null);
+      })
+      .catch(() => {
+        if (!cancelled) setCurrentUserId(null);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [isAuthReady, setCurrentUserId]);
+
+  useSessionAutoSave();
+  useTemplateAutoSave();
+
+  if (!isAuthReady && !AUTH_PATHS.has(pathname)) {
+    return <FullScreenLoader message="Laster…" />;
   }
 
-  return (
-    <>
-      {isSaving && (
-        <div className="fixed bottom-4 right-4 bg-secondary text-secondary-foreground text-sm p-2 rounded-md z-50 animate-pulse">
-          Lagrer...
-        </div>
-      )}
-      {children}
-    </>
-  );
+  return <>{children}</>;
 };

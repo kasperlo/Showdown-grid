@@ -1,11 +1,11 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase";
 import { useGameStore } from "@/utils/store";
 import { useQueryClient } from "@tanstack/react-query";
-import { User, LogOut, Settings, UserPlus } from "lucide-react";
+import { User, LogOut, UserPlus } from "lucide-react";
 import {
   DropdownMenu,
   DropdownMenuContent,

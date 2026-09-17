@@ -1,233 +1,133 @@
 "use client";
 
-import { useEffect, useState, useCallback } from "react";
-import { GameBoard } from "@/components/GameBoard";
-import { Ranking } from "@/components/Ranking";
-import { RoundDock } from "@/components/RoundDock";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { Button } from "@/components/ui/button";
-import { Settings, History } from "lucide-react";
-import { useGameStore } from "@/utils/store";
-import { QuizSelector } from "@/components/QuizSelector";
+import { GameBoard } from "@/components/GameBoard";
+import { Scoreboard } from "@/components/Scoreboard";
+import { RoundDock } from "@/components/RoundDock";
 import { TurnIndicator } from "@/components/TurnIndicator";
-import { UserMenu } from "@/components/UserMenu";
+import { GameHeader } from "@/components/GameHeader";
+import { Button } from "@/components/ui/button";
 import { createClient } from "@/lib/supabase";
 import { useAuth } from "@/hooks/useAuth";
-import { useActiveQuiz, useQuizzesList } from "@/hooks/queries/useQuizzes";
-import type { QuizTheme, Category, Team, AdjustmentEntry } from "@/utils/types";
+import { useQuizBootstrap } from "@/hooks/useQuizBootstrap";
+import { useGameStore } from "@/utils/store";
+import { countCompleteQuestions, countQuestions } from "@/utils/quiz-template";
 
 export default function Home() {
   const router = useRouter();
   const { isAuthReady, isAuthError } = useAuth();
+  const bootstrap = useQuizBootstrap();
 
-  // Optimize store selectors to reduce re-renders
-  const quizTitle = useGameStore((state) => state.quizTitle);
-  const quizDescription = useGameStore((state) => state.quizDescription);
-  const activeQuizId = useGameStore((state) => state.activeQuizId);
-  const activeQuizOwnerId = useGameStore((state) => state.activeQuizOwnerId);
-  const setCategories = useGameStore((state) => state.setCategories);
-  const setQuizTitle = useGameStore((state) => state.setQuizTitle);
-  const setQuizDescription = useGameStore((state) => state.setQuizDescription);
-  const setQuizTimeLimit = useGameStore((state) => state.setQuizTimeLimit);
-  const setQuizTheme = useGameStore((state) => state.setQuizTheme);
-  const setQuizIsPublic = useGameStore((state) => state.setQuizIsPublic);
-  const isPlayingPublicQuiz = useGameStore(
-    (state) => state.isPlayingPublicQuiz
-  );
-  const restoreActiveSession = useGameStore(
-    (state) => state.restoreActiveSession
-  );
+  const categories = useGameStore((s) => s.categories);
+  const canEdit = useGameStore((s) => s.canEditActiveQuiz());
 
-  // Use TanStack Query for server state
-  // Disable useActiveQuiz when playing a public quiz (to avoid overwriting it)
-  const { data: activeQuizData, isLoading: isLoadingQuiz } = useActiveQuiz(
-    !isPlayingPublicQuiz
-  );
-  const { data: quizzesList = [], isLoading: isLoadingQuizzesList } =
-    useQuizzesList();
+  const [userEmail, setUserEmail] = useState<string | undefined>(undefined);
+  const [isAnonymous, setIsAnonymous] = useState(false);
 
-  const [currentUserId, setCurrentUserId] = useState<string | null>(null);
-  const [currentUserEmail, setCurrentUserEmail] = useState<string | undefined>(undefined);
-  const [isAnonymous, setIsAnonymous] = useState<boolean>(false);
-  const [isInitialized, setIsInitialized] = useState(false);
-
-  // Get user info
   useEffect(() => {
-    if (!isAuthReady || isAuthError) {
-      return;
-    }
+    if (!isAuthReady || isAuthError) return;
+    let cancelled = false;
 
-    const getUserInfo = async () => {
-      const supabase = createClient();
-      const {
-        data: { user },
-      } = await supabase.auth.getUser();
-      setCurrentUserId(user?.id || null);
-      setCurrentUserEmail(user?.email);
-      setIsAnonymous(user?.is_anonymous || false);
+    createClient()
+      .auth.getUser()
+      .then(({ data }) => {
+        if (cancelled) return;
+        setUserEmail(data.user?.email);
+        setIsAnonymous(data.user?.is_anonymous ?? false);
+      })
+      .catch(() => undefined);
+
+    return () => {
+      cancelled = true;
     };
-
-    getUserInfo();
   }, [isAuthReady, isAuthError]);
 
-  // Stable callback to sync quiz data from query to Zustand store
-  const syncQuizDataToStore = useCallback(
-    (quizData: {
-      categories?: Category[];
-      teams?: Team[];
-      adjustmentLog?: AdjustmentEntry[];
-      quizId: string;
-      quizOwnerId: string;
-      quizTitle: string;
-      quizDescription: string;
-      quizTimeLimit: number | null;
-      quizTheme: string;
-      quizIsPublic: boolean;
-    }) => {
-      setCategories(quizData.categories || []);
-      useGameStore.setState({
-        teams: quizData.teams || [],
-        adjustmentLog: quizData.adjustmentLog || [],
-        activeQuizId: quizData.quizId,
-        activeQuizOwnerId: quizData.quizOwnerId,
-      });
-      setQuizTitle(quizData.quizTitle || "");
-      setQuizDescription(quizData.quizDescription || "");
-      setQuizTimeLimit(quizData.quizTimeLimit);
-      setQuizTheme((quizData.quizTheme as QuizTheme) || "classic");
-      setQuizIsPublic(quizData.quizIsPublic || false);
-    },
-    [
-      setCategories,
-      setQuizTitle,
-      setQuizDescription,
-      setQuizTimeLimit,
-      setQuizTheme,
-      setQuizIsPublic,
-    ]
-  );
-
-  // Sync active quiz data from query to Zustand store
+  // No quiz at all means there is nothing to host; the library is the only
+  // useful place to be.
   useEffect(() => {
-    if (!isAuthReady || isAuthError) {
-      return;
-    }
+    if (bootstrap.status === "empty") router.replace("/quizzes");
+  }, [bootstrap.status, router]);
 
-    // If playing a public quiz, don't sync from query (data is already in Zustand)
-    if (isPlayingPublicQuiz) {
-      queueMicrotask(() => setIsInitialized(true));
-      return;
-    }
+  if (bootstrap.status === "loading" || bootstrap.status === "empty") {
+    return (
+      <main className="stage min-h-screen">
+        <div className="container mx-auto p-8">
+          <div className="mx-auto max-w-4xl space-y-4">
+            <div className="h-10 w-1/2 animate-pulse rounded bg-muted" />
+            <div className="grid grid-cols-2 gap-3 sm:grid-cols-5">
+              {Array.from({ length: 10 }).map((_, i) => (
+                <div key={i} className="h-16 animate-pulse rounded-xl bg-muted" />
+              ))}
+            </div>
+          </div>
+        </div>
+      </main>
+    );
+  }
 
-    // For own quizzes, wait for query to load
-    if (isLoadingQuiz) {
-      return;
-    }
+  if (bootstrap.status === "error") {
+    return (
+      <main className="stage min-h-screen">
+        <div className="container mx-auto flex min-h-screen flex-col items-center justify-center gap-4 p-8 text-center">
+          <h1 className="text-2xl font-bold">Kunne ikke laste quizen</h1>
+          <p className="text-muted-foreground">{bootstrap.message}</p>
+          <div className="flex gap-2">
+            <Button onClick={() => window.location.reload()}>Prøv igjen</Button>
+            <Button variant="outline" onClick={() => router.push("/quizzes")}>
+              Til biblioteket
+            </Button>
+          </div>
+        </div>
+      </main>
+    );
+  }
 
-    if (activeQuizData) {
-      // Update Zustand state with quiz data
-      syncQuizDataToStore(activeQuizData);
-
-      // Restore active session if quiz has an ID (only for own quizzes, not public)
-      if (activeQuizData.quizId) {
-        restoreActiveSession(activeQuizData.quizId).catch((error) => {
-          console.error("Failed to restore active session:", error);
-        });
-      }
-
-      queueMicrotask(() => setIsInitialized(true));
-    } else {
-      // No active quiz found
-      queueMicrotask(() => setIsInitialized(true));
-    }
-  }, [
-    isAuthReady,
-    isAuthError,
-    isLoadingQuiz,
-    activeQuizData,
-    syncQuizDataToStore,
-    restoreActiveSession,
-    isPlayingPublicQuiz,
-  ]);
-
-  // Handle redirect after initialization completes
-  useEffect(() => {
-    if (
-      isInitialized &&
-      !isLoadingQuiz &&
-      !isLoadingQuizzesList &&
-      !activeQuizId &&
-      quizzesList.length === 0
-    ) {
-      router.push("/quizzes");
-    }
-  }, [
-    isInitialized,
-    isLoadingQuiz,
-    isLoadingQuizzesList,
-    activeQuizId,
-    quizzesList,
-    router,
-  ]);
-
-  // Turn selection is now manual via TurnIndicator component
-  // Removed automatic initializeTurn() - user clicks "Hvem skal starte?" button instead
-
-  // Derived state: check if current user owns the active quiz
-  const isOwner =
-    currentUserId && activeQuizOwnerId && currentUserId === activeQuizOwnerId;
+  const total = countQuestions(categories);
+  const complete = countCompleteQuestions(categories);
+  const boardIsEmpty = total === 0 || complete === 0;
 
   return (
-    <main className="stage min-h-screen">
+    <main className="stage min-h-screen pb-40">
       <div className="container mx-auto p-4 md:p-8">
-        <header className="text-center mb-10 relative">
+        <GameHeader userEmail={userEmail} isAnonymous={isAnonymous} />
+
+        <div className="mb-8 flex justify-center">
           <TurnIndicator />
-          <h1 className="display-xl text-accent drop-shadow-sm">{quizTitle}</h1>
-          <p className="mt-2 text-lg text-muted-foreground">
-            {quizDescription}
-          </p>
-          <div className="absolute top-0 right-0 flex items-center gap-2">
-            <UserMenu userEmail={currentUserEmail} isAnonymous={isAnonymous} />
-            <Button
-              variant="ghost"
-              size="icon"
-              onClick={() => router.push("/history")}
-              aria-label="Se historikk"
-              title="Historikk"
-            >
-              <History className="h-8 w-8" />
-            </Button>
-            <QuizSelector />
-            {isOwner && (
-              <Button
-                variant="ghost"
-                size="icon"
-                onClick={() => router.push("/setup")}
-                aria-label="Åpne oppsett"
-                title="Oppsett"
-              >
-                <Settings className="h-8 w-8" />
+        </div>
+
+        {boardIsEmpty ? (
+          <div className="glass mx-auto max-w-xl rounded-2xl p-8 text-center">
+            <h2 className="text-xl font-bold">Ingen spørsmål enda</h2>
+            <p className="mt-2 text-muted-foreground">
+              {total === 0
+                ? "Denne quizen har ingen kategorier."
+                : `${total} felter står tomme. Fyll dem ut før du spiller.`}
+            </p>
+            {canEdit && (
+              <Button className="mt-4" onClick={() => router.push("/setup")}>
+                Åpne redigering
               </Button>
             )}
           </div>
-        </header>
+        ) : (
+          <>
+            <section className="mb-10">
+              <GameBoard />
+            </section>
 
-        <section className="mb-10">
-          <GameBoard />
-        </section>
+            {complete < total && (
+              <p className="mb-8 text-center text-xs text-muted-foreground">
+                {total - complete} av {total} felter mangler innhold. De er
+                markert på brettet.
+              </p>
+            )}
 
-        <section className="mt-12">
-          <Ranking />
-        </section>
-
-        <div className="mt-16 text-center">
-          <Button
-            onClick={() => router.push("/results")}
-            className="bg-accent text-accent-foreground font-bold text-2xl px-12 py-6 rounded-xl shadow-lg transition-transform hover:scale-105"
-          >
-            RESULTATER
-          </Button>
-        </div>
+            <section className="mx-auto max-w-3xl">
+              <Scoreboard />
+            </section>
+          </>
+        )}
       </div>
 
       <RoundDock />

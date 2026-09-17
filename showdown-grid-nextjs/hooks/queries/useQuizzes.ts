@@ -13,7 +13,7 @@ export const quizKeys = {
 };
 
 // Types
-interface ActiveQuizData {
+export interface ActiveQuizData {
   quizId: string;
   quizOwnerId: string;
   quizTitle: string;
@@ -24,6 +24,7 @@ interface ActiveQuizData {
   categories: Category[];
   teams: Team[];
   adjustmentLog: AdjustmentEntry[];
+  jokerTimeLimit?: number | null;
 }
 
 interface QuizListResponse {
@@ -109,6 +110,12 @@ export function useActiveQuiz(enabled: boolean = true) {
     queryKey: quizKeys.active(),
     queryFn: fetchActiveQuiz,
     enabled, // Only fetch if enabled (false when playing public quiz)
+    // Load-once semantics on purpose. With refetch-on-focus, switching back to
+    // the tab mid-quiz refetched the stored quiz and the page synced it into the
+    // store, wiping the scores and answered questions of the running game.
+    refetchOnWindowFocus: false,
+    refetchOnReconnect: false,
+    staleTime: Infinity,
     retry: (failureCount, error) => {
       // Don't retry on 401 or 404
       if (

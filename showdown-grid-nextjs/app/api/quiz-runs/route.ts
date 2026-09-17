@@ -1,8 +1,13 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase-server";
-import type { Category, Team, AdjustmentEntry } from "@/utils/types";
 
-// POST - Save a new quiz run
+/**
+ * POST - Start a live session, or hand back the one that already exists.
+ *
+ * This is deliberately idempotent per (user, quiz). Two effects racing on the
+ * first opened question used to insert two rows, and the orphan could win the
+ * next restore and show an empty board mid-quiz.
+ */
 export async function POST(request: NextRequest) {
   try {
     const supabase = await createClient();
@@ -16,7 +21,7 @@ export async function POST(request: NextRequest) {
     }
 
     const body = await request.json();
-    const { quizId, startedAt, endedAt, finalState } = body;
+    const { quizId, startedAt, finalState } = body;
 
     if (!quizId || !startedAt || !finalState) {
       return NextResponse.json(
@@ -25,97 +30,51 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Fetch quiz metadata
+    const { data: existing } = await supabase
+      .from("quiz_runs")
+      .select("*")
+      .eq("user_id", user.id)
+      .eq("quiz_id", quizId)
+      .is("ended_at", null)
+      .order("started_at", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+
+    if (existing) {
+      return NextResponse.json({ run: existing, reused: true });
+    }
+
     const { data: quizData, error: quizError } = await supabase
       .from("quizzes")
-      .select("title, description, theme, time_limit")
+      .select("title, description, theme, time_limit, quiz_data")
       .eq("id", quizId)
       .single();
 
     if (quizError || !quizData) {
-      return NextResponse.json(
-        { error: "Quiz not found" },
-        { status: 404 }
-      );
+      return NextResponse.json({ error: "Quiz not found" }, { status: 404 });
     }
 
-    const categories: Category[] = finalState.categories || [];
-    const teams: Team[] = finalState.teams || [];
-    const adjustmentLog: AdjustmentEntry[] = finalState.adjustmentLog || [];
+    const totalQuestions = countQuestions(quizData.quiz_data);
 
-    // For live sessions (no endedAt), we'll set minimal required fields
-    // Statistics will be calculated when the session is completed
-    const isLiveSession = !endedAt;
-
-    const insertData: Record<string, unknown> = {
-      quiz_id: quizId,
-      user_id: user.id,
-      started_at: startedAt,
-      ended_at: endedAt || null,
-      duration_seconds: null,
-      quiz_title: quizData.title,
-      quiz_description: quizData.description,
-      quiz_theme: quizData.theme,
-      quiz_time_limit: quizData.time_limit,
-      final_state: {
-        categories,
-        teams,
-        adjustmentLog,
-      },
-    };
-
-    if (isLiveSession) {
-      // For live sessions, set minimal statistics (will be updated on completion)
-      const totalQuestions = categories.reduce(
-        (sum, cat) => sum + cat.questions.length,
-        0
-      );
-      insertData.total_questions = totalQuestions;
-      insertData.answered_questions = 0;
-      insertData.team_results = [];
-      insertData.winning_team_name = null;
-      insertData.winning_score = null;
-    } else {
-      // For completed sessions, calculate all statistics
-      const totalQuestions = categories.reduce(
-        (sum, cat) => sum + cat.questions.length,
-        0
-      );
-      const answeredQuestions = categories.reduce(
-        (sum, cat) => sum + cat.questions.filter((q) => q.answered).length,
-        0
-      );
-
-      // Calculate team results and rankings
-      const sortedTeams = [...teams].sort((a, b) => b.score - a.score);
-      const teamResults = sortedTeams.map((team, index) => ({
-        teamId: team.id,
-        teamName: team.name,
-        finalScore: team.score,
-        rank: index + 1,
-      }));
-
-      const winningTeam = sortedTeams[0];
-      const winningTeamName = winningTeam?.name || null;
-      const winningScore = winningTeam?.score || null;
-
-      // Calculate duration
-      const durationSeconds = Math.round(
-        (new Date(endedAt).getTime() - new Date(startedAt).getTime()) / 1000
-      );
-
-      insertData.duration_seconds = durationSeconds;
-      insertData.total_questions = totalQuestions;
-      insertData.answered_questions = answeredQuestions;
-      insertData.team_results = teamResults;
-      insertData.winning_team_name = winningTeamName;
-      insertData.winning_score = winningScore;
-    }
-
-    // Insert quiz run
     const { data, error } = await supabase
       .from("quiz_runs")
-      .insert(insertData)
+      .insert({
+        quiz_id: quizId,
+        user_id: user.id,
+        started_at: startedAt,
+        ended_at: null,
+        duration_seconds: null,
+        quiz_title: quizData.title,
+        quiz_description: quizData.description,
+        quiz_theme: quizData.theme,
+        quiz_time_limit: quizData.time_limit,
+        final_state: finalState,
+        total_questions: totalQuestions,
+        answered_questions: 0,
+        team_results: [],
+        winning_team_name: null,
+        winning_score: null,
+      })
       .select()
       .single();
 
@@ -149,17 +108,25 @@ export async function GET(request: NextRequest) {
 
     const { searchParams } = new URL(request.url);
     const quizId = searchParams.get("quizId");
-    const limit = parseInt(searchParams.get("limit") || "20");
+    const includeLive = searchParams.get("includeLive") === "true";
+    const limit = clampLimit(searchParams.get("limit"));
 
     let query = supabase
       .from("quiz_runs")
-      .select("id, quiz_title, ended_at, duration_seconds, total_questions, answered_questions, completion_percentage, winning_team_name, winning_score")
+      .select(
+        "id, quiz_id, quiz_title, started_at, ended_at, duration_seconds, total_questions, answered_questions, completion_percentage, winning_team_name, winning_score"
+      )
       .eq("user_id", user.id)
-      .order("ended_at", { ascending: false })
+      .order("started_at", { ascending: false })
       .limit(limit);
 
     if (quizId) {
       query = query.eq("quiz_id", quizId);
+    }
+    if (!includeLive) {
+      // Live sessions have no ended_at, so they rendered as "Invalid Date" and
+      // "NaNm NaNs" in the history list.
+      query = query.not("ended_at", "is", null);
     }
 
     const { data, error } = await query;
@@ -177,4 +144,20 @@ export async function GET(request: NextRequest) {
       { status: 500 }
     );
   }
+}
+
+function clampLimit(raw: string | null): number {
+  const parsed = parseInt(raw || "20", 10);
+  if (!Number.isFinite(parsed)) return 20;
+  return Math.min(200, Math.max(1, parsed));
+}
+
+function countQuestions(quizData: unknown): number {
+  if (!quizData || typeof quizData !== "object") return 0;
+  const categories = (quizData as { categories?: unknown }).categories;
+  if (!Array.isArray(categories)) return 0;
+  return categories.reduce((sum: number, category) => {
+    const questions = (category as { questions?: unknown })?.questions;
+    return sum + (Array.isArray(questions) ? questions.length : 0);
+  }, 0);
 }

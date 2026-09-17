@@ -2,14 +2,31 @@ import { create } from "zustand";
 import type {
   GameState,
   Category,
-  Team,
   Question,
   LastQuestion,
   AdjustmentEntry,
-  QuizMetadata,
   QuizTheme,
+  LoadQuizInput,
 } from "./types";
-import { gameData as initialGameData } from "./questions";
+import {
+  defaultQuestions,
+  defaultTeams,
+  emptyCategory,
+  emptyQuestion,
+  extractLiveState,
+  extractTemplate,
+  liveStateFromRunState,
+  mergeLiveIntoTemplate,
+  starterCategories,
+  answeredKey,
+  DEFAULT_POINTS,
+} from "./quiz-template";
+import {
+  clearSnapshot,
+  readSnapshot,
+  snapshotIsAhead,
+  writeSnapshot,
+} from "./live-snapshot";
 
 interface RoundState {
   active: boolean;
@@ -23,24 +40,62 @@ const initialRoundState = (): RoundState => ({
   negativeAwardedTo: [],
 });
 
-const defaultQuestions = (): Question[] =>
-  [100, 200, 300, 400, 500].map((points) => ({
-    points,
-    question: "",
-    answer: "",
-    imageUrl: "",
-    isJoker: false,
-    jokerTask: "",
-    jokerTimer: 10,
-    answered: false,
-  }));
-
 const genId = () => `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
 
-// Module-level variable for rate limiting session saves (max 1 per second)
+/** Live state is written at most this often; the last write always lands. */
+const SESSION_SAVE_INTERVAL_MS = 1000;
 let lastSessionSaveTime = 0;
+let pendingSessionSave: ReturnType<typeof setTimeout> | null = null;
 
-// Helper function to mark changes as "dirty"
+/**
+ * One session-create in flight at a time. Without this, two effects racing on
+ * the first opened question each saw "no active session" and inserted one,
+ * leaving an orphan run that a later restore could pick instead of the real one.
+ */
+let startSessionInFlight: Promise<string | null> | null = null;
+
+/**
+ * Save status lives in the store, including the timed fade from "Lagret" back
+ * to idle. Keeping the transition here rather than in the indicator means the
+ * component stays a pure render of state.
+ */
+let savedFadeTimer: ReturnType<typeof setTimeout> | null = null;
+
+export function reportSaving(): void {
+  if (savedFadeTimer) clearTimeout(savedFadeTimer);
+  useGameStore.setState({
+    saveStatus: "saving",
+    isSaving: true,
+    saveError: null,
+  });
+}
+
+export function reportSaved(): void {
+  useGameStore.setState({
+    saveStatus: "saved",
+    isSaving: false,
+    hasUnsavedChanges: false,
+    lastSavedAt: Date.now(),
+    saveError: null,
+  });
+  if (savedFadeTimer) clearTimeout(savedFadeTimer);
+  savedFadeTimer = setTimeout(() => {
+    savedFadeTimer = null;
+    if (useGameStore.getState().saveStatus === "saved") {
+      useGameStore.setState({ saveStatus: "idle" });
+    }
+  }, 2500);
+}
+
+export function reportSaveError(message: string): void {
+  if (savedFadeTimer) clearTimeout(savedFadeTimer);
+  useGameStore.setState({
+    saveStatus: "error",
+    isSaving: false,
+    saveError: message,
+  });
+}
+
 const withUnsavedChanges = <T extends (...args: never[]) => unknown>(
   fn: T,
   set: (partial: Partial<GameState>) => void
@@ -52,6 +107,22 @@ const withUnsavedChanges = <T extends (...args: never[]) => unknown>(
 };
 
 export const useGameStore = create<GameState>()((set, get) => {
+  /** Mirrors the live state to localStorage after every scoring action. */
+  const snapshotLiveState = () => {
+    const state = get();
+    if (!state.activeQuizId) return;
+    writeSnapshot(
+      state.activeQuizId,
+      extractLiveState({
+        categories: state.categories,
+        teams: state.teams,
+        adjustmentLog: state.adjustmentLog,
+        currentTurnTeamId: state.currentTurnTeamId,
+      }),
+      state.activeRunId
+    );
+  };
+
   const actions = {
     setCategories: (categories: Category[]) => set({ categories }),
 
@@ -59,10 +130,7 @@ export const useGameStore = create<GameState>()((set, get) => {
       set((state) => ({
         categories: [
           ...state.categories,
-          {
-            name: `Ny Kategori ${state.categories.length + 1}`,
-            questions: defaultQuestions(),
-          },
+          emptyCategory(`Kategori ${state.categories.length + 1}`),
         ],
       })),
 
@@ -71,24 +139,122 @@ export const useGameStore = create<GameState>()((set, get) => {
         categories: state.categories.filter((_, i) => i !== index),
       })),
 
-    addTeam: () =>
+    renameCategory: (categoryIndex: number, name: string) =>
+      set((state) => ({
+        categories: state.categories.map((cat, i) =>
+          i === categoryIndex ? { ...cat, name } : cat
+        ),
+      })),
+
+    duplicateCategory: (categoryIndex: number) =>
       set((state) => {
-        const newId = genId();
+        const source = state.categories[categoryIndex];
+        if (!source) return state;
+        const copy: Category = {
+          name: `${source.name} (kopi)`,
+          questions: source.questions.map((q) => ({ ...q, answered: false })),
+        };
+        const next = [...state.categories];
+        next.splice(categoryIndex + 1, 0, copy);
+        return { categories: next };
+      }),
+
+    moveCategory: (categoryIndex: number, direction: -1 | 1) =>
+      set((state) => {
+        const target = categoryIndex + direction;
+        if (target < 0 || target >= state.categories.length) return state;
+        const next = [...state.categories];
+        [next[categoryIndex], next[target]] = [next[target], next[categoryIndex]];
+        return { categories: next };
+      }),
+
+    addQuestionToCategory: (categoryIndex: number) =>
+      set((state) => ({
+        categories: state.categories.map((cat, i) => {
+          if (i !== categoryIndex) return cat;
+          const last = cat.questions[cat.questions.length - 1];
+          const step =
+            cat.questions.length >= 2
+              ? cat.questions[cat.questions.length - 1].points -
+                cat.questions[cat.questions.length - 2].points
+              : 100;
+          const nextPoints = last
+            ? Math.max(0, last.points + (step > 0 ? step : 100))
+            : DEFAULT_POINTS[0];
+          return { ...cat, questions: [...cat.questions, emptyQuestion(nextPoints)] };
+        }),
+      })),
+
+    removeQuestionFromCategory: (categoryIndex: number, questionIndex: number) =>
+      set((state) => ({
+        categories: state.categories.map((cat, i) =>
+          i === categoryIndex
+            ? {
+                ...cat,
+                questions: cat.questions.filter((_, qi) => qi !== questionIndex),
+              }
+            : cat
+        ),
+      })),
+
+    moveQuestion: (
+      categoryIndex: number,
+      questionIndex: number,
+      direction: -1 | 1
+    ) =>
+      set((state) => {
+        const category = state.categories[categoryIndex];
+        if (!category) return state;
+        const target = questionIndex + direction;
+        if (target < 0 || target >= category.questions.length) return state;
+        const questions = [...category.questions];
+        [questions[questionIndex], questions[target]] = [
+          questions[target],
+          questions[questionIndex],
+        ];
         return {
-          teams: [
-            ...state.teams,
-            {
-              id: newId,
-              name: `Team ${state.teams.length + 1}`,
-              score: 0,
-              players: [],
-            },
-          ],
+          categories: state.categories.map((cat, i) =>
+            i === categoryIndex ? { ...cat, questions } : cat
+          ),
         };
       }),
 
+    updateQuestion: (
+      categoryIndex: number,
+      questionIndex: number,
+      patch: Partial<Question>
+    ) =>
+      set((state) => ({
+        categories: state.categories.map((cat, i) => {
+          if (i !== categoryIndex) return cat;
+          return {
+            ...cat,
+            questions: cat.questions.map((q, qi) =>
+              qi === questionIndex ? { ...q, ...patch } : q
+            ),
+          };
+        }),
+      })),
+
+    addTeam: () =>
+      set((state) => ({
+        teams: [
+          ...state.teams,
+          {
+            id: genId(),
+            name: `Lag ${state.teams.length + 1}`,
+            score: 0,
+            players: [],
+          },
+        ],
+      })),
+
     removeTeam: (id: string) =>
-      set((state) => ({ teams: state.teams.filter((t) => t.id !== id) })),
+      set((state) => ({
+        teams: state.teams.filter((t) => t.id !== id),
+        currentTurnTeamId:
+          state.currentTurnTeamId === id ? null : state.currentTurnTeamId,
+      })),
 
     updateTeamName: (id: string, name: string) =>
       set((state) => ({
@@ -111,7 +277,9 @@ export const useGameStore = create<GameState>()((set, get) => {
       set({
         lastQuestion: question,
         isQuestionOpen: !!question,
-        round: initialRoundState(),
+        round: question
+          ? { ...initialRoundState(), active: true }
+          : initialRoundState(),
       });
     },
 
@@ -132,7 +300,6 @@ export const useGameStore = create<GameState>()((set, get) => {
     resetGame: () => {
       const state = get();
 
-      // Complete active session if one exists before resetting
       if (state.activeRunId) {
         get()
           .completeSession(state.activeRunId)
@@ -140,16 +307,14 @@ export const useGameStore = create<GameState>()((set, get) => {
             console.error("Failed to complete session on reset:", error);
           });
       }
-
-      const resetCategories = get().categories.map((cat) => ({
-        ...cat,
-        questions: cat.questions.map((q) => ({ ...q, answered: false })),
-      }));
-      const resetTeams = get().teams.map((t) => ({ ...t, score: 0 }));
+      if (state.activeQuizId) clearSnapshot(state.activeQuizId);
 
       set({
-        categories: resetCategories,
-        teams: resetTeams,
+        categories: state.categories.map((cat) => ({
+          ...cat,
+          questions: cat.questions.map((q) => ({ ...q, answered: false })),
+        })),
+        teams: state.teams.map((t) => ({ ...t, score: 0 })),
         lastQuestion: null,
         isQuestionOpen: false,
         round: initialRoundState(),
@@ -173,9 +338,12 @@ export const useGameStore = create<GameState>()((set, get) => {
         lastQuestion.questionIndex
       );
 
-      // Log custom scoring if points differ from question value
       let newAdjustmentLog = adjustmentLog;
-      if (customPoints !== undefined && customPoints !== lastQuestion.points && team) {
+      if (
+        customPoints !== undefined &&
+        customPoints !== lastQuestion.points &&
+        team
+      ) {
         const entry: AdjustmentEntry = {
           id: genId(),
           teamId,
@@ -188,15 +356,14 @@ export const useGameStore = create<GameState>()((set, get) => {
         newAdjustmentLog = [entry, ...adjustmentLog];
       }
 
-      set((state) => {
-        return {
-          teams: state.teams.map((t) =>
-            t.id === teamId ? { ...t, score: t.score + pointsToAward } : t
-          ),
-          round: { ...state.round, positiveTeamId: teamId },
-          adjustmentLog: newAdjustmentLog,
-        };
-      });
+      set((state) => ({
+        teams: state.teams.map((t) =>
+          t.id === teamId ? { ...t, score: t.score + pointsToAward } : t
+        ),
+        round: { ...state.round, positiveTeamId: teamId },
+        adjustmentLog: newAdjustmentLog,
+      }));
+      snapshotLiveState();
     },
 
     awardNegative: (teamId: string, customPoints?: number) => {
@@ -212,9 +379,12 @@ export const useGameStore = create<GameState>()((set, get) => {
       const penalty = customPoints ?? defaultPenalty;
       const team = teams.find((t) => t.id === teamId);
 
-      // Log custom scoring if points differ from default penalty
       let newAdjustmentLog = adjustmentLog;
-      if (customPoints !== undefined && customPoints !== defaultPenalty && team) {
+      if (
+        customPoints !== undefined &&
+        customPoints !== defaultPenalty &&
+        team
+      ) {
         const entry: AdjustmentEntry = {
           id: genId(),
           teamId,
@@ -237,6 +407,7 @@ export const useGameStore = create<GameState>()((set, get) => {
         },
         adjustmentLog: newAdjustmentLog,
       }));
+      snapshotLiveState();
     },
 
     endRound: () => {
@@ -252,16 +423,14 @@ export const useGameStore = create<GameState>()((set, get) => {
         isQuestionOpen: false,
         round: initialRoundState(),
       });
-
-      // Move to next team's turn
       get().nextTurn();
+      snapshotLiveState();
     },
 
     skipQuestion: () => {
       const { lastQuestion } = get();
       if (!lastQuestion) return;
 
-      // Mark question as answered without awarding any points
       get().markQuestionAsAnswered(
         lastQuestion.categoryName,
         lastQuestion.questionIndex
@@ -272,12 +441,15 @@ export const useGameStore = create<GameState>()((set, get) => {
         isQuestionOpen: false,
         round: initialRoundState(),
       });
-
-      // Move to next team's turn
       get().nextTurn();
+      snapshotLiveState();
     },
 
-    toggleQuestionAnswered: (categoryName: string, questionIndex: number, answered: boolean) =>
+    toggleQuestionAnswered: (
+      categoryName: string,
+      questionIndex: number,
+      answered: boolean
+    ) => {
       set((state) => ({
         categories: state.categories.map((cat) => {
           if (cat.name !== categoryName) return cat;
@@ -286,9 +458,11 @@ export const useGameStore = create<GameState>()((set, get) => {
           if (q) questions[questionIndex] = { ...q, answered };
           return { ...cat, questions };
         }),
-      })),
+      }));
+      snapshotLiveState();
+    },
 
-    manualAdjustScore: (teamId: string, delta: number, reason?: string) =>
+    manualAdjustScore: (teamId: string, delta: number, reason?: string) => {
       set((state) => {
         const team = state.teams.find((t) => t.id === teamId);
         if (!team || !Number.isFinite(delta) || delta === 0) return state;
@@ -309,7 +483,9 @@ export const useGameStore = create<GameState>()((set, get) => {
           ),
           adjustmentLog: [entry, ...state.adjustmentLog],
         };
-      }),
+      });
+      snapshotLiveState();
+    },
 
     undoLastAdjustment: () => {
       set((state) => {
@@ -322,6 +498,7 @@ export const useGameStore = create<GameState>()((set, get) => {
           adjustmentLog: state.adjustmentLog.slice(1),
         };
       });
+      snapshotLiveState();
     },
 
     setQuizTitle: (title: string) => set({ quizTitle: title }),
@@ -334,25 +511,27 @@ export const useGameStore = create<GameState>()((set, get) => {
     setQuizTheme: (theme: QuizTheme) => set({ quizTheme: theme }),
     setQuizIsPublic: (isPublic: boolean) => set({ quizIsPublic: isPublic }),
 
-    // Turn management actions
     setCurrentTurn: (teamId: string | null) => {
       set({ currentTurnTeamId: teamId, isInitialTurnSelection: false });
+      snapshotLiveState();
     },
 
     initializeTurn: () => {
       const teams = get().teams;
       if (!teams.length) return;
 
-      // Pick random team for first turn
-      const randomIndex = Math.floor(Math.random() * teams.length);
-      const randomTeamId = teams[randomIndex].id;
-
-      // Set initial turn selection flag to true for spinner animation
+      const randomTeamId = teams[Math.floor(Math.random() * teams.length)].id;
       set({ isInitialTurnSelection: true });
 
-      // After animation (3 seconds), set the actual turn
       setTimeout(() => {
-        set({ currentTurnTeamId: randomTeamId, isInitialTurnSelection: false });
+        // Teams can be edited while the wheel spins; drop the pick if the team
+        // is gone rather than pointing the turn at a team that no longer exists.
+        const stillThere = get().teams.some((t) => t.id === randomTeamId);
+        set({
+          currentTurnTeamId: stillThere ? randomTeamId : get().teams[0]?.id ?? null,
+          isInitialTurnSelection: false,
+        });
+        snapshotLiveState();
       }, 3000);
     },
 
@@ -361,14 +540,11 @@ export const useGameStore = create<GameState>()((set, get) => {
       const currentId = get().currentTurnTeamId;
 
       if (!teams.length) return;
-
-      // If no current turn, initialize
       if (!currentId) {
         get().initializeTurn();
         return;
       }
 
-      // Find next team in rotation
       const currentIndex = teams.findIndex((t) => t.id === currentId);
       const nextIndex = (currentIndex + 1) % teams.length;
       set({ currentTurnTeamId: teams[nextIndex].id });
@@ -376,24 +552,11 @@ export const useGameStore = create<GameState>()((set, get) => {
   };
 
   return {
-    categories: initialGameData.map((category) => ({
-      name: category.name,
-      questions: category.questions.map((q): Question => ({
-        points: q.points,
-        question: q.question,
-        answer: q.answer,
-        imageUrl: q.imageUrl,
-        isJoker: ('isJoker' in q && typeof q.isJoker === 'boolean') ? q.isJoker : false,
-        jokerTask: ('jokerTask' in q && typeof q.jokerTask === 'string') ? q.jokerTask : "",
-        answered: false,
-      })),
-    })),
-
-    teams: [
-      { id: "1", name: "Team 1", score: 0, players: ["Player 1"] },
-      { id: "2", name: "Team 2", score: 0, players: ["Player 1"] },
-      { id: "3", name: "Team 3", score: 0, players: ["Player 1"] },
-    ],
+    // A new quiz starts from a blank board, not from the old English demo data:
+    // a board already full of someone else's questions is harder to clear than
+    // to fill.
+    categories: starterCategories(),
+    teams: defaultTeams(),
     lastQuestion: null,
     isQuestionOpen: false,
     round: initialRoundState(),
@@ -401,24 +564,38 @@ export const useGameStore = create<GameState>()((set, get) => {
     currentTurnTeamId: null as string | null,
     isInitialTurnSelection: false,
     isPlayingPublicQuiz: false,
-    quizTitle: "Showdown Grid",
-    quizDescription: "A Jeopardy-style quiz game.",
+    quizTitle: "",
+    quizDescription: "",
     quizTimeLimit: null as number | null,
     jokerTimeLimit: 10 as number | null,
     quizTheme: "classic" as QuizTheme,
     quizIsPublic: false,
     isLoading: true,
+    isHydrated: false,
     isSaving: false,
+    saveStatus: "idle",
+    saveError: null as string | null,
+    lastSavedAt: null as number | null,
     hasUnsavedChanges: false,
     activeQuizId: null as string | null,
     activeQuizOwnerId: null as string | null,
+    currentUserId: null as string | null,
     currentRunStartTime: null as number | null,
     activeRunId: null as string | null,
 
-    // Wrap all mutating actions
     setCategories: withUnsavedChanges(actions.setCategories, set),
     addCategory: withUnsavedChanges(actions.addCategory, set),
     removeCategory: withUnsavedChanges(actions.removeCategory, set),
+    renameCategory: withUnsavedChanges(actions.renameCategory, set),
+    duplicateCategory: withUnsavedChanges(actions.duplicateCategory, set),
+    moveCategory: withUnsavedChanges(actions.moveCategory, set),
+    addQuestionToCategory: withUnsavedChanges(actions.addQuestionToCategory, set),
+    removeQuestionFromCategory: withUnsavedChanges(
+      actions.removeQuestionFromCategory,
+      set
+    ),
+    moveQuestion: withUnsavedChanges(actions.moveQuestion, set),
+    updateQuestion: withUnsavedChanges(actions.updateQuestion, set),
     addTeam: withUnsavedChanges(actions.addTeam, set),
     removeTeam: withUnsavedChanges(actions.removeTeam, set),
     updateTeamName: withUnsavedChanges(actions.updateTeamName, set),
@@ -432,7 +609,10 @@ export const useGameStore = create<GameState>()((set, get) => {
     awardPositive: withUnsavedChanges(actions.awardPositive, set),
     awardNegative: withUnsavedChanges(actions.awardNegative, set),
     skipQuestion: withUnsavedChanges(actions.skipQuestion, set),
-    toggleQuestionAnswered: withUnsavedChanges(actions.toggleQuestionAnswered, set),
+    toggleQuestionAnswered: withUnsavedChanges(
+      actions.toggleQuestionAnswered,
+      set
+    ),
     manualAdjustScore: withUnsavedChanges(actions.manualAdjustScore, set),
     undoLastAdjustment: withUnsavedChanges(actions.undoLastAdjustment, set),
     setQuizTitle: withUnsavedChanges(actions.setQuizTitle, set),
@@ -442,7 +622,6 @@ export const useGameStore = create<GameState>()((set, get) => {
     setQuizTheme: withUnsavedChanges(actions.setQuizTheme, set),
     setQuizIsPublic: withUnsavedChanges(actions.setQuizIsPublic, set),
 
-    // Non-mutating actions
     setLastQuestion: actions.setLastQuestion,
     setQuestionOpen: actions.setQuestionOpen,
     endRound: actions.endRound,
@@ -450,56 +629,95 @@ export const useGameStore = create<GameState>()((set, get) => {
     initializeTurn: actions.initializeTurn,
     nextTurn: actions.nextTurn,
 
+    setHydrated: (hydrated: boolean) =>
+      set({ isHydrated: hydrated, isLoading: !hydrated }),
+
+    setCurrentUserId: (userId: string | null) => set({ currentUserId: userId }),
+
+    canEditActiveQuiz: () => {
+      const { currentUserId, activeQuizOwnerId, isPlayingPublicQuiz } = get();
+      if (isPlayingPublicQuiz) return false;
+      if (!currentUserId || !activeQuizOwnerId) return false;
+      return currentUserId === activeQuizOwnerId;
+    },
+
+    loadQuiz: ({
+      template,
+      live,
+      quizId,
+      quizOwnerId,
+      runId = null,
+      runStartedAt = null,
+      isPublicPlay = false,
+    }: LoadQuizInput) => {
+      const merged = mergeLiveIntoTemplate(template, live ?? null);
+      set({
+        categories: merged.categories,
+        teams: merged.teams,
+        adjustmentLog: merged.adjustmentLog,
+        currentTurnTeamId: merged.currentTurnTeamId,
+        quizTitle: template.quizTitle,
+        quizDescription: template.quizDescription,
+        quizTimeLimit: template.quizTimeLimit,
+        jokerTimeLimit: template.jokerTimeLimit,
+        quizTheme: template.quizTheme,
+        quizIsPublic: template.quizIsPublic,
+        activeQuizId: quizId,
+        activeQuizOwnerId: quizOwnerId,
+        activeRunId: runId,
+        currentRunStartTime: runStartedAt,
+        isPlayingPublicQuiz: isPublicPlay,
+        lastQuestion: null,
+        isQuestionOpen: false,
+        round: initialRoundState(),
+        isInitialTurnSelection: false,
+        hasUnsavedChanges: false,
+        saveStatus: isPublicPlay ? "readonly" : "idle",
+        saveError: null,
+        isHydrated: true,
+        isLoading: false,
+      });
+    },
+
+    /** Writes the TEMPLATE only. Scores and answered questions never go here. */
     saveQuizToDB: async () => {
-      // Don't save if nothing has changed or if playing a public quiz
-      if (!get().hasUnsavedChanges && !get().isSaving) return;
-      if (get().isPlayingPublicQuiz) {
-        console.log("Skipping save - playing public quiz (session-only)");
+      const state = get();
+      if (!state.canEditActiveQuiz() || !state.activeQuizId) {
+        set({ saveStatus: state.isPlayingPublicQuiz ? "readonly" : "idle" });
         return;
       }
 
-      set({ isSaving: true });
+      reportSaving();
       try {
-        const {
-          categories,
-          teams,
-          quizTitle,
-          quizDescription,
-          quizTimeLimit,
-          jokerTimeLimit,
-          quizTheme,
-          quizIsPublic,
-          adjustmentLog,
-        } = get();
-
-        const quizStateToSave = {
-          categories,
-          teams,
-          quizTitle,
-          quizDescription,
-          quizTimeLimit,
-          jokerTimeLimit,
-          quizTheme,
-          quizIsPublic,
-          adjustmentLog,
-        };
-
-        const response = await fetch("/api/quiz", {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({ data: quizStateToSave }),
+        const template = extractTemplate(state);
+        const response = await fetch(`/api/quizzes/${state.activeQuizId}`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            title: template.quizTitle,
+            description: template.quizDescription,
+            timeLimit: template.quizTimeLimit,
+            theme: template.quizTheme,
+            isPublic: template.quizIsPublic,
+            quizData: {
+              categories: template.categories,
+              teams: template.teams,
+              jokerTimeLimit: template.jokerTimeLimit,
+            },
+          }),
         });
 
         if (!response.ok) {
-          throw new Error("Failed to save quiz");
+          const body = await response.json().catch(() => ({}));
+          throw new Error(body.error || `Lagring feilet (${response.status})`);
         }
 
-        set({ isSaving: false, hasUnsavedChanges: false });
+        reportSaved();
       } catch (error) {
-        console.error("Failed to save quiz to DB:", error);
-        set({ isSaving: false });
+        const message =
+          error instanceof Error ? error.message : "Ukjent lagringsfeil";
+        console.error("Failed to save quiz template:", error);
+        reportSaveError(message);
       }
     },
 
@@ -508,109 +726,109 @@ export const useGameStore = create<GameState>()((set, get) => {
     },
 
     saveQuizRun: async () => {
-      // Legacy method - now uses completeSession
       const state = get();
       if (state.activeRunId) {
         await get().completeSession(state.activeRunId);
-      } else {
-        console.warn("No active session to complete");
       }
     },
 
     startSession: async () => {
       const state = get();
-      if (!state.activeQuizId) {
-        console.error("Cannot start session - no active quiz ID");
-        return null;
-      }
+      if (!state.activeQuizId) return null;
+      if (state.activeRunId) return state.activeRunId;
+      if (startSessionInFlight) return startSessionInFlight;
 
-      // Check if there's already an active session for this quiz
-      try {
-        const checkResponse = await fetch(
-          `/api/quiz-runs/active?quizId=${state.activeQuizId}`
-        );
-        if (checkResponse.ok) {
-          const { run } = await checkResponse.json();
-          console.log("Found existing active session:", run.id);
+      const quizId = state.activeQuizId;
+      startSessionInFlight = (async () => {
+        try {
+          const response = await fetch("/api/quiz-runs", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              quizId,
+              startedAt: new Date().toISOString(),
+              finalState: extractLiveState({
+                categories: get().categories,
+                teams: get().teams,
+                adjustmentLog: get().adjustmentLog,
+                currentTurnTeamId: get().currentTurnTeamId,
+              }),
+            }),
+          });
+
+          if (!response.ok) {
+            throw new Error(`Kunne ikke starte økt (${response.status})`);
+          }
+
+          const { run } = await response.json();
           set({
             activeRunId: run.id,
             currentRunStartTime: new Date(run.started_at).getTime(),
           });
-          return run.id;
+          return run.id as string;
+        } catch (error) {
+          console.error("Error starting session:", error);
+          return null;
+        } finally {
+          startSessionInFlight = null;
         }
-      } catch (error) {
-        console.error("Error checking for active session:", error);
-      }
+      })();
 
-      // Create new session
-      const startTime = Date.now();
-      try {
-        const response = await fetch("/api/quiz-runs", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            quizId: state.activeQuizId,
-            startedAt: new Date(startTime).toISOString(),
-            // No endedAt - this is a live session
-            finalState: {
-              categories: state.categories,
-              teams: state.teams,
-              adjustmentLog: state.adjustmentLog,
-            },
-          }),
-        });
-
-        if (!response.ok) {
-          throw new Error("Failed to start session");
-        }
-
-        const { run } = await response.json();
-        console.log("Session started:", run.id);
-        set({
-          activeRunId: run.id,
-          currentRunStartTime: startTime,
-        });
-        return run.id;
-      } catch (error) {
-        console.error("Error starting session:", error);
-        return null;
-      }
+      return startSessionInFlight;
     },
 
     saveSession: async () => {
       const state = get();
-      if (!state.activeRunId) {
-        return; // No active session to save
+      if (!state.activeRunId) return;
+
+      const now = Date.now();
+      const elapsed = now - lastSessionSaveTime;
+      if (elapsed < SESSION_SAVE_INTERVAL_MS) {
+        // Schedule the write instead of dropping it. Dropping is what made the
+        // last action of a fast sequence never reach the server.
+        if (!pendingSessionSave) {
+          pendingSessionSave = setTimeout(() => {
+            pendingSessionSave = null;
+            void get().flushSession();
+          }, SESSION_SAVE_INTERVAL_MS - elapsed);
+        }
+        return;
       }
 
-      // Rate limiting: only save once per second
-      const now = Date.now();
-      if (now - lastSessionSaveTime < 1000) {
-        return; // Skip if less than 1 second since last save
+      await get().flushSession();
+    },
+
+    flushSession: async () => {
+      const state = get();
+      if (!state.activeRunId) return;
+      if (pendingSessionSave) {
+        clearTimeout(pendingSessionSave);
+        pendingSessionSave = null;
+      }
+
+      lastSessionSaveTime = Date.now();
+      const live = extractLiveState({
+        categories: state.categories,
+        teams: state.teams,
+        adjustmentLog: state.adjustmentLog,
+        currentTurnTeamId: state.currentTurnTeamId,
+      });
+
+      if (state.activeQuizId) {
+        writeSnapshot(state.activeQuizId, live, state.activeRunId);
       }
 
       try {
         const response = await fetch(`/api/quiz-runs/${state.activeRunId}`, {
           method: "PATCH",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            finalState: {
-              categories: state.categories,
-              teams: state.teams,
-              adjustmentLog: state.adjustmentLog,
-            },
-          }),
+          body: JSON.stringify({ finalState: live }),
         });
-
-        if (!response.ok) {
-          throw new Error("Failed to save session");
-        }
-
-        // Update last save time
-        lastSessionSaveTime = now;
+        if (!response.ok) throw new Error(`Status ${response.status}`);
       } catch (error) {
+        // The local snapshot above already holds this state, so the game keeps
+        // going and the next successful write catches up.
         console.error("Error saving session:", error);
-        // Don't throw - auto-save failures shouldn't break the app
       }
     },
 
@@ -618,45 +836,53 @@ export const useGameStore = create<GameState>()((set, get) => {
       try {
         const response = await fetch(`/api/quiz-runs/active?quizId=${quizId}`);
         if (response.status === 404) {
-          // No active session found - this is fine
+          // No server session. A local snapshot can still hold a game that was
+          // played before the first successful write.
+          const snapshot = readSnapshot(quizId);
+          if (snapshotIsAhead(snapshot, null) && snapshot) {
+            applyLive(snapshot.live);
+          }
           return;
         }
-
-        if (!response.ok) {
-          throw new Error("Failed to restore active session");
-        }
+        if (!response.ok) throw new Error("Failed to restore active session");
 
         const { run } = await response.json();
-        const finalState = run.final_state;
+        const serverLive = liveStateFromRunState(run.final_state);
+        const snapshot = readSnapshot(quizId);
+        const live = snapshotIsAhead(snapshot, serverLive)
+          ? snapshot!.live
+          : serverLive;
 
-        // Restore state from session
         set({
           activeRunId: run.id,
           currentRunStartTime: new Date(run.started_at).getTime(),
-          categories: finalState.categories || get().categories,
-          teams: finalState.teams || get().teams,
-          adjustmentLog: finalState.adjustmentLog || [],
-          hasUnsavedChanges: false,
         });
-
-        console.log("Active session restored:", run.id);
+        if (live) applyLive(live);
       } catch (error) {
         console.error("Error restoring active session:", error);
+      }
+
+      function applyLive(live: NonNullable<ReturnType<typeof liveStateFromRunState>>) {
+        const state = get();
+        const merged = mergeLiveIntoTemplate(extractTemplate(state), live);
+        set({
+          categories: merged.categories,
+          teams: merged.teams,
+          adjustmentLog: merged.adjustmentLog,
+          currentTurnTeamId: merged.currentTurnTeamId,
+          hasUnsavedChanges: false,
+        });
       }
     },
 
     completeSession: async (runId: string, quizId?: string) => {
       const state = get();
-      if (!state.currentRunStartTime) {
-        console.error("Cannot complete session - no start time");
-        return;
-      }
-
-      // Use provided quizId or fall back to activeQuizId from state
       const sessionQuizId = quizId || state.activeQuizId;
-      if (!sessionQuizId) {
-        console.error("Cannot complete session - no quiz ID");
-        return;
+      if (!sessionQuizId) return;
+
+      if (pendingSessionSave) {
+        clearTimeout(pendingSessionSave);
+        pendingSessionSave = null;
       }
 
       try {
@@ -664,26 +890,34 @@ export const useGameStore = create<GameState>()((set, get) => {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
-            finalState: {
+            finalState: extractLiveState({
               categories: state.categories,
               teams: state.teams,
               adjustmentLog: state.adjustmentLog,
-            },
+              currentTurnTeamId: state.currentTurnTeamId,
+            }),
+            teams: state.teams.map((t) => ({
+              id: t.id,
+              name: t.name,
+              score: t.score,
+            })),
+            totalQuestions: state.categories.reduce(
+              (sum, c) => sum + c.questions.length,
+              0
+            ),
+            answeredQuestions: state.categories.reduce(
+              (sum, c) => sum + c.questions.filter((q) => q.answered).length,
+              0
+            ),
           }),
         });
 
         if (!response.ok) {
-          throw new Error("Failed to complete session");
+          throw new Error(`Kunne ikke fullføre økten (${response.status})`);
         }
 
-        const { run } = await response.json();
-        console.log("Session completed:", run.id);
-
-        // Reset session tracking
-        set({
-          activeRunId: null,
-          currentRunStartTime: null,
-        });
+        clearSnapshot(sessionQuizId);
+        set({ activeRunId: null, currentRunStartTime: null });
       } catch (error) {
         console.error("Error completing session:", error);
         throw error;
@@ -691,3 +925,5 @@ export const useGameStore = create<GameState>()((set, get) => {
     },
   };
 });
+
+export { answeredKey, defaultQuestions };

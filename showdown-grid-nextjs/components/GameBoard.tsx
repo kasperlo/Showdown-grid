@@ -1,93 +1,205 @@
 "use client";
 
-import { useCallback } from "react";
+import { useCallback, useState } from "react";
 import { useGameStore } from "@/utils/store";
 import { QuestionModal } from "./QuestionModal";
-import { RotateCcw } from "lucide-react";
+import { Image as ImageIcon, RotateCcw, Sparkles } from "lucide-react";
+import { isQuestionComplete } from "@/utils/quiz-template";
 import type { Question } from "@/utils/types";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+
+interface ReopenTarget {
+  categoryName: string;
+  questionIndex: number;
+  points: number;
+}
 
 export function GameBoard() {
   const categories = useGameStore((state) => state.categories);
   const setLastQuestion = useGameStore((state) => state.setLastQuestion);
-  const toggleQuestionAnswered = useGameStore((state) => state.toggleQuestionAnswered);
+  const toggleQuestionAnswered = useGameStore(
+    (state) => state.toggleQuestionAnswered
+  );
+  const [reopenTarget, setReopenTarget] = useState<ReopenTarget | null>(null);
 
   const handleQuestionClick = useCallback(
     (categoryName: string, question: Question, questionIndex: number) => {
-      // Prevent opening if answered (since we removed disabled attribute)
       if (question.answered) return;
       setLastQuestion({ ...question, categoryName, questionIndex });
     },
     [setLastQuestion]
   );
 
-  const handleRightClick = useCallback(
-    (e: React.MouseEvent, categoryName: string, question: Question, questionIndex: number) => {
-      e.preventDefault();
-      if (!question.answered) return;
-
-      // Confirm before re-opening
-      if (confirm(`Re-åpne dette spørsmålet (${question.points} poeng)?`)) {
-        toggleQuestionAnswered(categoryName, questionIndex, false);
-      }
-    },
-    [toggleQuestionAnswered]
-  );
-
-  const handleResetClick = useCallback(
-    (e: React.MouseEvent, categoryName: string, questionIndex: number, points: number) => {
-      e.stopPropagation(); // Forhindre at button onClick trigges
-
-      if (confirm(`Re-åpne dette spørsmålet (${points} poeng)?`)) {
-        toggleQuestionAnswered(categoryName, questionIndex, false);
-      }
-    },
-    [toggleQuestionAnswered]
-  );
+  if (!categories.length) {
+    return (
+      <div className="glass rounded-2xl p-10 text-center">
+        <p className="text-lg font-semibold">Brettet er tomt</p>
+        <p className="mt-2 text-muted-foreground">
+          Legg til kategorier og spørsmål i oppsettet før du starter.
+        </p>
+      </div>
+    );
+  }
 
   return (
-    <section className="flex-grow w-full max-w-7xl mx-auto">
-      <div
-        className="grid gap-4 h-full"
-        style={{ gridTemplateColumns: "repeat(auto-fit, minmax(12rem, 1fr))" }}
-      >
-        {categories.map((category, categoryIndex) => (
-          <div key={categoryIndex} className="text-center flex flex-col gap-4">
-            <div className="category-header">
-              <span className="text-base md:text-lg">{category.name}</span>
-            </div>
+    <section className="w-full">
+      {/*
+        The board scrolls sideways below ~640px instead of collapsing each
+        category onto its own row: a Jeopardy board that is five screens tall
+        stops being a board.
+      */}
+      <div className="-mx-4 overflow-x-auto px-4 pb-2 sm:mx-0 sm:overflow-visible sm:px-0">
+        <div
+          className="grid min-w-[36rem] gap-2 sm:min-w-0 sm:gap-4"
+          style={{
+            gridTemplateColumns: `repeat(${categories.length}, minmax(6.5rem, 1fr))`,
+          }}
+        >
+          {categories.map((category, categoryIndex) => (
+            <div
+              key={`${category.name}-${categoryIndex}`}
+              className="flex flex-col gap-2 text-center sm:gap-4"
+            >
+              <div className="category-header !h-16 px-2 sm:!h-24">
+                <span className="line-clamp-3 text-xs leading-tight sm:text-base md:text-lg">
+                  {category.name}
+                </span>
+              </div>
 
-            {category.questions.map((question, questionIndex) => {
-              const disabled = question.answered;
-              return (
-                <button
-                  key={questionIndex}
-                  onClick={() => handleQuestionClick(category.name, question, questionIndex)}
-                  onContextMenu={(e) => handleRightClick(e, category.name, question, questionIndex)}
-                  className={`tile h-24 flex items-center justify-center relative ${
-                    disabled ? "opacity-40 cursor-not-allowed pointer-events-none" : "cursor-pointer"
-                  }`}
-                  title={disabled ? "Klikk reset-ikonet eller høyreklikk for å re-åpne" : undefined}
-                >
-                  {/* Reset-ikon - vises kun på disabled spørsmål */}
-                  {disabled && (
+              {category.questions.map((question, questionIndex) => {
+                const answered = question.answered;
+                const incomplete = !isQuestionComplete(question);
+
+                return (
+                  <div key={questionIndex} className="relative">
                     <button
-                      onClick={(e) => handleResetClick(e, category.name, questionIndex, question.points)}
-                      className="absolute top-1 right-1 p-1 rounded-full bg-background/80 hover:bg-background hover:scale-110 transition-all group pointer-events-auto"
-                      title="Re-åpne spørsmål"
-                      aria-label="Re-åpne spørsmål"
+                      type="button"
+                      onClick={() =>
+                        handleQuestionClick(
+                          category.name,
+                          question,
+                          questionIndex
+                        )
+                      }
+                      disabled={answered}
+                      aria-label={
+                        answered
+                          ? `${category.name}, ${question.points} poeng, brukt`
+                          : `${category.name}, ${question.points} poeng`
+                      }
+                      className={`tile flex h-16 w-full items-center justify-center sm:h-24 ${
+                        answered
+                          ? "cursor-not-allowed opacity-40"
+                          : "cursor-pointer"
+                      } ${
+                        incomplete && !answered
+                          ? "ring-1 ring-dashed ring-destructive/50"
+                          : ""
+                      }`}
+                      title={
+                        incomplete
+                          ? "Mangler spørsmål eller svar — fyll det ut i oppsettet"
+                          : undefined
+                      }
                     >
-                      <RotateCcw className="h-4 w-4 text-muted-foreground group-hover:text-foreground group-hover:rotate-180 transition-all duration-300" />
+                      <span className="points-chip text-lg sm:text-2xl">
+                        {question.points}
+                      </span>
                     </button>
-                  )}
 
-                  {/* Points chip */}
-                  <span className="points-chip">{question.points}</span>
-                </button>
-              );
-            })}
-          </div>
-        ))}
+                    {/* Markers sit outside the button: a button inside a button
+                        is invalid HTML and the inner one was unreachable by
+                        keyboard. */}
+                    <div className="pointer-events-none absolute left-1 top-1 flex gap-1">
+                      {question.isJoker && (
+                        <span
+                          className="rounded-full bg-gradient-to-r from-yellow-400 via-red-500 to-purple-500 p-1"
+                          title="Joker"
+                        >
+                          <Sparkles className="h-3 w-3 text-white" aria-hidden />
+                          <span className="sr-only">Joker</span>
+                        </span>
+                      )}
+                      {question.imageUrl && !question.isJoker && (
+                        <span
+                          className="rounded-full bg-background/70 p-1"
+                          title="Har bilde"
+                        >
+                          <ImageIcon
+                            className="h-3 w-3 text-muted-foreground"
+                            aria-hidden
+                          />
+                          <span className="sr-only">Har bilde</span>
+                        </span>
+                      )}
+                    </div>
+
+                    {answered && (
+                      <button
+                        type="button"
+                        onClick={() =>
+                          setReopenTarget({
+                            categoryName: category.name,
+                            questionIndex,
+                            points: question.points,
+                          })
+                        }
+                        className="absolute right-1 top-1 rounded-full bg-background/80 p-1 transition-all hover:scale-110 hover:bg-background"
+                        title="Åpne spørsmålet på nytt"
+                        aria-label={`Åpne ${category.name} ${question.points} på nytt`}
+                      >
+                        <RotateCcw className="h-4 w-4 text-muted-foreground" />
+                      </button>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          ))}
+        </div>
       </div>
+
+      <AlertDialog
+        open={!!reopenTarget}
+        onOpenChange={(open) => !open && setReopenTarget(null)}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Åpne spørsmålet på nytt?</AlertDialogTitle>
+            <AlertDialogDescription>
+              {reopenTarget
+                ? `${reopenTarget.categoryName} for ${reopenTarget.points} poeng blir spillbart igjen. Poeng som alt er gitt blir stående.`
+                : ""}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Avbryt</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => {
+                if (reopenTarget) {
+                  toggleQuestionAnswered(
+                    reopenTarget.categoryName,
+                    reopenTarget.questionIndex,
+                    false
+                  );
+                }
+                setReopenTarget(null);
+              }}
+            >
+              Åpne igjen
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       <QuestionModal />
     </section>
