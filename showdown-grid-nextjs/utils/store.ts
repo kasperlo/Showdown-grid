@@ -461,12 +461,24 @@ export const useGameStore = create<GameState>()((set, get) => {
           lastQuestion.questionIndex
         );
       }
+
+      const winner = round.positiveTeamId;
       set({
         lastQuestion: null,
         isQuestionOpen: false,
         round: initialRoundState(),
       });
-      get().nextTurn();
+
+      // Whoever took the card picks the next one — that is how the game is
+      // played at the table. Rotating in team order regardless of who answered
+      // meant the host had to say "no, it's still your turn" out loud after
+      // every card. Rotation is the fallback for a card nobody won.
+      if (winner && get().teams.some((t) => t.id === winner)) {
+        set({ currentTurnTeamId: winner, isInitialTurnSelection: false });
+      } else {
+        get().nextTurn();
+      }
+
       snapshotLiveState();
     },
 

@@ -45,7 +45,7 @@ function QuestionModalContent() {
   // Seeded at mount instead of in an effect. This component is keyed per
   // question, so a new question mounts a fresh countdown by itself.
   const [countdown, setCountdown] = useState<number | null>(() =>
-    isJoker ? lastQuestion?.jokerTimer || jokerTimeLimit || 10 : null
+    isJoker ? lastQuestion?.jokerTimer || jokerTimeLimit || 10 : null,
   );
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const jokerRunning = isJoker && countdown !== null && countdown > 0;
@@ -82,10 +82,10 @@ function QuestionModalContent() {
 
   return (
     <Dialog open={isQuestionOpen} onOpenChange={setQuestionOpen}>
-      <DialogContent className="flex h-[90vh] w-full max-w-4xl flex-col border-accent bg-popover text-foreground md:h-3/4">
+      <DialogContent className="flex h-[94vh] w-full max-w-[min(96vw,90rem)] flex-col border-accent bg-popover text-foreground">
         <DialogHeader>
           <div className="flex items-center justify-between gap-4">
-            <DialogTitle className="display-lg text-left text-accent">
+            <DialogTitle className="text-left text-[clamp(1.1rem,3.2vh,2.4rem)] font-extrabold tracking-tight text-accent">
               {lastQuestion.categoryName} • {lastQuestion.points}
             </DialogTitle>
             {isTimerActive && quizTimeLimit && (
@@ -99,11 +99,11 @@ function QuestionModalContent() {
 
         <div className="flex flex-1 flex-col items-center justify-center gap-5 overflow-y-auto p-2 text-center sm:p-6">
           {jokerRunning ? (
-            <div className="flex w-full max-w-3xl flex-col items-center gap-6">
+            <div className="flex w-full max-w-5xl flex-col items-center gap-6">
               <div className="rounded-full bg-gradient-to-r from-yellow-400 via-red-500 to-purple-500 px-4 py-2 text-base font-black tracking-wider text-white shadow-lg">
                 JOKER
               </div>
-              <p className="px-2 text-2xl font-bold leading-tight sm:text-4xl lg:text-5xl">
+              <p className="px-2 text-[clamp(1.4rem,5.6vh,4rem)] font-bold leading-tight">
                 {lastQuestion.jokerTask}
               </p>
               <div className="bg-gradient-to-r from-yellow-400 via-red-500 to-purple-500 bg-clip-text text-6xl font-black tabular-nums text-transparent drop-shadow-lg sm:text-8xl">
@@ -113,18 +113,18 @@ function QuestionModalContent() {
           ) : (
             <>
               {jokerFinished && (
-                <div className="flex w-full max-w-3xl flex-col items-center gap-4">
+                <div className="flex w-full max-w-5xl flex-col items-center gap-4">
                   <p className="bg-gradient-to-r from-red-500 via-orange-500 to-red-600 bg-clip-text text-3xl font-black text-transparent sm:text-4xl">
                     TIDEN ER UTE!
                   </p>
-                  <p className="px-2 text-xl font-semibold leading-tight text-muted-foreground sm:text-2xl">
+                  <p className="px-2 text-[clamp(1.1rem,3.4vh,2.2rem)] font-semibold leading-tight text-muted-foreground">
                     {lastQuestion.jokerTask}
                   </p>
                 </div>
               )}
 
               {!isJoker && (lastQuestion.question.trim() || !hasCode) && (
-                <p className="px-2 text-xl font-semibold leading-tight sm:text-3xl md:text-4xl">
+                <p className="px-2 text-[clamp(1.35rem,5.4vh,4.2rem)] font-semibold leading-tight">
                   {lastQuestion.question || "(Ingen spørsmålstekst)"}
                 </p>
               )}
@@ -134,7 +134,7 @@ function QuestionModalContent() {
                    centre-aligned is unreadable. Sized to be legible from the
                    back of the room, and it scrolls rather than wraps: a wrapped
                    line changes what the snippet means. */
-                <pre className="max-h-[45vh] w-full max-w-3xl overflow-auto rounded-lg border border-border bg-background/80 px-4 py-3 text-left font-mono text-sm leading-relaxed sm:text-base md:text-lg">
+                <pre className="max-h-[52vh] w-full max-w-6xl overflow-auto rounded-lg border border-border bg-background/80 px-4 py-3 text-left font-mono text-[clamp(0.95rem,3.1vh,2.1rem)] leading-relaxed">
                   <code>{lastQuestion.code}</code>
                 </pre>
               )}
@@ -144,21 +144,21 @@ function QuestionModalContent() {
                 <img
                   src={lastQuestion.imageUrl}
                   alt="Illustrasjon til spørsmålet"
-                  className="max-h-[45vh] max-w-full rounded-lg object-contain shadow-lg"
+                  className="max-h-[56vh] max-w-full rounded-lg object-contain shadow-lg"
                   loading="eager"
                 />
               )}
 
               {revealed && !isJoker && (
-                <div className="w-full max-w-3xl rounded-lg border border-border bg-muted p-4">
+                <div className="w-full max-w-5xl rounded-lg border border-border bg-muted p-4">
                   {/* The answer to a code card is usually code itself —
                       `"object"`, `[1, NaN, NaN]` — and the quotes and brackets
                       have to survive. */}
                   <p
                     className={
                       hasCode
-                        ? "whitespace-pre-wrap break-words font-mono text-xl font-bold text-accent sm:text-2xl md:text-3xl"
-                        : "display-lg text-accent"
+                        ? "whitespace-pre-wrap break-words font-mono text-[clamp(1.2rem,4.4vh,3.2rem)] font-bold text-accent"
+                        : "text-[clamp(1.5rem,6.2vh,4.5rem)] font-extrabold tracking-tight text-accent"
                     }
                   >
                     {lastQuestion.answer || "(Ingen svartekst)"}

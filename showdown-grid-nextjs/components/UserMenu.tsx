@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase";
 import { useGameStore } from "@/utils/store";
 import { useQueryClient } from "@tanstack/react-query";
-import { LogIn, LogOut, User, UserPlus } from "lucide-react";
+import { History, Library, LogIn, LogOut, User, UserPlus } from "lucide-react";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -68,12 +68,29 @@ export function UserMenu({ className }: { className?: string }) {
     <>
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
-          <Button variant="ghost" className={className}>
-            <User className="mr-2 h-4 w-4" />
-            <span className="max-w-[10rem] truncate">{displayName}</span>
+          <Button variant="ghost" className={className} title={displayName}>
+            <User className="h-4 w-4 sm:mr-2" />
+            {/* Icon only on a phone: the name plus the game bar's other
+                controls did not fit in 320px, and the trailing one was cut off
+                the edge of the screen. */}
+            <span className="hidden max-w-[10rem] truncate sm:inline">
+              {displayName}
+            </span>
           </Button>
         </DropdownMenuTrigger>
         <DropdownMenuContent align="end" className="w-60">
+          {/* Also in the menu, not only on the game bar: the bar hides these
+              two below sm, and on a phone that left no way to another quiz. */}
+          <DropdownMenuItem onClick={() => router.push("/quizzes")}>
+            <Library className="mr-2 h-4 w-4" />
+            Biblioteket
+          </DropdownMenuItem>
+          <DropdownMenuItem onClick={() => router.push("/history")}>
+            <History className="mr-2 h-4 w-4" />
+            Historikk
+          </DropdownMenuItem>
+          <DropdownMenuSeparator />
+
           {isAnonymous && (
             <>
               <DropdownMenuItem onClick={() => router.push("/signup")}>

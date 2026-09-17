@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useState } from "react";
+import { Fragment, useCallback, useState } from "react";
 import { useGameStore } from "@/utils/store";
 import { QuestionModal } from "./QuestionModal";
 import { Image as ImageIcon, RotateCcw, Sparkles } from "lucide-react";
@@ -23,11 +23,22 @@ interface ReopenTarget {
   points: number;
 }
 
+/**
+ * The board, sized to the height it is given rather than to a fixed tile height.
+ *
+ * One grid holds every header and tile, placed by column and row, instead of a
+ * column of flex stacks. Flexible rows only line up across columns if the rows
+ * themselves are shared: with per-column stacks, a category with four questions
+ * stretched its tiles taller than its neighbour's five.
+ *
+ * Type scales with viewport height, because the number on a tile has to be
+ * readable from the back of a room on a projector and on a laptop on a sofa.
+ */
 export function GameBoard() {
   const categories = useGameStore((state) => state.categories);
   const setLastQuestion = useGameStore((state) => state.setLastQuestion);
   const toggleQuestionAnswered = useGameStore(
-    (state) => state.toggleQuestionAnswered
+    (state) => state.toggleQuestionAnswered,
   );
   const [reopenTarget, setReopenTarget] = useState<ReopenTarget | null>(null);
 
@@ -36,7 +47,7 @@ export function GameBoard() {
       if (question.answered) return;
       setLastQuestion({ ...question, categoryName, questionIndex });
     },
-    [setLastQuestion]
+    [setLastQuestion],
   );
 
   if (!categories.length) {
@@ -50,27 +61,36 @@ export function GameBoard() {
     );
   }
 
+  const rowCount = categories.reduce(
+    (most, category) => Math.max(most, category.questions.length),
+    0,
+  );
+
   return (
-    <section className="w-full">
+    <>
       {/*
         The board scrolls sideways below ~640px instead of collapsing each
         category onto its own row: a Jeopardy board that is five screens tall
         stops being a board.
       */}
-      <div className="-mx-4 overflow-x-auto px-4 pb-2 sm:mx-0 sm:overflow-visible sm:px-0">
+      <div className="-mx-4 flex min-h-0 flex-1 overflow-x-auto px-4 sm:mx-0 sm:overflow-x-visible sm:px-0">
         <div
-          className="grid min-w-[36rem] gap-2 sm:min-w-0 sm:gap-4"
+          // Columns are capped rather than 1fr: a three-category board stretched
+          // each tile to 600px on a projector, which reads as a menu, not a
+          // Jeopardy board. Seven columns still fill a 1920px screen.
+          className="grid min-h-0 w-full min-w-[36rem] flex-1 justify-center gap-1.5 sm:min-w-0 sm:gap-3"
           style={{
-            gridTemplateColumns: `repeat(${categories.length}, minmax(6.5rem, 1fr))`,
+            gridTemplateColumns: `repeat(${categories.length}, minmax(6rem, 16rem))`,
+            gridTemplateRows: `auto repeat(${rowCount}, minmax(2.75rem, 1fr))`,
           }}
         >
           {categories.map((category, categoryIndex) => (
-            <div
-              key={`${category.name}-${categoryIndex}`}
-              className="flex flex-col gap-2 text-center sm:gap-4"
-            >
-              <div className="category-header !h-16 px-2 sm:!h-24">
-                <span className="line-clamp-3 text-xs leading-tight sm:text-base md:text-lg">
+            <Fragment key={`${category.name}-${categoryIndex}`}>
+              <div
+                className="category-header !h-auto px-2 py-2"
+                style={{ gridColumn: categoryIndex + 1, gridRow: 1 }}
+              >
+                <span className="line-clamp-3 text-[clamp(0.65rem,2.1vh,1.6rem)] font-bold leading-tight">
                   {category.name}
                 </span>
               </div>
@@ -80,14 +100,21 @@ export function GameBoard() {
                 const incomplete = !isQuestionComplete(question);
 
                 return (
-                  <div key={questionIndex} className="relative">
+                  <div
+                    key={questionIndex}
+                    className="relative min-h-0"
+                    style={{
+                      gridColumn: categoryIndex + 1,
+                      gridRow: questionIndex + 2,
+                    }}
+                  >
                     <button
                       type="button"
                       onClick={() =>
                         handleQuestionClick(
                           category.name,
                           question,
-                          questionIndex
+                          questionIndex,
                         )
                       }
                       disabled={answered}
@@ -96,9 +123,9 @@ export function GameBoard() {
                           ? `${category.name}, ${question.points} poeng, brukt`
                           : `${category.name}, ${question.points} poeng`
                       }
-                      className={`tile flex h-16 w-full items-center justify-center sm:h-24 ${
+                      className={`tile flex h-full w-full items-center justify-center ${
                         answered
-                          ? "cursor-not-allowed opacity-40"
+                          ? "cursor-not-allowed opacity-30"
                           : "cursor-pointer"
                       } ${
                         incomplete && !answered
@@ -111,7 +138,7 @@ export function GameBoard() {
                           : undefined
                       }
                     >
-                      <span className="points-chip text-lg sm:text-2xl">
+                      <span className="points-chip !text-[clamp(1.1rem,3.4vh,2.75rem)]">
                         {question.points}
                       </span>
                     </button>
@@ -125,7 +152,10 @@ export function GameBoard() {
                           className="rounded-full bg-gradient-to-r from-yellow-400 via-red-500 to-purple-500 p-1"
                           title="Joker"
                         >
-                          <Sparkles className="h-3 w-3 text-white" aria-hidden />
+                          <Sparkles
+                            className="h-3 w-3 text-white"
+                            aria-hidden
+                          />
                           <span className="sr-only">Joker</span>
                         </span>
                       )}
@@ -153,7 +183,7 @@ export function GameBoard() {
                             points: question.points,
                           })
                         }
-                        className="absolute right-1 top-1 rounded-full bg-background/80 p-1 transition-all hover:scale-110 hover:bg-background"
+                        className="absolute right-1 top-1 rounded-full bg-background/80 p-1 opacity-0 transition-all hover:scale-110 hover:bg-background focus-visible:opacity-100 group-hover/board:opacity-100"
                         title="Åpne spørsmålet på nytt"
                         aria-label={`Åpne ${category.name} ${question.points} på nytt`}
                       >
@@ -163,7 +193,7 @@ export function GameBoard() {
                   </div>
                 );
               })}
-            </div>
+            </Fragment>
           ))}
         </div>
       </div>
@@ -189,7 +219,7 @@ export function GameBoard() {
                   toggleQuestionAnswered(
                     reopenTarget.categoryName,
                     reopenTarget.questionIndex,
-                    false
+                    false,
                   );
                 }
                 setReopenTarget(null);
@@ -202,6 +232,6 @@ export function GameBoard() {
       </AlertDialog>
 
       <QuestionModal />
-    </section>
+    </>
   );
 }

@@ -24,6 +24,7 @@ export function EditModeToggle() {
         type="button"
         onClick={() => setEditMode(false)}
         aria-pressed={!editMode}
+        aria-label="Spill"
         className={`inline-flex h-7 items-center gap-1.5 rounded-full px-3 text-sm transition-colors ${
           editMode
             ? "font-semibold text-muted-foreground"
@@ -31,12 +32,13 @@ export function EditModeToggle() {
         }`}
       >
         <Play className="h-3.5 w-3.5" />
-        Spill
+        <span className="hidden sm:inline">Spill</span>
       </button>
       <button
         type="button"
         onClick={() => setEditMode(true)}
         aria-pressed={editMode}
+        aria-label="Rediger"
         className={`inline-flex h-7 items-center gap-1.5 rounded-full px-3 text-sm transition-colors ${
           editMode
             ? "bg-accent font-bold text-accent-foreground"
@@ -44,7 +46,7 @@ export function EditModeToggle() {
         }`}
       >
         <Pencil className="h-3.5 w-3.5" />
-        Rediger
+        <span className="hidden sm:inline">Rediger</span>
       </button>
     </div>
   );

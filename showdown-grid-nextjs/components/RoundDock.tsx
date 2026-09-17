@@ -45,7 +45,7 @@ function DockBody() {
   const [showBurst, setShowBurst] = useState(false);
   const [burstEmojis, setBurstEmojis] = useState<string[]>(POS_EMOJIS);
   const [customPointsText, setCustomPointsText] = useState<string>(() =>
-    String(lastQuestion?.points ?? 0)
+    String(lastQuestion?.points ?? 0),
   );
 
   const customPoints = useMemo(() => {
@@ -59,16 +59,16 @@ function DockBody() {
       setMode(next);
       if (!lastQuestion) return;
       setCustomPointsText(
-        String(next === "plus" ? lastQuestion.points : penaltyAbs)
+        String(next === "plus" ? lastQuestion.points : penaltyAbs),
       );
     },
-    [lastQuestion, penaltyAbs]
+    [lastQuestion, penaltyAbs],
   );
 
   const awardingBlocked = isQuestionOpen || !lastQuestion;
   const winner = teams.find((t) => t.id === round.positiveTeamId) ?? null;
   const somethingHappened = Boolean(
-    round.positiveTeamId || round.negativeAwardedTo.length
+    round.positiveTeamId || round.negativeAwardedTo.length,
   );
 
   const awardTo = useCallback(
@@ -98,7 +98,7 @@ function DockBody() {
       customPoints,
       awardPositive,
       awardNegative,
-    ]
+    ],
   );
 
   // Host shortcuts. Ignored while typing so the points and team-name fields
@@ -160,156 +160,153 @@ function DockBody() {
 
       {/* Nothing is shown while the question is on screen. The dock used to stay
           up with "Lukk spørsmålet for å tildele poeng", which read as a second
-          surface competing with the question the room is looking at. */}
+          surface competing with the question the room is looking at.
+
+          It sits in the page flow rather than fixed to the bottom, in the same
+          slot as the standings: fixed, it covered the top row of the standings
+          it was meant to sit beside. */}
       {lastQuestion && !isQuestionOpen && (
-        <div className="pointer-events-none fixed inset-x-0 bottom-0 z-50 pb-3 sm:bottom-4 sm:pb-0">
-          <div className="container mx-auto max-w-5xl px-2 sm:px-4">
-            <div className="pointer-events-auto tile space-y-3 p-3 sm:p-4">
-              <div className="flex flex-wrap items-center justify-between gap-2">
-                <div className="flex items-center gap-2">
-                  <span className="inline-flex items-center gap-1 rounded-full border border-border px-2 py-1 text-xs">
-                    <span className="max-w-[9rem] truncate">
-                      {lastQuestion.categoryName}
-                    </span>
-                    <span className="font-bold text-accent">
-                      {lastQuestion.points}
-                    </span>
-                  </span>
+        <div className="tile space-y-2 p-2.5 sm:p-3">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <div className="flex items-center gap-2">
+              <span className="inline-flex items-center gap-1 rounded-full border border-border px-2 py-1 text-xs">
+                <span className="max-w-[9rem] truncate">
+                  {lastQuestion.categoryName}
+                </span>
+                <span className="font-bold text-accent">
+                  {lastQuestion.points}
+                </span>
+              </span>
 
-                  <div className="inline-flex overflow-hidden rounded-lg border border-border">
-                    <button
-                      type="button"
-                      onClick={() => switchMode("plus")}
-                      className={`inline-flex items-center gap-1 px-3 py-1.5 text-sm ${
-                        mode === "plus"
-                          ? "bg-success text-success-foreground"
-                          : "bg-transparent"
-                      }`}
-                      title="Riktig svar (R)"
-                      aria-pressed={mode === "plus"}
-                    >
-                      <Plus className="h-4 w-4" />
-                      <span className="hidden sm:inline">Riktig</span>
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => switchMode("minus")}
-                      className={`inline-flex items-center gap-1 px-3 py-1.5 text-sm ${
-                        mode === "minus"
-                          ? "bg-destructive text-destructive-foreground"
-                          : "bg-transparent"
-                      }`}
-                      title="Feil svar — trekker poeng (F)"
-                      aria-pressed={mode === "minus"}
-                    >
-                      <Minus className="h-4 w-4" />
-                      <span className="hidden sm:inline">Feil</span>
-                    </button>
-                  </div>
-
-                  <Input
-                    type="number"
-                    inputMode="numeric"
-                    min={0}
-                    step={50}
-                    value={customPointsText}
-                    onChange={(e) => setCustomPointsText(e.target.value)}
-                    className="h-8 w-20 text-sm"
-                    aria-label="Poeng å tildele"
-                    title="Poeng å tildele — endre for å gi halv pott o.l."
-                  />
-                </div>
-
-                <Button
-                  onClick={() => endRound()}
-                  variant={round.positiveTeamId ? "default" : "outline"}
-                  className={
-                    round.positiveTeamId
-                      ? "gap-2 bg-primary text-primary-foreground"
-                      : "gap-2"
-                  }
-                  title="Gå videre til brettet (N)"
+              <div className="inline-flex overflow-hidden rounded-lg border border-border">
+                <button
+                  type="button"
+                  onClick={() => switchMode("plus")}
+                  className={`inline-flex items-center gap-1 px-3 py-1.5 text-sm ${
+                    mode === "plus"
+                      ? "bg-success text-success-foreground"
+                      : "bg-transparent"
+                  }`}
+                  title="Riktig svar (R)"
+                  aria-pressed={mode === "plus"}
                 >
-                  {somethingHappened ? "Neste spørsmål" : "Ingen klarte den"}
-                  <ArrowRight className="h-4 w-4" />
-                </Button>
+                  <Plus className="h-4 w-4" />
+                  <span className="hidden sm:inline">Riktig</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => switchMode("minus")}
+                  className={`inline-flex items-center gap-1 px-3 py-1.5 text-sm ${
+                    mode === "minus"
+                      ? "bg-destructive text-destructive-foreground"
+                      : "bg-transparent"
+                  }`}
+                  title="Feil svar — trekker poeng (F)"
+                  aria-pressed={mode === "minus"}
+                >
+                  <Minus className="h-4 w-4" />
+                  <span className="hidden sm:inline">Feil</span>
+                </button>
               </div>
 
-              {/* One line that says what to do next, and nothing else. */}
-              <p className="text-center text-sm font-semibold">
-                {winner ? (
-                  <span className="inline-flex items-center gap-2 text-success">
-                    <Check className="h-4 w-4" />
-                    {customPoints} poeng til {winner.name}
-                  </span>
-                ) : teams.length === 0 ? (
-                  <span className="text-muted-foreground">
-                    Legg til lagene først
-                  </span>
-                ) : mode === "plus" ? (
-                  "Hvem svarte riktig?"
-                ) : (
-                  "Hvem svarte feil?"
-                )}
-              </p>
-
-              {teams.length === 0 ? (
-                <div className="mx-auto max-w-sm">
-                  <AddTeamInline autoFocus />
-                </div>
-              ) : (
-                <div className="flex flex-wrap items-center justify-center gap-2">
-                  {teams.map((team, index) => {
-                    const isWinner = round.positiveTeamId === team.id;
-                    const hasNeg = round.negativeAwardedTo.includes(team.id);
-                    const chipActive =
-                      (mode === "plus" && isWinner) ||
-                      (mode === "minus" && hasNeg);
-                    const chipDisabled =
-                      (mode === "plus" && !!round.positiveTeamId) ||
-                      (mode === "minus" && (hasNeg || !!round.positiveTeamId));
-
-                    return (
-                      <button
-                        key={team.id}
-                        onClick={() => awardTo(team.id)}
-                        disabled={chipDisabled}
-                        className={[
-                          "inline-flex items-center gap-2 rounded-full border border-border px-4 py-2 text-base transition-colors",
-                          chipDisabled
-                            ? "cursor-not-allowed opacity-50"
-                            : "hover:bg-muted",
-                          chipActive
-                            ? mode === "plus"
-                              ? "bg-success text-success-foreground"
-                              : "bg-destructive text-destructive-foreground"
-                            : "bg-popover",
-                        ].join(" ")}
-                        aria-pressed={chipActive}
-                        title={
-                          mode === "plus"
-                            ? `Tildel +${customPoints} til ${team.name} (${index + 1})`
-                            : `Tildel −${customPoints} til ${team.name} (${index + 1})`
-                        }
-                      >
-                        {index < 9 && (
-                          <kbd className="rounded bg-muted px-1 text-[0.65rem] text-muted-foreground">
-                            {index + 1}
-                          </kbd>
-                        )}
-                        <span className="max-w-[8rem] truncate">
-                          {team.name}
-                        </span>
-                        <span className="font-bold tabular-nums">
-                          {team.score}
-                        </span>
-                      </button>
-                    );
-                  })}
-                </div>
-              )}
+              <Input
+                type="number"
+                inputMode="numeric"
+                min={0}
+                step={50}
+                value={customPointsText}
+                onChange={(e) => setCustomPointsText(e.target.value)}
+                className="h-8 w-20 text-sm"
+                aria-label="Poeng å tildele"
+                title="Poeng å tildele — endre for å gi halv pott o.l."
+              />
             </div>
+
+            <Button
+              onClick={() => endRound()}
+              variant={round.positiveTeamId ? "default" : "outline"}
+              className={
+                round.positiveTeamId
+                  ? "gap-2 bg-primary text-primary-foreground"
+                  : "gap-2"
+              }
+              title="Gå videre til brettet (N)"
+            >
+              {somethingHappened ? "Neste spørsmål" : "Ingen klarte den"}
+              <ArrowRight className="h-4 w-4" />
+            </Button>
           </div>
+
+          {/* One line that says what to do next, and nothing else. */}
+          <p className="text-center text-[clamp(0.85rem,2.1vh,1.25rem)] font-semibold">
+            {winner ? (
+              <span className="inline-flex items-center gap-2 text-success">
+                <Check className="h-4 w-4" />
+                {customPoints} poeng til {winner.name}
+              </span>
+            ) : teams.length === 0 ? (
+              <span className="text-muted-foreground">
+                Legg til lagene først
+              </span>
+            ) : mode === "plus" ? (
+              "Hvem svarte riktig?"
+            ) : (
+              "Hvem svarte feil?"
+            )}
+          </p>
+
+          {teams.length === 0 ? (
+            <div className="mx-auto max-w-sm">
+              <AddTeamInline autoFocus />
+            </div>
+          ) : (
+            <div className="flex flex-wrap items-center justify-center gap-2">
+              {teams.map((team, index) => {
+                const isWinner = round.positiveTeamId === team.id;
+                const hasNeg = round.negativeAwardedTo.includes(team.id);
+                const chipActive =
+                  (mode === "plus" && isWinner) || (mode === "minus" && hasNeg);
+                const chipDisabled =
+                  (mode === "plus" && !!round.positiveTeamId) ||
+                  (mode === "minus" && (hasNeg || !!round.positiveTeamId));
+
+                return (
+                  <button
+                    key={team.id}
+                    onClick={() => awardTo(team.id)}
+                    disabled={chipDisabled}
+                    className={[
+                      "inline-flex items-center gap-2 rounded-full border border-border px-3 py-1.5 text-[clamp(0.85rem,2.1vh,1.3rem)] transition-colors",
+                      chipDisabled
+                        ? "cursor-not-allowed opacity-50"
+                        : "hover:bg-muted",
+                      chipActive
+                        ? mode === "plus"
+                          ? "bg-success text-success-foreground"
+                          : "bg-destructive text-destructive-foreground"
+                        : "bg-popover",
+                    ].join(" ")}
+                    aria-pressed={chipActive}
+                    title={
+                      mode === "plus"
+                        ? `Tildel +${customPoints} til ${team.name} (${index + 1})`
+                        : `Tildel −${customPoints} til ${team.name} (${index + 1})`
+                    }
+                  >
+                    {index < 9 && (
+                      <kbd className="rounded bg-muted px-1 text-[0.65rem] text-muted-foreground">
+                        {index + 1}
+                      </kbd>
+                    )}
+                    <span className="max-w-[8rem] truncate">{team.name}</span>
+                    <span className="text-[clamp(0.95rem,2.6vh,1.6rem)] font-bold tabular-nums">
+                      {team.score}
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
+          )}
         </div>
       )}
     </>

@@ -14,7 +14,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Trash2 } from "lucide-react";
+import { Hand, Trash2 } from "lucide-react";
 
 interface TeamAdjustmentModalProps {
   team: Team | null;
@@ -41,6 +41,8 @@ function AdjustmentBody({
   const manualAdjustScore = useGameStore((state) => state.manualAdjustScore);
   const updateTeamName = useGameStore((state) => state.updateTeamName);
   const removeTeam = useGameStore((state) => state.removeTeam);
+  const setCurrentTurn = useGameStore((state) => state.setCurrentTurn);
+  const currentTurnTeamId = useGameStore((state) => state.currentTurnTeamId);
 
   const [pointsText, setPointsText] = useState("100");
   const [reason, setReason] = useState("");
@@ -74,6 +76,24 @@ function AdjustmentBody({
         </DialogHeader>
 
         <div className="space-y-4">
+          {team.id !== currentTurnTeamId && (
+            /* The host needs to be able to say who picks next without waiting
+               for the rotation to come round — a team swaps a player, someone
+               passes, a card is voided. */
+            <Button
+              variant="secondary"
+              className="w-full gap-2"
+              onClick={() => {
+                commitName();
+                setCurrentTurn(team.id);
+                onClose();
+              }}
+            >
+              <Hand className="h-4 w-4" />
+              Gi turen til {team.name}
+            </Button>
+          )}
+
           <div>
             <Label htmlFor="team-name">Lagnavn</Label>
             <Input
