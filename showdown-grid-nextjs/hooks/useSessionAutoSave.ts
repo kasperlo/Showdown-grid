@@ -1,53 +1,54 @@
 import { useEffect, useRef } from "react";
 import { useGameStore } from "@/utils/store";
+import { extractLiveState } from "@/utils/quiz-template";
 import { useDebounce } from "@/utils/useDebounce";
 
 /**
- * Custom hook for auto-saving quiz sessions
- * Debounces state changes and calls saveSession() with rate limiting (max 1/sec)
+ * Keeps the live session in sync with the server.
+ *
+ * The previous version marked a state as saved as soon as `saveSession()`
+ * resolved — including when it resolved early because of the rate limit. Those
+ * changes were then never retried. The rate limiter now schedules the write
+ * instead of dropping it, and the fingerprint only advances on an actual write.
  */
 export function useSessionAutoSave() {
-  const activeRunId = useGameStore((state) => state.activeRunId);
-  const saveSession = useGameStore((state) => state.saveSession);
-  const categories = useGameStore((state) => state.categories);
-  const teams = useGameStore((state) => state.teams);
-  const adjustmentLog = useGameStore((state) => state.adjustmentLog);
+  const activeRunId = useGameStore((s) => s.activeRunId);
+  const saveSession = useGameStore((s) => s.saveSession);
+  const flushSession = useGameStore((s) => s.flushSession);
+  const categories = useGameStore((s) => s.categories);
+  const teams = useGameStore((s) => s.teams);
+  const adjustmentLog = useGameStore((s) => s.adjustmentLog);
+  const currentTurnTeamId = useGameStore((s) => s.currentTurnTeamId);
 
-  // Debounce session state changes (1000ms delay)
-  const debouncedState = useDebounce(
-    {
-      categories,
-      teams,
-      adjustmentLog,
-    },
-    1000
+  const liveFingerprint = JSON.stringify(
+    extractLiveState({ categories, teams, adjustmentLog, currentTurnTeamId })
   );
-
-  // Track if we've already saved this state to avoid duplicate saves
-  const lastSavedStateRef = useRef<string | null>(null);
+  const debounced = useDebounce(liveFingerprint, 600);
+  const lastQueued = useRef<string | null>(null);
 
   useEffect(() => {
-    // Only auto-save if there's an active session
-    if (!activeRunId) {
-      return;
-    }
+    if (!activeRunId) return;
+    if (lastQueued.current === debounced) return;
+    lastQueued.current = debounced;
+    void saveSession();
+  }, [debounced, activeRunId, saveSession]);
 
-    // Create a simple hash of the state to detect changes
-    const stateHash = JSON.stringify(debouncedState);
+  // A host closing the laptop lid mid-quiz should not lose the last answer.
+  useEffect(() => {
+    if (!activeRunId) return;
 
-    // Skip if this state was already saved
-    if (lastSavedStateRef.current === stateHash) {
-      return;
-    }
+    const flush = () => {
+      void flushSession();
+    };
+    const onVisibility = () => {
+      if (document.visibilityState === "hidden") flush();
+    };
 
-    // Save the session (rate limiting is handled inside saveSession)
-    saveSession().then(() => {
-      lastSavedStateRef.current = stateHash;
-    }).catch((error) => {
-      console.error("Auto-save failed:", error);
-      // Don't update lastSavedStateRef on error so we can retry
-    });
-  }, [debouncedState, activeRunId, saveSession]);
+    window.addEventListener("pagehide", flush);
+    document.addEventListener("visibilitychange", onVisibility);
+    return () => {
+      window.removeEventListener("pagehide", flush);
+      document.removeEventListener("visibilitychange", onVisibility);
+    };
+  }, [activeRunId, flushSession]);
 }
-
-

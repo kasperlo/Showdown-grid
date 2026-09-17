@@ -1,233 +1,178 @@
 "use client";
 
-import { useEffect, useState, useCallback } from "react";
+import { useEffect } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import { GameBoard } from "@/components/GameBoard";
-import { Ranking } from "@/components/Ranking";
+import { Scoreboard } from "@/components/Scoreboard";
 import { RoundDock } from "@/components/RoundDock";
-import { useRouter } from "next/navigation";
-import { Button } from "@/components/ui/button";
-import { Settings, History } from "lucide-react";
-import { useGameStore } from "@/utils/store";
-import { QuizSelector } from "@/components/QuizSelector";
 import { TurnIndicator } from "@/components/TurnIndicator";
-import { UserMenu } from "@/components/UserMenu";
-import { createClient } from "@/lib/supabase";
+import { GameHeader } from "@/components/GameHeader";
+import { EditorBar } from "@/components/editor/EditorBar";
+import { EditableBoard } from "@/components/editor/EditableBoard";
+import { EditableQuizTitle } from "@/components/editor/EditableQuizTitle";
+import { QuestionInspector } from "@/components/editor/QuestionInspector";
+import { BoardLegend } from "@/components/editor/BoardLegend";
+import { Button } from "@/components/ui/button";
+import { Sheet, SheetContent } from "@/components/ui/sheet";
 import { useAuth } from "@/hooks/useAuth";
-import { useActiveQuiz, useQuizzesList } from "@/hooks/queries/useQuizzes";
-import type { QuizTheme, Category, Team, AdjustmentEntry } from "@/utils/types";
+import { useIsWideScreen } from "@/hooks/useMediaQuery";
+import { useQuizBootstrap } from "@/hooks/useQuizBootstrap";
+import { useGameStore } from "@/utils/store";
+import { countCompleteQuestions, countQuestions } from "@/utils/quiz-template";
 
 export default function Home() {
   const router = useRouter();
-  const { isAuthReady, isAuthError } = useAuth();
+  const searchParams = useSearchParams();
+  useAuth();
+  const bootstrap = useQuizBootstrap();
 
-  // Optimize store selectors to reduce re-renders
-  const quizTitle = useGameStore((state) => state.quizTitle);
-  const quizDescription = useGameStore((state) => state.quizDescription);
-  const activeQuizId = useGameStore((state) => state.activeQuizId);
-  const activeQuizOwnerId = useGameStore((state) => state.activeQuizOwnerId);
-  const setCategories = useGameStore((state) => state.setCategories);
-  const setQuizTitle = useGameStore((state) => state.setQuizTitle);
-  const setQuizDescription = useGameStore((state) => state.setQuizDescription);
-  const setQuizTimeLimit = useGameStore((state) => state.setQuizTimeLimit);
-  const setQuizTheme = useGameStore((state) => state.setQuizTheme);
-  const setQuizIsPublic = useGameStore((state) => state.setQuizIsPublic);
-  const isPlayingPublicQuiz = useGameStore(
-    (state) => state.isPlayingPublicQuiz
-  );
-  const restoreActiveSession = useGameStore(
-    (state) => state.restoreActiveSession
-  );
+  const categories = useGameStore((s) => s.categories);
+  const canEdit = useGameStore((s) => s.canEditActiveQuiz());
+  const editMode = useGameStore((s) => s.editMode);
+  const setEditMode = useGameStore((s) => s.setEditMode);
+  const selectedCard = useGameStore((s) => s.selectedCard);
+  const selectCard = useGameStore((s) => s.selectCard);
+  const isWide = useIsWideScreen();
 
-  // Use TanStack Query for server state
-  // Disable useActiveQuiz when playing a public quiz (to avoid overwriting it)
-  const { data: activeQuizData, isLoading: isLoadingQuiz } = useActiveQuiz(
-    !isPlayingPublicQuiz
-  );
-  const { data: quizzesList = [], isLoading: isLoadingQuizzesList } =
-    useQuizzesList();
-
-  const [currentUserId, setCurrentUserId] = useState<string | null>(null);
-  const [currentUserEmail, setCurrentUserEmail] = useState<string | undefined>(undefined);
-  const [isAnonymous, setIsAnonymous] = useState<boolean>(false);
-  const [isInitialized, setIsInitialized] = useState(false);
-
-  // Get user info
+  // ?mode=edit makes the editor a shareable link and gives /setup somewhere to
+  // redirect to.
   useEffect(() => {
-    if (!isAuthReady || isAuthError) {
-      return;
-    }
+    if (bootstrap.status !== "ready" || !canEdit) return;
+    if (searchParams.get("mode") === "edit") setEditMode(true);
+  }, [bootstrap.status, canEdit, searchParams, setEditMode]);
 
-    const getUserInfo = async () => {
-      const supabase = createClient();
-      const {
-        data: { user },
-      } = await supabase.auth.getUser();
-      setCurrentUserId(user?.id || null);
-      setCurrentUserEmail(user?.email);
-      setIsAnonymous(user?.is_anonymous || false);
-    };
-
-    getUserInfo();
-  }, [isAuthReady, isAuthError]);
-
-  // Stable callback to sync quiz data from query to Zustand store
-  const syncQuizDataToStore = useCallback(
-    (quizData: {
-      categories?: Category[];
-      teams?: Team[];
-      adjustmentLog?: AdjustmentEntry[];
-      quizId: string;
-      quizOwnerId: string;
-      quizTitle: string;
-      quizDescription: string;
-      quizTimeLimit: number | null;
-      quizTheme: string;
-      quizIsPublic: boolean;
-    }) => {
-      setCategories(quizData.categories || []);
-      useGameStore.setState({
-        teams: quizData.teams || [],
-        adjustmentLog: quizData.adjustmentLog || [],
-        activeQuizId: quizData.quizId,
-        activeQuizOwnerId: quizData.quizOwnerId,
-      });
-      setQuizTitle(quizData.quizTitle || "");
-      setQuizDescription(quizData.quizDescription || "");
-      setQuizTimeLimit(quizData.quizTimeLimit);
-      setQuizTheme((quizData.quizTheme as QuizTheme) || "classic");
-      setQuizIsPublic(quizData.quizIsPublic || false);
-    },
-    [
-      setCategories,
-      setQuizTitle,
-      setQuizDescription,
-      setQuizTimeLimit,
-      setQuizTheme,
-      setQuizIsPublic,
-    ]
-  );
-
-  // Sync active quiz data from query to Zustand store
   useEffect(() => {
-    if (!isAuthReady || isAuthError) {
-      return;
-    }
+    if (bootstrap.status === "empty") router.replace("/quizzes");
+  }, [bootstrap.status, router]);
 
-    // If playing a public quiz, don't sync from query (data is already in Zustand)
-    if (isPlayingPublicQuiz) {
-      queueMicrotask(() => setIsInitialized(true));
-      return;
-    }
+  if (bootstrap.status === "loading" || bootstrap.status === "empty") {
+    return (
+      <main className="stage min-h-screen">
+        <div className="container mx-auto p-8">
+          <div className="mx-auto max-w-4xl space-y-4">
+            <div className="h-10 w-1/2 animate-pulse rounded bg-muted" />
+            <div className="grid grid-cols-2 gap-3 sm:grid-cols-5">
+              {Array.from({ length: 10 }).map((_, i) => (
+                <div key={i} className="h-16 animate-pulse rounded-xl bg-muted" />
+              ))}
+            </div>
+          </div>
+        </div>
+      </main>
+    );
+  }
 
-    // For own quizzes, wait for query to load
-    if (isLoadingQuiz) {
-      return;
-    }
+  if (bootstrap.status === "error") {
+    return (
+      <main className="stage min-h-screen">
+        <div className="container mx-auto flex min-h-screen flex-col items-center justify-center gap-4 p-8 text-center">
+          <h1 className="text-2xl font-bold">Kunne ikke laste quizen</h1>
+          <p className="text-muted-foreground">{bootstrap.message}</p>
+          <div className="flex gap-2">
+            <Button onClick={() => window.location.reload()}>Prøv igjen</Button>
+            <Button variant="outline" onClick={() => router.push("/quizzes")}>
+              Til biblioteket
+            </Button>
+          </div>
+        </div>
+      </main>
+    );
+  }
 
-    if (activeQuizData) {
-      // Update Zustand state with quiz data
-      syncQuizDataToStore(activeQuizData);
+  const total = countQuestions(categories);
+  const complete = countCompleteQuestions(categories);
+  const boardIsEmpty = total === 0 || complete === 0;
 
-      // Restore active session if quiz has an ID (only for own quizzes, not public)
-      if (activeQuizData.quizId) {
-        restoreActiveSession(activeQuizData.quizId).catch((error) => {
-          console.error("Failed to restore active session:", error);
-        });
-      }
+  if (editMode) {
+    return (
+      <main className="stage min-h-screen">
+        {/* Board left, inspector right. The panel is a fixed 404px so the board
+            keeps the same column widths while you work in it. */}
+        <div
+          className={
+            isWide
+              ? "grid min-h-screen grid-cols-[minmax(0,1fr)_404px]"
+              : undefined
+          }
+        >
+          <div className="container mx-auto p-4 md:p-8 xl:mx-0 xl:max-w-none">
+            <EditorBar />
+            <div className="mb-8">
+              <EditableQuizTitle />
+            </div>
+            <EditableBoard />
+            <BoardLegend />
+          </div>
 
-      queueMicrotask(() => setIsInitialized(true));
-    } else {
-      // No active quiz found
-      queueMicrotask(() => setIsInitialized(true));
-    }
-  }, [
-    isAuthReady,
-    isAuthError,
-    isLoadingQuiz,
-    activeQuizData,
-    syncQuizDataToStore,
-    restoreActiveSession,
-    isPlayingPublicQuiz,
-  ]);
+          {isWide && (
+            <div className="sticky top-0 h-screen border-l border-border">
+              {selectedCard ? (
+                <QuestionInspector />
+              ) : (
+                <p className="flex h-full items-center justify-center px-8 text-center text-sm text-muted-foreground">
+                  Velg et kort
+                </p>
+              )}
+            </div>
+          )}
+        </div>
 
-  // Handle redirect after initialization completes
-  useEffect(() => {
-    if (
-      isInitialized &&
-      !isLoadingQuiz &&
-      !isLoadingQuizzesList &&
-      !activeQuizId &&
-      quizzesList.length === 0
-    ) {
-      router.push("/quizzes");
-    }
-  }, [
-    isInitialized,
-    isLoadingQuiz,
-    isLoadingQuizzesList,
-    activeQuizId,
-    quizzesList,
-    router,
-  ]);
-
-  // Turn selection is now manual via TurnIndicator component
-  // Removed automatic initializeTurn() - user clicks "Hvem skal starte?" button instead
-
-  // Derived state: check if current user owns the active quiz
-  const isOwner =
-    currentUserId && activeQuizOwnerId && currentUserId === activeQuizOwnerId;
+        {/* Below xl the panel is a sheet, so the board keeps the full width.
+            Mounted only for that breakpoint: rendering both would put two
+            inspectors on the page and dim the desktop layout with the sheet's
+            own overlay. */}
+        {!isWide && (
+          <Sheet
+            open={!!selectedCard}
+            onOpenChange={(open) => !open && selectCard(null)}
+          >
+            <SheetContent
+              side="right"
+              className="w-full p-0 sm:max-w-md"
+              hideCloseButton
+            >
+              <QuestionInspector />
+            </SheetContent>
+          </Sheet>
+        )}
+      </main>
+    );
+  }
 
   return (
-    <main className="stage min-h-screen">
+    <main className="stage min-h-screen pb-40">
       <div className="container mx-auto p-4 md:p-8">
-        <header className="text-center mb-10 relative">
+        <GameHeader />
+
+        <div className="mb-8 flex justify-center">
           <TurnIndicator />
-          <h1 className="display-xl text-accent drop-shadow-sm">{quizTitle}</h1>
-          <p className="mt-2 text-lg text-muted-foreground">
-            {quizDescription}
-          </p>
-          <div className="absolute top-0 right-0 flex items-center gap-2">
-            <UserMenu userEmail={currentUserEmail} isAnonymous={isAnonymous} />
-            <Button
-              variant="ghost"
-              size="icon"
-              onClick={() => router.push("/history")}
-              aria-label="Se historikk"
-              title="Historikk"
-            >
-              <History className="h-8 w-8" />
-            </Button>
-            <QuizSelector />
-            {isOwner && (
-              <Button
-                variant="ghost"
-                size="icon"
-                onClick={() => router.push("/setup")}
-                aria-label="Åpne oppsett"
-                title="Oppsett"
-              >
-                <Settings className="h-8 w-8" />
+        </div>
+
+        {boardIsEmpty ? (
+          <div className="glass mx-auto max-w-xl rounded-2xl p-8 text-center">
+            <h2 className="text-xl font-bold">Ingen spørsmål enda</h2>
+            <p className="mt-2 text-muted-foreground">
+              {total === 0
+                ? "Denne quizen har ingen kategorier."
+                : `${total} kort står tomme.`}
+            </p>
+            {canEdit && (
+              <Button className="mt-4" onClick={() => setEditMode(true)}>
+                Rediger brettet
               </Button>
             )}
           </div>
-        </header>
+        ) : (
+          <>
+            <section className="mb-10">
+              <GameBoard />
+            </section>
 
-        <section className="mb-10">
-          <GameBoard />
-        </section>
-
-        <section className="mt-12">
-          <Ranking />
-        </section>
-
-        <div className="mt-16 text-center">
-          <Button
-            onClick={() => router.push("/results")}
-            className="bg-accent text-accent-foreground font-bold text-2xl px-12 py-6 rounded-xl shadow-lg transition-transform hover:scale-105"
-          >
-            RESULTATER
-          </Button>
-        </div>
+            <section className="mx-auto max-w-3xl">
+              <Scoreboard />
+            </section>
+          </>
+        )}
       </div>
 
       <RoundDock />

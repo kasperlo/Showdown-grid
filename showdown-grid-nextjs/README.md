@@ -1,40 +1,95 @@
-# Showdown Grid
+# JEOPARTY
 
-A modern, fullstack Jeopardy-style quiz application built with Next.js 15, TypeScript, Tailwind CSS, and Supabase.
+Lag og hold quiz i Jeopardy-stil: eget brett, lag, poeng, joker-oppgaver og
+historikk. Next.js 16, TypeScript, Tailwind, Supabase. Kjører på jeoparty.no.
 
-## Features
+## Hvordan det henger sammen
 
-- 🎮 **Jeopardy-style Game Board** - 5 categories with 5 questions each (100-500 points)
-- 🏆 **Live Ranking** - Real-time scoreboard with trophy icons for top 3
-- 🎯 **Joker Rounds** - Special questions with 10-second countdown
-- 📊 **Team Management** - Add teams, players, and track scores
-- 🎨 **Glassmorphism UI** - Beautiful modern design with light/dark themes
-- 💾 **Auto-save** - Persistent state with Supabase
-- 🎭 **Emoji Effects** - Animated emoji bursts for correct/incorrect answers
-- 🏅 **Results Podium** - Dramatic winner reveal with podium visualization
-- ⚙️ **Admin Panel** - Full quiz customization and manual score adjustments
+```
+quizzes.quiz_data          quiz_runs.final_state
+= MALEN                    = ÉN SPILLING
+kategorier, spørsmål,      answeredKeys ["kategori|indeks"],
+laginndeling, tema,        poeng per lag-id, justeringslogg
+tidsbegrensning            (+ localStorage-speil for krasj)
+```
 
-## Tech Stack
+Dette skillet er hele poenget med lagringen. Malen er hva quizen **er**;
+run-raden er hva som **skjedde** en kveld. Skriver man dem til samme sted, gjør
+én quizkveld brettet permanent ferdigspilt — som er det som skjedde før.
 
-- **Framework**: Next.js 15 (App Router)
-- **Language**: TypeScript
-- **Styling**: Tailwind CSS
-- **UI Components**: Shadcn/ui + Radix UI
-- **State Management**: Zustand
-- **Database**: Supabase (PostgreSQL)
-- **Animations**: Framer Motion
-- **Deployment**: Vercel
+- `utils/quiz-template.ts` — konverterer begge veier (`extractTemplate`,
+  `extractLiveState`, `mergeLiveIntoTemplate`). Ren logikk, testet.
+- `lib/sanitize-template.ts` — serveren vasker malen ved hver skriving, så ingen
+  klient kan legge poeng eller «besvart» inn i den.
+- `utils/live-snapshot.ts` — speiler økten til localStorage og avgjør hvilken
+  kopi som vinner ved lasting.
+- `hooks/useQuizBootstrap.ts` — laster mal + eventuell pågående økt. Én gang per
+  montering, aldri på fokusbytte: en refetch midt i spillet ville overskrevet
+  poengene.
+- `hooks/useTemplateAutoSave.ts` — lagrer malen 1,2 s etter siste endring, og
+  bare når malens fingeravtrykk faktisk er endret.
+- `hooks/useSessionAutoSave.ts` — lagrer økten, maks én skriving per sekund, og
+  siste skriving lander alltid (planlegges, forkastes ikke).
 
-## Quick Start
+## Sider
 
-1. Install dependencies: `npm install`
-2. Set up Supabase (see below)
-3. Copy `.env.local.example` to `.env.local` and add your Supabase credentials
-4. Run `npm run dev`
-5. Open http://localhost:3000
+| Rute | Hva |
+|---|---|
+| `/` | Brettet. Åpne spørsmål, del ut poeng, se stillingen |
+| `/setup` | Redigering: brettet, lagene, innstillingene |
+| `/quizzes` | Bibliotek: egne og offentlige quizzer, kopiering, søk |
+| `/results` | Podium og full stilling. Herfra fullføres økten |
+| `/history` | Fullførte økter, med detaljside per økt |
 
-## Full Setup Guide
+## Verten sine snarveier
 
-See the complete documentation in the project for Supabase setup, deployment, and customization options.
+Mens en runde er åpen og spørsmålsvinduet er lukket:
 
-Built with ❤️ using Next.js and Supabase
+| Tast | Handling |
+|---|---|
+| `1`–`9` | Gi poeng til lag nummer N |
+| `R` / `+` | Riktig svar |
+| `F` / `−` | Feil svar (halv pott i minus) |
+| `Esc` | Avslutt runden |
+
+## Lage et brett raskt
+
+Innstillinger → **Lim inn spørsmål**. Én rad per spørsmål, kolonner skilt med
+tabulator, semikolon eller komma:
+
+```
+Norsk historie	100	Hvem var Norges første statsminister?	Frederik Stang
+Norsk historie	200	Hvilket år ble Norge selvstendig?	1905
+Mat	100	Hva heter Norges nasjonalrett?	Fårikål
+```
+
+Kategorier grupperes automatisk og sorteres på poeng. En overskriftsrad fra et
+regneark hoppes over. Hele brettet kan også eksporteres og importeres som JSON.
+
+## Kom i gang lokalt
+
+```bash
+npm install
+cp .env.local.example .env.local   # Supabase-URL + publishable key
+npm run dev                        # http://localhost:3000
+```
+
+Verifisering:
+
+```bash
+npm test             # domenetester (mal/økt-skillet, rangering, import, vasking)
+npx tsc --noEmit     # typecheck
+npm run lint         # eslint
+npm run build        # produksjonsbygg
+```
+
+## Database
+
+Migrasjonene i `supabase/migrations/` kjøres i rekkefølge i Supabase SQL Editor.
+Ingen nye migrasjoner var nødvendige for mal/økt-skillet: `quiz_runs.final_state`
+er `jsonb`, og både den gamle og den nye formen leses.
+
+## Deploy
+
+Vercel-prosjektet `showdown-grid` (kontoen `kasperlo`) er koblet til GitHub.
+Push til `main` deployer til jeoparty.no.

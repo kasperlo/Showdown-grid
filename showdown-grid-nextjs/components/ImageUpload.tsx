@@ -95,9 +95,6 @@ export function ImageUpload({ value, onChange, label = "Bilde" }: ImageUploadPro
           {uploadError && (
             <p className="text-sm text-destructive">{uploadError}</p>
           )}
-          <p className="text-xs text-muted-foreground">
-            Maks 5MB. Støtter JPEG, PNG, GIF og WebP.
-          </p>
         </TabsContent>
 
         <TabsContent value="url" className="space-y-2">
@@ -106,10 +103,8 @@ export function ImageUpload({ value, onChange, label = "Bilde" }: ImageUploadPro
             placeholder="https://example.com/image.jpg"
             value={value || ""}
             onChange={(e) => handleUrlChange(e.target.value)}
+            title="Direkte lenke til et bilde"
           />
-          <p className="text-xs text-muted-foreground">
-            Lim inn en direkte lenke til et bilde.
-          </p>
         </TabsContent>
       </Tabs>
 

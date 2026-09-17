@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase-server';
+import { sanitizeQuizData } from '@/lib/sanitize-template';
 
-// PATCH - Update a quiz (title, description)
+// PATCH - Update a quiz: metadata and/or the board itself
 export async function PATCH(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
@@ -20,14 +21,40 @@ export async function PATCH(
     }
 
     const body = await request.json();
-    const { title, description } = body;
+    const { title, description, timeLimit, theme, isPublic, quizData } = body;
 
     const updateData: Record<string, unknown> = {
       updated_at: new Date().toISOString(),
     };
 
-    if (title !== undefined) updateData.title = title;
-    if (description !== undefined) updateData.description = description;
+    if (title !== undefined) {
+      const trimmed = String(title).trim();
+      if (!trimmed) {
+        return NextResponse.json(
+          { error: 'Tittel kan ikke være tom' },
+          { status: 400 }
+        );
+      }
+      updateData.title = trimmed.slice(0, 200);
+    }
+    if (description !== undefined) {
+      updateData.description = String(description).slice(0, 1000);
+    }
+    if (timeLimit !== undefined) {
+      updateData.time_limit =
+        timeLimit === null ? null : Math.max(5, Math.round(Number(timeLimit) || 0));
+    }
+    if (theme !== undefined) {
+      const allowed = ['classic', 'modern', 'christmas'];
+      updateData.theme = allowed.includes(theme) ? theme : 'classic';
+    }
+    if (isPublic !== undefined) {
+      updateData.is_public = Boolean(isPublic);
+    }
+    if (quizData !== undefined) {
+      // Never trust the client with the template shape: see lib/sanitize-template.
+      updateData.quiz_data = sanitizeQuizData(quizData);
+    }
 
     const { data, error } = await supabase
       .from('quizzes')

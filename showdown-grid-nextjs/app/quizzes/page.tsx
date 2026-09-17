@@ -1,20 +1,19 @@
 "use client";
 
-import { useState, useCallback } from "react";
-import { useGameStore } from "@/utils/store";
+import { useCallback, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
+import { useQueryClient } from "@tanstack/react-query";
+import { useGameStore } from "@/utils/store";
 import {
   usePublicQuizzes,
   useQuizzesList,
-  useQuiz,
+  quizKeys,
 } from "@/hooks/queries/useQuizzes";
 import {
   useCreateQuiz,
   useActivateQuiz,
   useDeleteQuiz,
 } from "@/hooks/mutations/useQuizMutations";
-import { useQueryClient } from "@tanstack/react-query";
-import { quizKeys } from "@/hooks/queries/useQuizzes";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -32,7 +31,6 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
-  DialogTrigger,
 } from "@/components/ui/dialog";
 import {
   AlertDialog,
@@ -43,386 +41,469 @@ import {
   AlertDialogFooter,
   AlertDialogHeader,
   AlertDialogTitle,
-  AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { ArrowLeft, Plus, Trash2, Check, Globe } from "lucide-react";
+import {
+  ArrowLeft,
+  Check,
+  Copy,
+  Globe,
+  Pencil,
+  Play,
+  Plus,
+  Search,
+  Trash2,
+} from "lucide-react";
 import { toast } from "@/hooks/use-toast";
+import { UserMenu } from "@/components/UserMenu";
+import { rememberPublicPlay } from "@/utils/live-snapshot";
 import type { QuizMetadata } from "@/utils/types";
 
 export default function QuizzesPage() {
   const router = useRouter();
   const queryClient = useQueryClient();
-  const activeQuizId = useGameStore((state) => state.activeQuizId);
-  const setCategories = useGameStore((state) => state.setCategories);
-  const setQuizTitle = useGameStore((state) => state.setQuizTitle);
-  const setQuizDescription = useGameStore((state) => state.setQuizDescription);
-  const setQuizTimeLimit = useGameStore((state) => state.setQuizTimeLimit);
-  const setQuizTheme = useGameStore((state) => state.setQuizTheme);
-  const setQuizIsPublic = useGameStore((state) => state.setQuizIsPublic);
+  const activeQuizId = useGameStore((s) => s.activeQuizId);
 
-  const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false);
-  const [newQuizTitle, setNewQuizTitle] = useState("");
-  const [newQuizDescription, setNewQuizDescription] = useState("");
+  const [createOpen, setCreateOpen] = useState(false);
+  const [newTitle, setNewTitle] = useState("");
+  const [newDescription, setNewDescription] = useState("");
+  const [search, setSearch] = useState("");
+  const [quizToDelete, setQuizToDelete] = useState<QuizMetadata | null>(null);
 
-  // Use TanStack Query for quizzes
-  const { data: quizzesList = [], isLoading: isLoadingQuizzes } =
-    useQuizzesList();
+  const { data: myQuizzes = [], isLoading: isLoadingMine } = useQuizzesList();
   const { data: publicQuizzes = [], isLoading: isLoadingPublic } =
     usePublicQuizzes();
-  const createQuizMutation = useCreateQuiz();
-  const activateQuizMutation = useActivateQuiz();
-  const deleteQuizMutation = useDeleteQuiz();
+  const createQuiz = useCreateQuiz();
+  const activateQuiz = useActivateQuiz();
+  const deleteQuiz = useDeleteQuiz();
 
-  // Stable callback for creating quiz
-  const handleCreateQuiz = useCallback(async () => {
-    if (!newQuizTitle.trim()) {
+  const filter = useCallback(
+    (quizzes: QuizMetadata[]) => {
+      const needle = search.trim().toLowerCase();
+      if (!needle) return quizzes;
+      return quizzes.filter(
+        (quiz) =>
+          quiz.title.toLowerCase().includes(needle) ||
+          (quiz.description ?? "").toLowerCase().includes(needle)
+      );
+    },
+    [search]
+  );
+
+  const filteredMine = useMemo(() => filter(myQuizzes), [filter, myQuizzes]);
+  const hasActiveQuiz = Boolean(activeQuizId) || myQuizzes.some((q) => q.is_active);
+  const filteredPublic = useMemo(
+    () => filter(publicQuizzes),
+    [filter, publicQuizzes]
+  );
+
+  const handleCreate = async () => {
+    if (!newTitle.trim()) {
       toast({
-        title: "Feil",
-        description: "Quizzen må ha en tittel",
+        title: "Tittel mangler",
+        description: "Quizzen må ha et navn.",
         variant: "destructive",
       });
       return;
     }
 
     try {
-      await createQuizMutation.mutateAsync({
-        title: newQuizTitle,
-        description: newQuizDescription || undefined,
-        setAsActive: false,
+      // Straight into the editor: a new quiz is empty, and the only useful next
+      // step is filling it in. It used to land you back on this list.
+      const quiz = await createQuiz.mutateAsync({
+        title: newTitle.trim(),
+        description: newDescription.trim() || undefined,
+        setAsActive: true,
       });
-      setIsCreateDialogOpen(false);
-      setNewQuizTitle("");
-      setNewQuizDescription("");
-      toast({
-        title: "Suksess!",
-        description: "Ny quiz opprettet",
-      });
+      rememberPublicPlay(null);
+      useGameStore.setState({ isHydrated: false, activeQuizId: null });
+      queryClient.invalidateQueries({ queryKey: quizKeys.active() });
+      setCreateOpen(false);
+      setNewTitle("");
+      setNewDescription("");
+      toast({ title: "Quiz opprettet", description: quiz.title });
+      router.push("/setup");
     } catch (error) {
       toast({
-        title: "Feil",
-        description: "Kunne ikke opprette quiz",
+        title: "Kunne ikke opprette quiz",
+        description: error instanceof Error ? error.message : undefined,
         variant: "destructive",
       });
     }
-  }, [createQuizMutation, newQuizTitle, newQuizDescription]);
+  };
 
-  // Stable callback for activating quiz
-  const handleActivateQuiz = useCallback(
-    async (quizId: string, isPublic: boolean = false) => {
-      if (quizId === activeQuizId) return;
+  const openOwnQuiz = async (quizId: string, destination: "/" | "/setup") => {
+    try {
+      rememberPublicPlay(null);
+      await activateQuiz.mutateAsync(quizId);
+      // Forces useQuizBootstrap to fetch the newly activated quiz instead of
+      // keeping whatever is already in the store.
+      useGameStore.setState({
+        isHydrated: false,
+        activeQuizId: null,
+        isPlayingPublicQuiz: false,
+      });
+      router.push(destination);
+    } catch {
+      toast({
+        title: "Kunne ikke åpne quizzen",
+        variant: "destructive",
+      });
+    }
+  };
 
-      try {
-        if (isPublic) {
-          // Load public quiz without activating it in the database
-          const quizData = await queryClient.fetchQuery({
-            queryKey: quizKeys.detail(quizId),
-            queryFn: async () => {
-              const response = await fetch(`/api/quizzes/${quizId}/load`);
-              if (!response.ok) throw new Error("Failed to load quiz");
-              const result = await response.json();
-              return result.data;
-            },
-          });
+  const playPublicQuiz = (quizId: string) => {
+    rememberPublicPlay(quizId);
+    useGameStore.setState({
+      isHydrated: false,
+      activeQuizId: null,
+      isPlayingPublicQuiz: true,
+    });
+    router.push("/");
+  };
 
-          if (quizData) {
-            // Update Zustand state with quiz data
-            setCategories(quizData.categories || []);
-            useGameStore.setState({
-              teams: quizData.teams || [],
-              adjustmentLog: quizData.adjustmentLog || [],
-            });
-            setQuizTitle(quizData.quizTitle || "");
-            setQuizDescription(quizData.quizDescription || "");
-            setQuizTimeLimit(quizData.quizTimeLimit);
-            setQuizTheme(quizData.quizTheme || "classic");
-            setQuizIsPublic(quizData.quizIsPublic || false);
-            useGameStore.setState({
-              activeQuizId: quizData.quizId,
-              activeQuizOwnerId: quizData.quizOwnerId,
-              isPlayingPublicQuiz: true,
-            });
+  const copyQuiz = async (quiz: QuizMetadata) => {
+    try {
+      await createQuiz.mutateAsync({
+        title: `${quiz.title} (kopi)`,
+        description: quiz.description,
+        copyFromQuizId: quiz.id,
+      });
+      toast({
+        title: "Kopi laget",
+        description: "Du finner den under Mine quizzer.",
+      });
+    } catch (error) {
+      toast({
+        title: "Kunne ikke kopiere",
+        description: error instanceof Error ? error.message : undefined,
+        variant: "destructive",
+      });
+    }
+  };
 
-            toast({
-              title: "Lastet quiz!",
-              description: "Klar til å spille",
-            });
-            router.push("/");
-          }
-        } else {
-          // Activate user's own quiz
-          // Reset isPlayingPublicQuiz flag when switching to own quiz
-          useGameStore.setState({ isPlayingPublicQuiz: false });
-          await activateQuizMutation.mutateAsync(quizId);
-          // Invalidate active quiz query to refetch
-          queryClient.invalidateQueries({ queryKey: quizKeys.active() });
-          toast({
-            title: "Byttet quiz!",
-            description: "Den valgte quizzen er nå aktiv",
-          });
-          router.push("/");
-        }
-      } catch (error) {
-        toast({
-          title: "Feil",
-          description: isPublic
-            ? "Kunne ikke laste quiz"
-            : "Kunne ikke bytte quiz",
-          variant: "destructive",
-        });
-      }
-    },
-    [
-      activeQuizId,
-      queryClient,
-      activateQuizMutation,
-      setCategories,
-      setQuizTitle,
-      setQuizDescription,
-      setQuizTimeLimit,
-      setQuizTheme,
-      setQuizIsPublic,
-      router,
-    ]
-  );
+  const renderCard = (quiz: QuizMetadata, isPublicList: boolean) => {
+    // is_active comes from the list endpoint: this page does not load a quiz,
+    // so the store does not know which one is active on a fresh visit.
+    const isActive = quiz.is_active ?? quiz.id === activeQuizId;
+    const isMine = !isPublicList || quiz.isOwnedByCurrentUser;
 
-  // Stable callback for deleting quiz
-  const handleDeleteQuiz = useCallback(
-    async (quizId: string) => {
-      try {
-        await deleteQuizMutation.mutateAsync(quizId);
-        toast({
-          title: "Slettet!",
-          description: "Quizzen ble slettet",
-        });
-      } catch (error) {
-        toast({
-          title: "Feil",
-          description: "Kunne ikke slette quiz",
-          variant: "destructive",
-        });
-      }
-    },
-    [deleteQuizMutation]
-  );
-
-  // Stable callback for rendering quiz cards
-  const renderQuizCard = useCallback(
-    (quiz: QuizMetadata, isPublic: boolean = false) => (
-      <Card
-        key={quiz.id}
-        className={`relative group cursor-pointer transition-all hover:shadow-lg ${
-          quiz.id === activeQuizId ? "border-primary shadow-md" : ""
-        }`}
-        onClick={() => handleActivateQuiz(quiz.id, isPublic)}
-      >
-        {quiz.id === activeQuizId && (
-          <div className="absolute top-2 right-2">
-            <span className="bg-primary text-primary-foreground text-xs px-2 py-1 rounded-full flex items-center gap-1">
-              <Check className="h-3 w-3" />
-              Aktiv
-            </span>
-          </div>
-        )}
-        {isPublic && quiz.is_public && (
-          <div className="absolute top-2 left-2">
-            <span className="bg-accent text-accent-foreground text-xs px-2 py-1 rounded-full flex items-center gap-1">
-              <Globe className="h-3 w-3" />
-              Offentlig
-            </span>
-          </div>
-        )}
-        <CardHeader>
-          <CardTitle className="pr-16 group-hover:text-primary transition-colors">
-            {quiz.title}
-          </CardTitle>
-          <CardDescription className="line-clamp-2">
-            {quiz.description}
-          </CardDescription>
-          <div className="flex items-center gap-2 pt-2 text-xs text-muted-foreground">
-            <span className="capitalize">{quiz.theme}</span>
-            {quiz.time_limit && <span>• {quiz.time_limit}s timer</span>}
-          </div>
-        </CardHeader>
-        <CardContent>
-          <div className="flex justify-end">
-            {!isPublic && (
-              <AlertDialog>
-                <AlertDialogTrigger asChild>
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    className="text-destructive hover:text-destructive hover:bg-destructive/10"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                    }}
-                  >
-                    <Trash2 className="h-4 w-4" />
-                  </Button>
-                </AlertDialogTrigger>
-                <AlertDialogContent>
-                  <AlertDialogHeader>
-                    <AlertDialogTitle>Er du sikker?</AlertDialogTitle>
-                    <AlertDialogDescription>
-                      Dette vil permanent slette quizzen &ldquo;{quiz.title}&rdquo;. Denne
-                      handlingen kan ikke angres.
-                    </AlertDialogDescription>
-                  </AlertDialogHeader>
-                  <AlertDialogFooter>
-                    <AlertDialogCancel>Avbryt</AlertDialogCancel>
-                    <AlertDialogAction
-                      onClick={() => handleDeleteQuiz(quiz.id)}
-                      className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-                    >
-                      Slett
-                    </AlertDialogAction>
-                  </AlertDialogFooter>
-                </AlertDialogContent>
-              </AlertDialog>
+    return (
+      <Card key={quiz.id} className="flex flex-col">
+        <CardHeader className="space-y-2">
+          <div className="flex items-start justify-between gap-2">
+            {/* The badge used to sit on top of the title and cut it in half. */}
+            <CardTitle className="min-w-0 break-words text-lg leading-snug">
+              {quiz.title}
+            </CardTitle>
+            {isActive && (
+              <span className="flex shrink-0 items-center gap-1 rounded-full bg-primary px-2 py-1 text-xs text-primary-foreground">
+                <Check className="h-3 w-3" />
+                Aktiv
+              </span>
             )}
           </div>
+          <CardDescription className="line-clamp-2">
+            {quiz.description || "Ingen beskrivelse"}
+          </CardDescription>
+          <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+            {quiz.is_public && (
+              <span className="inline-flex items-center gap-1 rounded-full border border-border px-2 py-0.5">
+                <Globe className="h-3 w-3" />
+                Offentlig
+              </span>
+            )}
+            <span className="capitalize">{quiz.theme}</span>
+            {typeof quiz.category_count === "number" && (
+              <span>
+                {quiz.category_count} kat. / {quiz.question_count ?? 0} spm.
+              </span>
+            )}
+            {quiz.time_limit && <span>{quiz.time_limit}s per spørsmål</span>}
+          </div>
+        </CardHeader>
+
+        <CardContent className="mt-auto flex flex-wrap items-center gap-2">
+          <Button
+            size="sm"
+            className="gap-1"
+            onClick={() =>
+              isPublicList && !isMine
+                ? playPublicQuiz(quiz.id)
+                : openOwnQuiz(quiz.id, "/")
+            }
+          >
+            <Play className="h-4 w-4" />
+            Spill
+          </Button>
+
+          {isMine ? (
+            <Button
+              size="sm"
+              variant="outline"
+              className="gap-1"
+              onClick={() => openOwnQuiz(quiz.id, "/setup")}
+            >
+              <Pencil className="h-4 w-4" />
+              Rediger
+            </Button>
+          ) : (
+            <Button
+              size="sm"
+              variant="outline"
+              className="gap-1"
+              onClick={() => copyQuiz(quiz)}
+              disabled={createQuiz.isPending}
+            >
+              <Copy className="h-4 w-4" />
+              Kopier
+            </Button>
+          )}
+
+          {!isPublicList && (
+            <>
+              <Button
+                size="sm"
+                variant="ghost"
+                className="gap-1"
+                onClick={() => copyQuiz(quiz)}
+                disabled={createQuiz.isPending}
+                title="Lag en kopi"
+              >
+                <Copy className="h-4 w-4" />
+              </Button>
+              <Button
+                size="sm"
+                variant="ghost"
+                className="ml-auto text-destructive hover:text-destructive"
+                onClick={() => setQuizToDelete(quiz)}
+                title={`Slett ${quiz.title}`}
+                aria-label={`Slett ${quiz.title}`}
+              >
+                <Trash2 className="h-4 w-4" />
+              </Button>
+            </>
+          )}
         </CardContent>
       </Card>
-    ),
-    [activeQuizId, handleActivateQuiz, handleDeleteQuiz]
+    );
+  };
+
+  const skeletons = (
+    <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+      {Array.from({ length: 3 }).map((_, i) => (
+        <div key={i} className="h-48 animate-pulse rounded-xl bg-muted" />
+      ))}
+    </div>
   );
 
   return (
     <main className="stage min-h-screen">
-      <div className="container mx-auto p-4 md:p-8 max-w-5xl">
-        <div className="flex items-center justify-between mb-8">
-          <div className="flex items-center gap-4">
-            <Button
-              variant="ghost"
-              size="icon"
-              onClick={() => router.push("/")}
-              aria-label="Tilbake"
-            >
-              <ArrowLeft className="h-6 w-6" />
-            </Button>
+      <div className="container mx-auto max-w-5xl p-4 md:p-8">
+        <div className="mb-6 flex flex-wrap items-center justify-between gap-3">
+          <div className="flex items-center gap-3">
+            {/* Only shown when there is somewhere to go back TO. Without an
+                active quiz, "/" bounces straight back here, so the arrow looked
+                broken. */}
+            {hasActiveQuiz && (
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={() => router.push("/")}
+                aria-label="Tilbake til brettet"
+              >
+                <ArrowLeft className="h-5 w-5" />
+              </Button>
+            )}
             <div>
-              <h1 className="text-3xl font-bold">Quizzer</h1>
-              <p className="text-muted-foreground">
-                Bla gjennom offentlige quizzer eller administrer dine egne
+              <h1 className="text-2xl font-bold sm:text-3xl">Bibliotek</h1>
+              <p className="text-sm text-muted-foreground">
+                Spill en offentlig quiz, eller lag din egen
               </p>
             </div>
           </div>
 
-          <Dialog
-            open={isCreateDialogOpen}
-            onOpenChange={setIsCreateDialogOpen}
-          >
-            <DialogTrigger asChild>
-              <Button className="gap-2">
-                <Plus className="h-4 w-4" />
-                Ny Quiz
-              </Button>
-            </DialogTrigger>
-            <DialogContent>
-              <DialogHeader>
-                <DialogTitle>Opprett ny quiz</DialogTitle>
-                <DialogDescription>
-                  Gi quizzen din en tittel og beskrivelse
-                </DialogDescription>
-              </DialogHeader>
-              <div className="space-y-4 py-4">
-                <div className="space-y-2">
-                  <label htmlFor="title" className="text-sm font-medium">
-                    Tittel
-                  </label>
-                  <Input
-                    id="title"
-                    placeholder="Min Quiz"
-                    value={newQuizTitle}
-                    onChange={(e) => setNewQuizTitle(e.target.value)}
-                  />
-                </div>
-                <div className="space-y-2">
-                  <label htmlFor="description" className="text-sm font-medium">
-                    Beskrivelse
-                  </label>
-                  <Textarea
-                    id="description"
-                    placeholder="En Jeopardy-stil quiz"
-                    value={newQuizDescription}
-                    onChange={(e) => setNewQuizDescription(e.target.value)}
-                    rows={3}
-                  />
-                </div>
-              </div>
-              <DialogFooter>
-                <Button
-                  variant="outline"
-                  onClick={() => setIsCreateDialogOpen(false)}
-                >
-                  Avbryt
-                </Button>
-                <Button
-                  onClick={handleCreateQuiz}
-                  disabled={createQuizMutation.isPending}
-                >
-                  {createQuizMutation.isPending ? "Oppretter..." : "Opprett"}
-                </Button>
-              </DialogFooter>
-            </DialogContent>
-          </Dialog>
+          <div className="flex items-center gap-2">
+            <Button className="gap-2" onClick={() => setCreateOpen(true)}>
+              <Plus className="h-4 w-4" />
+              Ny quiz
+            </Button>
+            {/* A guest with no quizzes always lands here, and this used to be
+                the one page with no way to sign out or sign in. */}
+            <UserMenu />
+          </div>
         </div>
 
-        <Tabs defaultValue="public" className="w-full">
-          <TabsList className="grid w-full grid-cols-2 bg-popover mb-6">
-            <TabsTrigger value="public">
-              <Globe className="h-4 w-4 mr-2" />
-              Offentlige
+        <div className="relative mb-6">
+          <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+          <Input
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder="Søk i quizzer"
+            className="pl-9"
+            aria-label="Søk i quizzer"
+          />
+        </div>
+
+        <Tabs defaultValue="mine" className="w-full">
+          <TabsList className="mb-6 grid w-full grid-cols-2 bg-popover">
+            <TabsTrigger value="mine">
+              Mine quizzer
+              {myQuizzes.length > 0 && ` (${myQuizzes.length})`}
             </TabsTrigger>
-            <TabsTrigger value="mine">Mine Quizzer</TabsTrigger>
+            <TabsTrigger value="public">
+              <Globe className="mr-2 h-4 w-4" />
+              Offentlige
+              {publicQuizzes.length > 0 && ` (${publicQuizzes.length})`}
+            </TabsTrigger>
           </TabsList>
 
-          {/* Public Quizzes Tab */}
-          <TabsContent value="public">
-            {isLoadingPublic ? (
-              <div className="text-center p-12">
-                <p className="text-muted-foreground">
-                  Laster offentlige quizzer...
-                </p>
-              </div>
-            ) : publicQuizzes.length > 0 ? (
+          <TabsContent value="mine">
+            {isLoadingMine ? (
+              skeletons
+            ) : filteredMine.length > 0 ? (
               <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-                {publicQuizzes.map((quiz) => renderQuizCard(quiz, true))}
+                {filteredMine.map((quiz) => renderCard(quiz, false))}
               </div>
             ) : (
-              <Card className="text-center p-12">
-                <CardContent>
-                  <Globe className="h-12 w-12 mx-auto mb-4 text-muted-foreground" />
+              <Card className="p-10 text-center">
+                <CardContent className="space-y-4">
                   <p className="text-muted-foreground">
-                    Ingen offentlige quizzer tilgjengelig ennå
+                    {myQuizzes.length === 0
+                      ? "Du har ingen quizzer enda."
+                      : "Ingen treff på søket."}
                   </p>
+                  {myQuizzes.length === 0 && (
+                    <Button onClick={() => setCreateOpen(true)}>
+                      <Plus className="mr-2 h-4 w-4" />
+                      Lag din første quiz
+                    </Button>
+                  )}
                 </CardContent>
               </Card>
             )}
           </TabsContent>
 
-          {/* My Quizzes Tab */}
-          <TabsContent value="mine">
-            {quizzesList.length > 0 ? (
+          <TabsContent value="public">
+            {isLoadingPublic ? (
+              skeletons
+            ) : filteredPublic.length > 0 ? (
               <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-                {quizzesList.map((quiz) => renderQuizCard(quiz, false))}
+                {filteredPublic.map((quiz) => renderCard(quiz, true))}
               </div>
             ) : (
-              <Card className="text-center p-12">
+              <Card className="p-10 text-center">
                 <CardContent>
-                  <p className="text-muted-foreground mb-4">
-                    Du har ingen quizzer ennå
+                  <Globe className="mx-auto mb-4 h-10 w-10 text-muted-foreground" />
+                  <p className="text-muted-foreground">
+                    {publicQuizzes.length === 0
+                      ? "Ingen offentlige quizzer enda."
+                      : "Ingen treff på søket."}
                   </p>
-                  <Button onClick={() => setIsCreateDialogOpen(true)}>
-                    <Plus className="h-4 w-4 mr-2" />
-                    Opprett din første quiz
-                  </Button>
                 </CardContent>
               </Card>
             )}
           </TabsContent>
         </Tabs>
       </div>
+
+      <Dialog open={createOpen} onOpenChange={setCreateOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Ny quiz</DialogTitle>
+            <DialogDescription>
+              Du får et tomt brett med fem kategorier og fem spørsmål i hver.
+            </DialogDescription>
+          </DialogHeader>
+          {/* A real form, so Enter submits the way it does in every other
+              dialog. A keydown handler on the input only looked like it did. */}
+          <form
+            onSubmit={(event) => {
+              event.preventDefault();
+              void handleCreate();
+            }}
+          >
+            <div className="space-y-4 py-2">
+              <div className="space-y-1">
+                <label htmlFor="new-title" className="text-sm font-medium">
+                  Tittel
+                </label>
+                <Input
+                  id="new-title"
+                  value={newTitle}
+                  onChange={(e) => setNewTitle(e.target.value)}
+                  placeholder="Julequiz 2026"
+                  // The dialog opens with the cursor here, so the name can be
+                  // typed without aiming at the field first.
+                  autoFocus
+                />
+              </div>
+              <div className="space-y-1">
+                <label htmlFor="new-description" className="text-sm font-medium">
+                  Beskrivelse (valgfritt)
+                </label>
+                <Textarea
+                  id="new-description"
+                  value={newDescription}
+                  onChange={(e) => setNewDescription(e.target.value)}
+                  rows={2}
+                />
+              </div>
+            </div>
+            <DialogFooter>
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => setCreateOpen(false)}
+              >
+                Avbryt
+              </Button>
+              <Button type="submit" disabled={createQuiz.isPending}>
+                {createQuiz.isPending ? "Oppretter…" : "Opprett og rediger"}
+              </Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
+
+      <AlertDialog
+        open={!!quizToDelete}
+        onOpenChange={(open) => !open && setQuizToDelete(null)}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>
+              Slette «{quizToDelete?.title}»?
+            </AlertDialogTitle>
+            <AlertDialogDescription>
+              Quizzen og historikken fra øktene som er spilt på den blir borte.
+              Kan ikke angres.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Avbryt</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              onClick={async () => {
+                const target = quizToDelete;
+                setQuizToDelete(null);
+                if (!target) return;
+                try {
+                  await deleteQuiz.mutateAsync(target.id);
+                  toast({ title: "Slettet", description: target.title });
+                } catch {
+                  toast({
+                    title: "Kunne ikke slette",
+                    variant: "destructive",
+                  });
+                }
+              }}
+            >
+              Slett
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </main>
   );
 }

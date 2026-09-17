@@ -13,7 +13,7 @@ export const quizKeys = {
 };
 
 // Types
-interface ActiveQuizData {
+export interface ActiveQuizData {
   quizId: string;
   quizOwnerId: string;
   quizTitle: string;
@@ -24,6 +24,7 @@ interface ActiveQuizData {
   categories: Category[];
   teams: Team[];
   adjustmentLog: AdjustmentEntry[];
+  jokerTimeLimit?: number | null;
 }
 
 interface QuizListResponse {
@@ -84,31 +85,18 @@ async function fetchPublicQuizzes(): Promise<QuizMetadata[]> {
   return result.quizzes || [];
 }
 
-async function fetchQuiz(quizId: string): Promise<ActiveQuizData> {
-  const response = await fetch(`/api/quizzes/${quizId}/load`);
-
-  if (response.status === 404) {
-    throw new Error("Quiz not found");
-  }
-
-  if (response.status === 401 || response.status === 403) {
-    throw new Error("Unauthorized");
-  }
-
-  if (!response.ok) {
-    throw new Error(`Failed to load quiz: ${response.status}`);
-  }
-
-  const result: QuizDataResponse = await response.json();
-  return result.data;
-}
-
 // Query hooks
 export function useActiveQuiz(enabled: boolean = true) {
   return useQuery({
     queryKey: quizKeys.active(),
     queryFn: fetchActiveQuiz,
     enabled, // Only fetch if enabled (false when playing public quiz)
+    // Load-once semantics on purpose. With refetch-on-focus, switching back to
+    // the tab mid-quiz refetched the stored quiz and the page synced it into the
+    // store, wiping the scores and answered questions of the running game.
+    refetchOnWindowFocus: false,
+    refetchOnReconnect: false,
+    staleTime: Infinity,
     retry: (failureCount, error) => {
       // Don't retry on 401 or 404
       if (
@@ -141,23 +129,5 @@ export function usePublicQuizzes() {
     queryKey: quizKeys.public(),
     queryFn: fetchPublicQuizzes,
     staleTime: 2 * 60 * 1000, // Public quizzes can be cached longer
-  });
-}
-
-export function useQuiz(quizId: string | null) {
-  return useQuery({
-    queryKey: quizKeys.detail(quizId!),
-    queryFn: () => fetchQuiz(quizId!),
-    enabled: !!quizId, // Only fetch if quizId is provided
-    retry: (failureCount, error) => {
-      // Don't retry on 404 or 401/403
-      if (
-        error instanceof Error &&
-        (error.message === "Quiz not found" || error.message === "Unauthorized")
-      ) {
-        return false;
-      }
-      return failureCount < 1;
-    },
   });
 }

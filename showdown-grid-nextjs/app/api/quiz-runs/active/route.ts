@@ -40,14 +40,9 @@ export async function GET(request: NextRequest) {
       throw error;
     }
 
-    if (!data) {
-      return NextResponse.json(
-        { error: "No active session found" },
-        { status: 404 }
-      );
-    }
-
-    return NextResponse.json({ run: data });
+    // 200 with run: null rather than 404. "No session yet" is the normal case
+    // on every page load, and a 404 per load buries real errors in the console.
+    return NextResponse.json({ run: data ?? null });
   } catch (error) {
     console.error("[API /quiz-runs/active GET] Unexpected error:", error);
     return NextResponse.json(

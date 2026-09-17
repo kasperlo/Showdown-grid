@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase";
+import { useGameStore } from "@/utils/store";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -160,8 +161,11 @@ export default function SignupPage() {
         return;
       }
 
-      // Redirect to home
-      router.push("/");
+      // The migration moved the guest's quizzes to the new account, so the
+      // board has to be reloaded for the new user id rather than kept in memory
+      // with the old owner on it.
+      useGameStore.getState().resetForNewUser();
+      router.replace("/");
       router.refresh();
     } catch (error: unknown) {
       console.error("Signup error:", error);

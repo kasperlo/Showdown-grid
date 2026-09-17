@@ -2,7 +2,6 @@
 
 import { useGameStore } from "@/utils/store";
 import { QuizTheme } from "@/utils/types";
-import { Button } from "./ui/button";
 import { Check } from "lucide-react";
 import { cn } from "@/lib/utils";
 

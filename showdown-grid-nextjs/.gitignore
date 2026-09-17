@@ -32,6 +32,9 @@ yarn-error.log*
 
 # env files (can opt-in for committing if needed)
 .env*
+# The example is placeholder-only and the README tells you to copy it, so it has
+# to be in the repo.
+!.env.local.example
 
 # vercel
 .vercel
