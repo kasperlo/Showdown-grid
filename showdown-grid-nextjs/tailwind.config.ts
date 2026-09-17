@@ -11,6 +11,11 @@ const config: Config = {
   ],
   prefix: "",
   theme: {
+    fontFamily: {
+      // Geist Mono is already loaded in app/layout.tsx; without this mapping
+      // `font-mono` fell back to the browser default.
+      mono: ["var(--font-geist-mono)", "ui-monospace", "monospace"],
+    },
     container: {
       center: true,
       padding: "2rem",

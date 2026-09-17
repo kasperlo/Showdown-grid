@@ -6,8 +6,13 @@ import { emptyQuestion } from "./quiz-template";
  *
  * Writing 25 questions one dialog at a time is the slowest part of making a
  * quiz, and most people already have them in a spreadsheet or a note. One row
- * per question: category, points, question, answer. Tab-separated (what you get
- * when copying from a spreadsheet), semicolon or comma also work.
+ * per question: category, points, question, answer, and optionally a code
+ * snippet. Tab-separated (what you get when copying from a spreadsheet),
+ * semicolon or comma also work.
+ *
+ * The import is line-based, so a real newline would end the row. `\n` inside the
+ * code column is therefore read as a line break — that is the only way to paste
+ * a multi-line snippet without typing it into the card by hand.
  */
 
 export interface ImportResult {
@@ -41,7 +46,13 @@ export function parseBoardText(text: string): ImportResult {
       return;
     }
 
-    const [categoryName, pointsRaw, questionText = "", answerText = ""] = cells;
+    const [
+      categoryName,
+      pointsRaw,
+      questionText = "",
+      answerText = "",
+      codeText = "",
+    ] = cells;
     if (!categoryName) {
       errors.push(`Rad ${index + 1}: kategorinavn mangler.`);
       return;
@@ -64,6 +75,7 @@ export function parseBoardText(text: string): ImportResult {
     const question = emptyQuestion(points);
     question.question = questionText;
     question.answer = answerText;
+    question.code = unescapeNewlines(codeText);
     byCategory.get(categoryName)!.questions.push(question);
     rowCount += 1;
   });
@@ -80,6 +92,11 @@ export function parseBoardText(text: string): ImportResult {
   }
 
   return { categories, rowCount, errors };
+}
+
+/** `\n` typed in a cell becomes a real line break; `\\n` stays literal. */
+function unescapeNewlines(value: string): string {
+  return value.replace(/\\(\\|n)/g, (_, char) => (char === "n" ? "\n" : "\\"));
 }
 
 function pickSeparator(lines: string[]): string {
@@ -163,6 +180,7 @@ export function parseExportedBoard(json: string): ExportedBoard {
             ...emptyQuestion(Number(question?.points) || 100),
             question: String(question?.question ?? ""),
             answer: String(question?.answer ?? ""),
+            code: String(question?.code ?? ""),
             imageUrl: String(question?.imageUrl ?? ""),
             isJoker: question?.isJoker === true,
             jokerTask: String(question?.jokerTask ?? ""),

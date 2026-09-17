@@ -3,6 +3,32 @@
 Kontekst, antakelse, beslutning, begrunnelse og oppfølging for valg som ikke er
 åpenbare fra koden. Nyeste først.
 
+## 2026-09-17 — Kodeblokker på kort
+
+- **Kontekst:** en «Kode»-kategori der spørsmålet er «hva printes?» og kortet må
+  vise en kodesnutt med linjeskift og innrykk i behold.
+- **Beslutning:** eget felt `code` på spørsmålet, ikke markdown-gjerder inne i
+  spørsmålsteksten. Kortet skal både spørre om noe og vise koden, og å tolke
+  ```-gjerder ut av fritekst er å gjette på hva forfatteren mente.
+- **Visning:** `<pre><code>` venstrestilt i en ramme under spørsmålet, monospace,
+  og den ruller sidelengs i stedet for å brytes. En brutt linje endrer hva
+  snutten betyr. Svaret på et kodekort vises også i monospace, siden svaret
+  gjerne *er* kode (`"object"`, `[1, NaN, NaN]`) og hermetegn og klammer må
+  overleve.
+- **Ferdigstatus:** kode alene dekker spørsmålssiden av kortet. «Hva printes?»
+  er valgfritt pynt når snutten står der.
+- **Tab i kodefeltet** gir to mellomrom i stedet for å flytte fokus. Uten det
+  kan man ikke skrive innrykket kode i det hele tatt, bare lime den inn.
+- **Lim-inn:** femte kolonne er kode, og `\n` i den kolonnen blir et ekte
+  linjeskift. Importen er linjebasert, så et reelt linjeskift ville avsluttet
+  raden — dette er den eneste veien til en flerlinjet snutt uten å skrive den
+  inn i kortet.
+- **Ingen syntaksfarging.** Det krever et bibliotek, og handoffen sier nei til
+  nye avhengigheter. Monospace med god kontrast er nok til å lese fire linjer
+  JavaScript fra bakerste rad.
+- **Sidefunn:** `font-mono` pekte ikke på Geist Mono, selv om fonten alt lastes
+  i `app/layout.tsx`. Nå mappet i `tailwind.config.ts`.
+
 ## 2026-09-17 — Redigering flyttet ut på brettet (design 2a)
 
 Bygget etter handoffen i `design_handoff_quiz_admin`, retning 2a, med fire valg

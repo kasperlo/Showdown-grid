@@ -24,6 +24,7 @@ import {
 import {
   ArrowLeft,
   ArrowRight,
+  Code2,
   Copy,
   Image as ImageIcon,
   ListChecks,
@@ -163,7 +164,10 @@ export function EditableBoard() {
                 const label = statusLabel(status);
                 const preview = question.isJoker
                   ? question.jokerTask?.trim()
-                  : question.question.trim();
+                  : question.question.trim() ||
+                    // Newlines flattened: the tile clamps to two lines, and a
+                    // snippet's own line breaks would spend them both.
+                    question.code?.trim().replace(/\s*\n\s*/g, " ⏎ ");
 
                 return (
                   <div key={questionIndex} className="relative">
@@ -189,6 +193,12 @@ export function EditableBoard() {
                             JOKER
                           </span>
                         )}
+                        {question.code?.trim() && (
+                          <Code2
+                            className="h-3 w-3 text-muted-foreground"
+                            aria-label="Har kode"
+                          />
+                        )}
                         {question.imageUrl?.trim() && (
                           <ImageIcon
                             className="h-3 w-3 text-muted-foreground"
@@ -207,6 +217,8 @@ export function EditableBoard() {
                         className={`line-clamp-2 text-xs leading-snug ${
                           label
                             ? "font-semibold text-destructive"
+                            : question.code?.trim() && !question.question.trim()
+                            ? "font-mono text-muted-foreground"
                             : "text-muted-foreground"
                         }`}
                       >
