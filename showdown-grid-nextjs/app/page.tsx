@@ -13,7 +13,12 @@ import { EditableQuizTitle } from "@/components/editor/EditableQuizTitle";
 import { QuestionInspector } from "@/components/editor/QuestionInspector";
 import { BoardLegend } from "@/components/editor/BoardLegend";
 import { Button } from "@/components/ui/button";
-import { Sheet, SheetContent } from "@/components/ui/sheet";
+import {
+  Sheet,
+  SheetContent,
+  SheetHeader,
+  SheetTitle,
+} from "@/components/ui/sheet";
 import { useAuth } from "@/hooks/useAuth";
 import { useIsWideScreen } from "@/hooks/useMediaQuery";
 import { useQuizBootstrap } from "@/hooks/useQuizBootstrap";
@@ -131,6 +136,12 @@ export default function Home() {
               className="w-full p-0 sm:max-w-md"
               hideCloseButton
             >
+              {/* Radix needs a title on every dialog for screen readers; the
+                  inspector already shows the card it is editing, so this one is
+                  for assistive tech only. */}
+              <SheetHeader className="sr-only">
+                <SheetTitle>Rediger kort</SheetTitle>
+              </SheetHeader>
               <QuestionInspector />
             </SheetContent>
           </Sheet>
