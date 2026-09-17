@@ -835,7 +835,10 @@ export const useGameStore = create<GameState>()((set, get) => {
     restoreActiveSession: async (quizId: string) => {
       try {
         const response = await fetch(`/api/quiz-runs/active?quizId=${quizId}`);
-        if (response.status === 404) {
+        if (!response.ok) throw new Error("Failed to restore active session");
+
+        const { run } = await response.json();
+        if (!run) {
           // No server session. A local snapshot can still hold a game that was
           // played before the first successful write.
           const snapshot = readSnapshot(quizId);
@@ -844,9 +847,7 @@ export const useGameStore = create<GameState>()((set, get) => {
           }
           return;
         }
-        if (!response.ok) throw new Error("Failed to restore active session");
 
-        const { run } = await response.json();
         const serverLive = liveStateFromRunState(run.final_state);
         const snapshot = readSnapshot(quizId);
         const live = snapshotIsAhead(snapshot, serverLive)
@@ -917,7 +918,23 @@ export const useGameStore = create<GameState>()((set, get) => {
         }
 
         clearSnapshot(sessionQuizId);
-        set({ activeRunId: null, currentRunStartTime: null });
+        // Finishing a session archives the night and hands the board back
+        // clean. Leaving the scores on screen would mean the board disagrees
+        // with what is stored the moment anyone reloads, since the live state
+        // this came from no longer exists.
+        set((state) => ({
+          activeRunId: null,
+          currentRunStartTime: null,
+          categories: state.categories.map((cat) => ({
+            ...cat,
+            questions: cat.questions.map((q) => ({ ...q, answered: false })),
+          })),
+          teams: state.teams.map((t) => ({ ...t, score: 0 })),
+          adjustmentLog: [],
+          currentTurnTeamId: null,
+          lastQuestion: null,
+          isQuestionOpen: false,
+        }));
       } catch (error) {
         console.error("Error completing session:", error);
         throw error;

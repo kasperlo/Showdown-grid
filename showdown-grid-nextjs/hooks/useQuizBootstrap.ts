@@ -29,27 +29,32 @@ interface RawQuizPayload {
  * Both the game page and the editor need the same thing: the stored template,
  * plus whatever live session is running on top of it. Doing it in one hook is
  * also what keeps a refetch from overwriting a running game — the fetch happens
- * exactly once per quiz, not on every focus change.
+ * exactly once per mount, not on every focus change.
+ *
+ * The cancel flag is a ref rather than a per-effect local: loading the quiz
+ * updates the store, which re-renders, which would re-run the effect and cancel
+ * the load that was still finishing.
  */
 export function useQuizBootstrap(): BootstrapState {
-  const [state, setState] = useState<BootstrapState>({ status: "loading" });
-  const loadQuiz = useGameStore((s) => s.loadQuiz);
-  const restoreActiveSession = useGameStore((s) => s.restoreActiveSession);
-  const activeQuizId = useGameStore((s) => s.activeQuizId);
-  const isHydrated = useGameStore((s) => s.isHydrated);
-  const startedRef = useRef(false);
+  const [state, setState] = useState<BootstrapState>(() => {
+    const store = useGameStore.getState();
+    return store.isHydrated && store.activeQuizId
+      ? { status: "ready", quizId: store.activeQuizId }
+      : { status: "loading" };
+  });
+  const aliveRef = useRef(true);
 
   useEffect(() => {
-    if (startedRef.current) return;
-    if (isHydrated && activeQuizId) {
-      // Already loaded in this tab (for example navigating editor → game).
-      startedRef.current = true;
-      setState({ status: "ready", quizId: activeQuizId });
-      return;
-    }
-    startedRef.current = true;
+    aliveRef.current = true;
+    const store = useGameStore.getState();
 
-    let cancelled = false;
+    // Already loaded in this tab, for example navigating editor → game.
+    if (store.isHydrated && store.activeQuizId) {
+      setState({ status: "ready", quizId: store.activeQuizId });
+      return () => {
+        aliveRef.current = false;
+      };
+    }
 
     const run = async () => {
       const publicQuizId = readPublicPlay();
@@ -59,16 +64,15 @@ export function useQuizBootstrap(): BootstrapState {
 
       try {
         const response = await fetch(url);
+        if (!aliveRef.current) return;
 
         if (response.status === 404 || response.status === 403) {
-          if (!cancelled) {
-            useGameStore.getState().setHydrated(true);
-            setState({ status: "empty" });
-          }
+          useGameStore.getState().setHydrated(true);
+          setState({ status: "empty" });
           return;
         }
         if (response.status === 401) {
-          if (!cancelled) setState({ status: "empty" });
+          setState({ status: "empty" });
           return;
         }
         if (!response.ok) {
@@ -76,7 +80,7 @@ export function useQuizBootstrap(): BootstrapState {
         }
 
         const { data } = (await response.json()) as { data: RawQuizPayload };
-        if (cancelled) return;
+        if (!aliveRef.current) return;
 
         const isPublicPlay = Boolean(publicQuizId);
         const template = templateFromQuizData(
@@ -94,17 +98,19 @@ export function useQuizBootstrap(): BootstrapState {
           }
         );
 
-        loadQuiz({
+        useGameStore.getState().loadQuiz({
           template,
           quizId: data.quizId,
           quizOwnerId: data.quizOwnerId,
           isPublicPlay,
         });
 
-        await restoreActiveSession(data.quizId);
-        if (!cancelled) setState({ status: "ready", quizId: data.quizId });
+        // The board is usable from here; the session restore that follows only
+        // adds scores, so the page is released before awaiting it.
+        setState({ status: "ready", quizId: data.quizId });
+        await useGameStore.getState().restoreActiveSession(data.quizId);
       } catch (error) {
-        if (cancelled) return;
+        if (!aliveRef.current) return;
         useGameStore.getState().setHydrated(true);
         setState({
           status: "error",
@@ -116,9 +122,9 @@ export function useQuizBootstrap(): BootstrapState {
     void run();
 
     return () => {
-      cancelled = true;
+      aliveRef.current = false;
     };
-  }, [loadQuiz, restoreActiveSession, activeQuizId, isHydrated]);
+  }, []);
 
   return state;
 }

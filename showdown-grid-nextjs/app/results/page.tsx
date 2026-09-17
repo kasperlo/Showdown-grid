@@ -18,9 +18,13 @@ import {
 import { toast } from "@/hooks/use-toast";
 import { rankTeams } from "@/utils/ranking";
 import { countQuestions } from "@/utils/quiz-template";
+import { useQuizBootstrap } from "@/hooks/useQuizBootstrap";
 
 export default function Results() {
   const router = useRouter();
+  // Opening /results directly, or refreshing it, used to render the store's
+  // default empty board: "Uten navn", 0 of 25 questions and every team on zero.
+  const bootstrap = useQuizBootstrap();
   const teams = useGameStore((s) => s.teams);
   const categories = useGameStore((s) => s.categories);
   const activeRunId = useGameStore((s) => s.activeRunId);
@@ -83,6 +87,17 @@ export default function Results() {
 
   const colorForRank = (rank: number) =>
     rank === 1 ? "bg-accent" : rank === 2 ? "bg-muted" : "bg-secondary";
+
+  if (bootstrap.status === "loading") {
+    return (
+      <div className="min-h-screen bg-background p-8">
+        <div className="mx-auto max-w-3xl space-y-4">
+          <div className="mx-auto h-12 w-64 animate-pulse rounded bg-muted" />
+          <div className="h-48 animate-pulse rounded-2xl bg-muted" />
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-background px-4 py-8 text-foreground sm:px-6">
@@ -250,8 +265,8 @@ export default function Results() {
           <AlertDialogHeader>
             <AlertDialogTitle>Fullføre økten?</AlertDialogTitle>
             <AlertDialogDescription>
-              Resultatet lagres i historikken og økten låses. Brettet beholder
-              poengene sine til du nullstiller det i oppsettet.
+              Resultatet lagres i historikken, og brettet nullstilles så quizen
+              er klar til neste gang. Poengene finner du igjen under Historikk.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>

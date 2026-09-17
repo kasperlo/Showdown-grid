@@ -18,24 +18,33 @@ export async function GET() {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    const { data, error } = await supabase
-      .from("quizzes")
-      .select(
-        "id, title, description, is_public, time_limit, theme, created_at, updated_at, quiz_data"
-      )
-      .eq("user_id", user.id)
-      .order("updated_at", { ascending: false });
+    const [{ data, error }, { data: userRow }] = await Promise.all([
+      supabase
+        .from("quizzes")
+        .select(
+          "id, title, description, is_public, time_limit, theme, created_at, updated_at, quiz_data"
+        )
+        .eq("user_id", user.id)
+        .order("updated_at", { ascending: false }),
+      supabase
+        .from("users")
+        .select("active_quiz_id")
+        .eq("user_id", user.id)
+        .maybeSingle(),
+    ]);
 
     if (error) {
       throw error;
     }
 
-    // The list view shows how finished each quiz is, which needs a count but not
-    // the whole board, so the payload is reduced here rather than in the client.
+    // The list view shows how finished each quiz is and which one is active,
+    // which needs a count but not the whole board, so the payload is reduced
+    // here rather than in the client.
     const quizzes = (data || []).map(({ quiz_data, ...quiz }) => ({
       ...quiz,
       question_count: countQuestions(quiz_data),
       category_count: countCategories(quiz_data),
+      is_active: quiz.id === userRow?.active_quiz_id,
     }));
 
     return NextResponse.json({ quizzes });

@@ -91,6 +91,7 @@ export interface QuizMetadata {
   question_count?: number;
   category_count?: number;
   isOwnedByCurrentUser?: boolean;
+  is_active?: boolean;
 }
 
 // Quiz Run types for history and statistics

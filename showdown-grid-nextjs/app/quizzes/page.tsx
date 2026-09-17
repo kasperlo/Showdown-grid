@@ -181,7 +181,9 @@ export default function QuizzesPage() {
   };
 
   const renderCard = (quiz: QuizMetadata, isPublicList: boolean) => {
-    const isActive = quiz.id === activeQuizId;
+    // is_active comes from the list endpoint: this page does not load a quiz,
+    // so the store does not know which one is active on a fresh visit.
+    const isActive = quiz.is_active ?? quiz.id === activeQuizId;
     const isMine = !isPublicList || quiz.isOwnedByCurrentUser;
 
     return (
@@ -411,6 +413,9 @@ export default function QuizzesPage() {
                 value={newTitle}
                 onChange={(e) => setNewTitle(e.target.value)}
                 placeholder="Julequiz 2026"
+                // The dialog opens with the cursor here, so the name can be
+                // typed without aiming at the field first.
+                autoFocus
                 onKeyDown={(e) => {
                   if (e.key === "Enter") void handleCreate();
                 }}

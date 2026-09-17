@@ -22,7 +22,7 @@ interface QuizRunResponse {
 }
 
 interface ActiveRunResponse {
-  run: QuizRun;
+  run: QuizRun | null;
 }
 
 // Fetch functions
@@ -51,10 +51,6 @@ async function fetchQuizRuns(
 async function fetchActiveRun(quizId: string): Promise<QuizRun | null> {
   const response = await fetch(`/api/quiz-runs/active?quizId=${quizId}`);
 
-  if (response.status === 404) {
-    return null; // No active session found
-  }
-
   if (response.status === 401) {
     throw new Error("Unauthorized");
   }
@@ -64,7 +60,7 @@ async function fetchActiveRun(quizId: string): Promise<QuizRun | null> {
   }
 
   const result: ActiveRunResponse = await response.json();
-  return result.run;
+  return result.run ?? null;
 }
 
 async function fetchQuizRun(runId: string): Promise<QuizRun> {
