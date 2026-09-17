@@ -62,6 +62,14 @@ describe("cardStatus", () => {
     ).toBe("complete");
   });
 
+  it("counts code as the question side of the card", () => {
+    expect(cardStatus(q({ code: "console.log(1)", answer: "1" }))).toBe(
+      "complete"
+    );
+    expect(cardStatus(q({ code: "console.log(1)" }))).toBe("missing-answer");
+    expect(cardStatus(q({ code: "   ", answer: "1" }))).toBe("missing-question");
+  });
+
   it("treats whitespace as empty", () => {
     expect(cardStatus(q({ question: "   ", answer: "\n" }))).toBe("empty");
   });

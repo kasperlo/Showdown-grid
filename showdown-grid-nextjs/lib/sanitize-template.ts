@@ -65,6 +65,7 @@ function sanitizeQuestion(input: unknown): Category["questions"] {
           : 0,
       question: str(raw.question).slice(0, 2000),
       answer: str(raw.answer).slice(0, 2000),
+      code: str(raw.code).slice(0, 4000),
       imageUrl: str(raw.imageUrl).slice(0, 2000),
       isJoker: raw.isJoker === true,
       jokerTask: str(raw.jokerTask).slice(0, 2000),

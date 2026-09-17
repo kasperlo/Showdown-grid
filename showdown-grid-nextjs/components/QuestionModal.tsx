@@ -39,6 +39,7 @@ function QuestionModalContent() {
   const startSession = useGameStore((state) => state.startSession);
 
   const isJoker = Boolean(lastQuestion?.isJoker);
+  const hasCode = Boolean(lastQuestion?.code?.trim());
 
   const [revealed, setRevealed] = useState(false);
   // Seeded at mount instead of in an effect. This component is keyed per
@@ -122,10 +123,20 @@ function QuestionModalContent() {
                 </div>
               )}
 
-              {!isJoker && (
+              {!isJoker && (lastQuestion.question.trim() || !hasCode) && (
                 <p className="px-2 text-xl font-semibold leading-tight sm:text-3xl md:text-4xl">
                   {lastQuestion.question || "(Ingen spørsmålstekst)"}
                 </p>
+              )}
+
+              {hasCode && !isJoker && (
+                /* Left-aligned inside a centred column, because code read
+                   centre-aligned is unreadable. Sized to be legible from the
+                   back of the room, and it scrolls rather than wraps: a wrapped
+                   line changes what the snippet means. */
+                <pre className="max-h-[45vh] w-full max-w-3xl overflow-auto rounded-lg border border-border bg-background/80 px-4 py-3 text-left font-mono text-sm leading-relaxed sm:text-base md:text-lg">
+                  <code>{lastQuestion.code}</code>
+                </pre>
               )}
 
               {lastQuestion.imageUrl && !isJoker && (
@@ -140,7 +151,16 @@ function QuestionModalContent() {
 
               {revealed && !isJoker && (
                 <div className="w-full max-w-3xl rounded-lg border border-border bg-muted p-4">
-                  <p className="display-lg text-accent">
+                  {/* The answer to a code card is usually code itself —
+                      `"object"`, `[1, NaN, NaN]` — and the quotes and brackets
+                      have to survive. */}
+                  <p
+                    className={
+                      hasCode
+                        ? "whitespace-pre-wrap break-words font-mono text-xl font-bold text-accent sm:text-2xl md:text-3xl"
+                        : "display-lg text-accent"
+                    }
+                  >
                     {lastQuestion.answer || "(Ingen svartekst)"}
                   </p>
                 </div>

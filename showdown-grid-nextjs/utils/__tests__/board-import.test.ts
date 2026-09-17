@@ -59,6 +59,32 @@ describe("parseBoardText", () => {
     expect(result.errors[0]).toContain("Rad 2");
   });
 
+  it("reads a fifth column as a code snippet", () => {
+    const result = parseBoardText(
+      'Kode\t100\tHva printes?\t"object"\tconsole.log(typeof null)'
+    );
+
+    const card = result.categories[0].questions[0];
+    expect(card.question).toBe("Hva printes?");
+    expect(card.answer).toBe('"object"');
+    expect(card.code).toBe("console.log(typeof null)");
+  });
+
+  it("turns \\n in the code column into real line breaks", () => {
+    const result = parseBoardText(
+      "Kode;100;Hva printes?;1 4 3 2;console.log('1')\\nconsole.log('4')"
+    );
+
+    expect(result.categories[0].questions[0].code).toBe(
+      "console.log('1')\nconsole.log('4')"
+    );
+  });
+
+  it("leaves an escaped backslash alone", () => {
+    const result = parseBoardText("Kode;100;Regex?;ja;/\\\\n/");
+    expect(result.categories[0].questions[0].code).toBe("/\\n/");
+  });
+
   it("says so when there is nothing to read", () => {
     expect(parseBoardText("   ").errors).toEqual(["Ingen rader å lese."]);
   });

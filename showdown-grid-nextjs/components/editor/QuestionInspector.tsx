@@ -13,6 +13,7 @@ import {
   ChevronLeft,
   ChevronRight,
   CircleAlert,
+  Code2,
   ImagePlus,
   ListChecks,
   Trash2,
@@ -63,6 +64,7 @@ function InspectorBody() {
   const question = cardAt(categories, selectedCard);
   const counts = readiness(categories);
   const [imageOpen, setImageOpen] = useState(false);
+  const [codeOpen, setCodeOpen] = useState(false);
 
   // Keyboard flow. Skipped while typing, so the shortcuts never eat text.
   useEffect(() => {
@@ -278,28 +280,74 @@ function InspectorBody() {
                 value={question.answer}
                 onChange={(e) => patch({ answer: e.target.value })}
                 rows={2}
-                className={`text-base font-semibold leading-snug ${
-                  question.answer.trim() ? "" : "border-accent"
-                }`}
+                spellCheck={!question.code?.trim()}
+                className={`leading-snug ${
+                  question.code?.trim()
+                    ? "font-mono text-sm"
+                    : "text-base font-semibold"
+                } ${question.answer.trim() ? "" : "border-accent"}`}
               />
             </Field>
 
-            {question.imageUrl?.trim() || imageOpen ? (
+            {question.code?.trim() || codeOpen ? (
+              <Field label="Kode">
+                <Textarea
+                  value={question.code ?? ""}
+                  onChange={(e) => patch({ code: e.target.value })}
+                  onKeyDown={(e) => {
+                    // Tab indents instead of leaving the field. Without this you
+                    // cannot type indented code at all, only paste it.
+                    if (e.key !== "Tab" || e.shiftKey) return;
+                    e.preventDefault();
+                    const el = e.currentTarget;
+                    const { selectionStart: from, selectionEnd: to, value } = el;
+                    patch({
+                      code: `${value.slice(0, from)}  ${value.slice(to)}`,
+                    });
+                    requestAnimationFrame(() => {
+                      el.selectionStart = el.selectionEnd = from + 2;
+                    });
+                  }}
+                  rows={6}
+                  spellCheck={false}
+                  placeholder="console.log(typeof null)"
+                  className="font-mono text-sm leading-relaxed"
+                />
+              </Field>
+            ) : null}
+
+            <div className="flex flex-wrap gap-1">
+              {!question.code?.trim() && !codeOpen && (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="gap-2 text-muted-foreground"
+                  onClick={() => setCodeOpen(true)}
+                >
+                  <Code2 className="h-4 w-4" />
+                  Kode
+                </Button>
+              )}
+
+              {question.imageUrl?.trim() || imageOpen ? null : (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="gap-2 text-muted-foreground"
+                  onClick={() => setImageOpen(true)}
+                >
+                  <ImagePlus className="h-4 w-4" />
+                  Bilde
+                </Button>
+              )}
+            </div>
+
+            {(question.imageUrl?.trim() || imageOpen) && (
               <ImageUpload
                 value={question.imageUrl}
                 onChange={(url) => patch({ imageUrl: url })}
                 label="Bilde"
               />
-            ) : (
-              <Button
-                variant="ghost"
-                size="sm"
-                className="gap-2 text-muted-foreground"
-                onClick={() => setImageOpen(true)}
-              >
-                <ImagePlus className="h-4 w-4" />
-                Bilde
-              </Button>
             )}
           </>
         )}

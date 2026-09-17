@@ -4,6 +4,13 @@ export interface Question {
   points: number;
   question: string;
   answer: string;
+  /**
+   * A code snippet shown below the question, monospaced with its line breaks
+   * kept. A separate field rather than markdown fences inside `question`: the
+   * card needs to ask something ("Hva printes?") AND show the code, and parsing
+   * fences out of free text guesses at intent.
+   */
+  code?: string;
   imageUrl?: string;
   answered: boolean;
   isJoker?: boolean;
@@ -29,6 +36,7 @@ export interface LastQuestion {
   points: number;
   question: string;
   answer: string;
+  code?: string;
   imageUrl?: string;
   answered?: boolean;
   isJoker?: boolean;
@@ -192,7 +200,7 @@ export interface GameState {
   setLastQuestion: (question: LastQuestion | null) => void;
   setQuestionOpen: (open: boolean) => void;
 
-  addTeam: () => void;
+  addTeam: (name?: string) => void;
   removeTeam: (id: string) => void;
   updateTeamName: (id: string, name: string) => void;
   updateTeamPlayers: (id: string, players: string[]) => void;
@@ -206,7 +214,6 @@ export interface GameState {
 
   awardPositive: (teamId: string, customPoints?: number) => void;
   awardNegative: (teamId: string, customPoints?: number) => void;
-  skipQuestion: () => void;
   endRound: () => void;
   toggleQuestionAnswered: (categoryName: string, questionIndex: number, answered: boolean) => void;
 

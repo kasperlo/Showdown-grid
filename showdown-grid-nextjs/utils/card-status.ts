@@ -23,7 +23,11 @@ export function cardStatus(question: Question): CardStatus {
     return question.jokerTask?.trim() ? "complete" : "empty";
   }
 
-  const hasQuestion = Boolean(question.question.trim());
+  // A code card carries its prompt in the snippet, so code alone satisfies the
+  // question side: "Hva printes?" is optional furniture on those.
+  const hasQuestion = Boolean(
+    question.question.trim() || question.code?.trim()
+  );
   const hasAnswer = Boolean(question.answer.trim());
 
   if (!hasQuestion && !hasAnswer) return "empty";

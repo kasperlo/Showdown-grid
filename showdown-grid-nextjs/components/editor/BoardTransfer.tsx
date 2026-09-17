@@ -23,8 +23,8 @@ import {
 } from "@/utils/board-import";
 
 const PASTE_EXAMPLE = `Norsk historie\t100\tHvem var Norges første statsminister?\tFrederik Stang
-Norsk historie\t200\tHvilket år ble Norge selvstendig fra Sverige?\t1905
-Mat\t100\tHva heter Norges nasjonalrett?\tFårikål`;
+Mat\t100\tHva heter Norges nasjonalrett?\tFårikål
+Kode\t100\tHva printes?\t"object"\tconsole.log(typeof null)`;
 
 /**
  * Bulk in and out. Filling a 25-cell board by hand is the slowest part of
@@ -132,8 +132,9 @@ export function BoardTransfer() {
             <DialogHeader>
               <DialogTitle>Lim inn spørsmål</DialogTitle>
               <DialogDescription>
-                Én rad per spørsmål: kategori, poeng, spørsmål, svar. Tabulator,
-                semikolon eller komma mellom kolonnene.
+                Én rad per spørsmål: kategori, poeng, spørsmål, svar og
+                eventuelt kode. Tabulator, semikolon eller komma mellom
+                kolonnene. Skriv \n i kodekolonnen der du vil ha linjeskift.
               </DialogDescription>
             </DialogHeader>
 

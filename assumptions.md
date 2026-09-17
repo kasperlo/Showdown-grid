@@ -3,6 +3,32 @@
 Kontekst, antakelse, beslutning, begrunnelse og oppfølging for valg som ikke er
 åpenbare fra koden. Nyeste først.
 
+## 2026-09-17 — Kodeblokker på kort
+
+- **Kontekst:** en «Kode»-kategori der spørsmålet er «hva printes?» og kortet må
+  vise en kodesnutt med linjeskift og innrykk i behold.
+- **Beslutning:** eget felt `code` på spørsmålet, ikke markdown-gjerder inne i
+  spørsmålsteksten. Kortet skal både spørre om noe og vise koden, og å tolke
+  ```-gjerder ut av fritekst er å gjette på hva forfatteren mente.
+- **Visning:** `<pre><code>` venstrestilt i en ramme under spørsmålet, monospace,
+  og den ruller sidelengs i stedet for å brytes. En brutt linje endrer hva
+  snutten betyr. Svaret på et kodekort vises også i monospace, siden svaret
+  gjerne *er* kode (`"object"`, `[1, NaN, NaN]`) og hermetegn og klammer må
+  overleve.
+- **Ferdigstatus:** kode alene dekker spørsmålssiden av kortet. «Hva printes?»
+  er valgfritt pynt når snutten står der.
+- **Tab i kodefeltet** gir to mellomrom i stedet for å flytte fokus. Uten det
+  kan man ikke skrive innrykket kode i det hele tatt, bare lime den inn.
+- **Lim-inn:** femte kolonne er kode, og `\n` i den kolonnen blir et ekte
+  linjeskift. Importen er linjebasert, så et reelt linjeskift ville avsluttet
+  raden — dette er den eneste veien til en flerlinjet snutt uten å skrive den
+  inn i kortet.
+- **Ingen syntaksfarging.** Det krever et bibliotek, og handoffen sier nei til
+  nye avhengigheter. Monospace med god kontrast er nok til å lese fire linjer
+  JavaScript fra bakerste rad.
+- **Sidefunn:** `font-mono` pekte ikke på Geist Mono, selv om fonten alt lastes
+  i `app/layout.tsx`. Nå mappet i `tailwind.config.ts`.
+
 ## 2026-09-17 — Redigering flyttet ut på brettet (design 2a)
 
 Bygget etter handoffen i `design_handoff_quiz_admin`, retning 2a, med fire valg
@@ -159,3 +185,51 @@ avklart med eier før bygging:
 - **Begrunnelse:** en feil i hva som skrives til databasen, i hvilken kopi av en
   økt som vinner, eller i hvem rangeringen sier vant, er usynlig helt til noe er
   tapt. UI-feil ser man. Kasper har sagt at bare kritiske deler trenger tester.
+
+## 2026-09-17 — Lag kan opprettes mens quizen kjører
+
+- **Beslutning:** «Stilling» har fått en «Lag»-knapp og et inline navnefelt, og
+  lagmodalen har fått navneendring og fjerning. Ingenting av dette krever
+  redigeringsrettigheter på quizen.
+- **Begrunnelse:** den som holder quizen er ofte ikke den som lagde den, og
+  lagene finnes først når folk har satt seg. Før dette lå lagoppsettet bare i
+  redigeringsmodus, som en gjest eller en annen bruker ikke kommer inn i —
+  verten hadde ingen vei til å legge til et lag.
+- **Vurdert og forkastet:** å åpne redigeringsmodus for alle. Det gir verten
+  tilgang til å endre spørsmålene midt i quizen, som er verre.
+- **Oppfølging:** quizen har tre plassholderlag («Lag 1/2/3») som verten må
+  døpe om. Navneendring ligger bak et trykk på laget i stillingen.
+
+## 2026-09-17 — Lagendringer speiles til localStorage med en gang
+
+- **Beslutning:** `addTeam`, `removeTeam` og `updateTeamName` kaller
+  `snapshotLiveState()`.
+- **Begrunnelse:** lag tastes inn før første spørsmål er åpnet, og det er
+  spørsmålet som oppretter økten på serveren. Uten snapshot var en refresh i
+  det vinduet nok til å miste alle lagnavnene.
+
+## 2026-09-17 — Dokken skjules mens spørsmålet vises
+
+- **Beslutning:** `RoundDock` rendrer ingenting når `isQuestionOpen` er sann.
+  Teksten «Lukk spørsmålet for å tildele poeng» er borte.
+- **Begrunnelse:** dokken lå synlig men død bak spørsmålsvinduet, og leste som
+  en andre konkurrerende flate til den skjermen rommet ser på.
+
+## 2026-09-17 — Én vei videre ut av en runde
+
+- **Beslutning:** «Ingen» og kryss-ikonet er erstattet av én knapp som skifter
+  tekst: «Ingen klarte den» før noe er tildelt, «Neste spørsmål» etter. Over
+  brikkene står én linje som sier hva som skal gjøres («Hvem svarte riktig?»,
+  eller «300 poeng til Bordet ved baren» når det er gjort).
+- **Begrunnelse:** etter en tildeling ble alle brikkene deaktivert uten at noe
+  pekte videre. `skipQuestion` og `endRound` gjorde dessuten presis det samme,
+  så to knapper konkurrerte om samme handling. `skipQuestion` er slettet.
+
+## 2026-09-17 — Escape avslutter ikke runden
+
+- **Beslutning:** dokkens hurtigtaster er tall 1–9, R, F og N. Escape og Enter
+  er bevisst ikke bundet.
+- **Begrunnelse:** begge er i lufta fra spørsmålsvinduet i det øyeblikket
+  dokkens vindus-lytter monteres. Å lukke vinduet med Escape lot samme
+  tastetrykk nå lytteren og kalle `endRound()` — kortet ble markert spilt og
+  poengtildelingen hoppet over. Verifisert i nettleser før og etter.
