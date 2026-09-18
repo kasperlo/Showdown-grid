@@ -3,6 +3,25 @@
 Kontekst, antakelse, beslutning, begrunnelse og oppfølging for valg som ikke er
 åpenbare fra koden. Nyeste først.
 
+## 2026-09-18 — Collaborator kunne ikke lese sin egen rad
+
+- **Kontekst:** Kasper delte en lenke, vennen logget inn og fikk «Fikk ikke
+  tilgang». Join-kallet hadde faktisk lyktes (raden i `quiz_collaborators`
+  ble satt inn), men aktiverings-kallet rett etter feilet.
+- **Feil:** SELECT-policyen på `quiz_collaborators` (05/06) sa
+  `is_quiz_owner(quiz_id)` — kun eieren fikk lese tabellen. Tre steder leser
+  «er jeg collaborator på denne quizen» direkte som den innloggede brukeren,
+  ikke via en SECURITY DEFINER-funksjon: `activate`-endepunktet,
+  `canEdit`-beregningen i `/api/quiz`, og «hvilke quizzer er jeg
+  collaborator på»-spørringen i `/api/quizzes`. Alle tre ble RLS-blokkert
+  for collaboratoren selv.
+- **Beslutning (migrasjon 07):** SELECT-policyen er nå
+  `auth.uid() = user_id OR is_quiz_owner(quiz_id)` — raden er synlig for
+  eieren OG personen den gjelder for.
+- **Konsekvens før fix:** en delt quiz kunne aldri vises i mottakerens eget
+  bibliotek, selv om collaborator-raden fantes. Ingen ny lenke er nødvendig
+  etter fixen — raden fra det mislykkede forsøket er allerede der.
+
 ## 2026-09-18 — Delt redigeringstilgang via lenke
 
 - **Kontekst:** Kasper ville kunne dele redigeringstilgang til en quiz via
