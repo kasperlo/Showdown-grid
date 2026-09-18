@@ -329,9 +329,6 @@ export interface GameState {
   closeQueue: () => void;
   queueNext: () => void;
   queuePrev: () => void;
-  /** Moves a card to another position, re-applying the points ladder. */
-  moveCard: (from: CardRef, to: CardRef) => void;
-
   // Quiz run tracking
   currentRunStartTime: number | null;
   setRunStartTime: (time: number | null) => void;

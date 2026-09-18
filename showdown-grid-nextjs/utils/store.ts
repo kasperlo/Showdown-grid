@@ -229,38 +229,6 @@ export const useGameStore = create<GameState>()((set, get) => {
         };
       }),
 
-    /**
-     * Moves a card. The points ladder is re-applied afterwards, so the card
-     * takes on the points of wherever it lands — see normalizePoints.
-     */
-    moveCard: (from: CardRef, to: CardRef) =>
-      set((state) => {
-        const source = state.categories[from.categoryIndex];
-        const question = source?.questions[from.questionIndex];
-        if (!question) return state;
-        if (sameCard(from, to)) return state;
-
-        const categories = state.categories.map((cat) => ({
-          ...cat,
-          questions: [...cat.questions],
-        }));
-
-        categories[from.categoryIndex].questions.splice(from.questionIndex, 1);
-
-        const target = categories[to.categoryIndex];
-        if (!target) return state;
-        const index = Math.max(
-          0,
-          Math.min(to.questionIndex, target.questions.length)
-        );
-        target.questions.splice(index, 0, question);
-
-        return {
-          categories: normalizePoints(categories),
-          selectedCard: { categoryIndex: to.categoryIndex, questionIndex: index },
-        };
-      }),
-
     updateQuestion: (
       categoryIndex: number,
       questionIndex: number,
@@ -681,7 +649,6 @@ export const useGameStore = create<GameState>()((set, get) => {
       set
     ),
     moveQuestion: withUnsavedChanges(actions.moveQuestion, set),
-    moveCard: withUnsavedChanges(actions.moveCard, set),
     updateQuestion: withUnsavedChanges(actions.updateQuestion, set),
     addTeam: withUnsavedChanges(actions.addTeam, set),
     removeTeam: withUnsavedChanges(actions.removeTeam, set),
