@@ -78,19 +78,19 @@ export function GameBoard() {
           // Columns are capped rather than 1fr: a three-category board stretched
           // each tile to 600px on a projector, which reads as a menu, not a
           // Jeopardy board. Seven columns still fill a 1920px screen.
-          className="grid min-h-0 w-full min-w-[36rem] flex-1 justify-center gap-1.5 sm:min-w-0 sm:gap-3"
+          className="grid min-h-0 w-full min-w-[36rem] justify-center gap-1.5 sm:min-w-0 sm:gap-3"
           style={{
-            gridTemplateColumns: `repeat(${categories.length}, minmax(6rem, 18rem))`,
-            gridTemplateRows: `auto repeat(${rowCount}, minmax(2.75rem, 1fr))`,
+            gridTemplateColumns: `repeat(${categories.length}, var(--col-w))`,
+            gridTemplateRows: `var(--head-h) repeat(${rowCount}, var(--tile-h))`,
           }}
         >
           {categories.map((category, categoryIndex) => (
             <Fragment key={`${category.name}-${categoryIndex}`}>
               <div
-                className="category-header !h-auto px-2 py-2"
+                className="category-header px-2 py-2"
                 style={{ gridColumn: categoryIndex + 1, gridRow: 1 }}
               >
-                <span className="line-clamp-3 text-[clamp(0.65rem,2.1vh,1.6rem)] font-bold leading-tight">
+                <span className="line-clamp-3 category-header-label font-bold leading-tight">
                   {category.name}
                 </span>
               </div>
@@ -138,7 +138,7 @@ export function GameBoard() {
                           : undefined
                       }
                     >
-                      <span className="points-chip !text-[clamp(1.1rem,3.4vh,2.75rem)]">
+                      <span className="points-chip">
                         {question.points}
                       </span>
                     </button>
