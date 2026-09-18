@@ -27,6 +27,7 @@ export function GameTopBar({
   const router = useRouter();
   const categories = useGameStore((s) => s.categories);
   const quizTitle = useGameStore((s) => s.quizTitle);
+  const quizDescription = useGameStore((s) => s.quizDescription);
   const isPublicPlay = useGameStore((s) => s.isPlayingPublicQuiz);
 
   const total = countQuestions(categories);
@@ -67,12 +68,19 @@ export function GameTopBar({
           </div>
         )}
 
-        <h1
-          className="min-w-0 flex-1 truncate text-[clamp(1rem,3vh,2.1rem)] font-extrabold leading-none tracking-tight text-accent drop-shadow-sm"
-          title={quizTitle || "Uten navn"}
-        >
-          {quizTitle || "Uten navn"}
-        </h1>
+        <div className="min-w-0 flex-1">
+          <h1
+            className="truncate text-[clamp(1rem,3vh,2.1rem)] font-extrabold leading-none tracking-tight text-accent drop-shadow-sm"
+            title={quizTitle || "Uten navn"}
+          >
+            {quizTitle || "Uten navn"}
+          </h1>
+          {quizDescription && (
+            <p className="mt-0.5 truncate text-xs text-muted-foreground">
+              {quizDescription}
+            </p>
+          )}
+        </div>
 
         <div className="flex shrink-0 items-center gap-1">
           {presentation.active ? (
