@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import type { CSSProperties } from "react";
 import { useGameStore } from "@/utils/store";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -38,11 +39,16 @@ import {
   statusLabel,
   type CardRef,
 } from "@/utils/card-status";
+import { useBoardGeometry } from "@/hooks/useBoardGeometry";
+import { boardGeometryCssVars } from "@/utils/board-geometry";
+
+/** EditorBar + title + BoardLegend + outer page padding — see Assumption 1. */
+const EDITOR_CHROME = 240;
 
 /**
- * The board, editable in place. Same grid and the same tiles the room sees, so
- * there is no separate preview to keep in sync — switching to Spill *is* the
- * preview.
+ * The board, editable in place. Same one-grid layout the room sees — one
+ * column per category, points ladder downward, no wrapping — so switching
+ * to Spill really is the preview, not a different shape.
  */
 export function EditableBoard() {
   const categories = useGameStore((s) => s.categories);
@@ -58,6 +64,18 @@ export function EditableBoard() {
   const addQuestionToCategory = useGameStore((s) => s.addQuestionToCategory);
   const [categoryToDelete, setCategoryToDelete] = useState<number | null>(null);
 
+  const maxRows = categories.reduce(
+    (most, c) => Math.max(most, c.questions.length),
+    0
+  );
+  const geometry = useBoardGeometry(categories.length || 1, maxRows || 1, {
+    panelWidthClamp: [360, 0.24, 460],
+    boardHeightOverride:
+      (typeof window !== "undefined" ? window.innerHeight : 900) -
+      EDITOR_CHROME,
+  });
+  const geometryVars = boardGeometryCssVars(geometry) as CSSProperties;
+
   const queuePosition = (ref: CardRef): number | null => {
     if (!queue?.active) return null;
     const index = queue.ids.findIndex((id) => sameCard(id, ref));
@@ -67,9 +85,11 @@ export function EditableBoard() {
   return (
     <div className="space-y-4">
       <div
-        className="grid gap-3"
+        className="-mx-4 grid gap-3 overflow-x-auto px-4 sm:mx-0 sm:px-0"
         style={{
-          gridTemplateColumns: `repeat(auto-fit, minmax(11rem, 1fr))`,
+          ...geometryVars,
+          gridTemplateColumns: `repeat(${categories.length}, var(--col-w)) minmax(180px, var(--col-w))`,
+          gridTemplateRows: `var(--head-h) repeat(${Math.max(maxRows, 1)}, var(--tile-h)) auto`,
         }}
       >
         {categories.map((category, categoryIndex) => {
@@ -78,8 +98,14 @@ export function EditableBoard() {
           ).length;
 
           return (
-            <div key={categoryIndex} className="flex flex-col gap-3">
-              <div className="category-header !h-[70px] flex-col gap-1 px-2">
+            <div
+              key={categoryIndex}
+              className="contents"
+            >
+              <div
+                className="category-header flex-col gap-1 px-2"
+                style={{ gridColumn: categoryIndex + 1, gridRow: 1 }}
+              >
                 <div className="flex w-full items-center gap-1">
                   <Input
                     value={category.name}
@@ -165,18 +191,25 @@ export function EditableBoard() {
                 const preview = question.isJoker
                   ? question.jokerTask?.trim()
                   : question.question.trim() ||
-                    // Newlines flattened: the tile clamps to two lines, and a
+                    // Newlines flattened: the tile clamps to a few lines, and a
                     // snippet's own line breaks would spend them both.
                     question.code?.trim().replace(/\s*\n\s*/g, " ⏎ ");
 
                 return (
-                  <div key={questionIndex} className="relative">
+                  <div
+                    key={questionIndex}
+                    className="relative min-h-0"
+                    style={{
+                      gridColumn: categoryIndex + 1,
+                      gridRow: questionIndex + 2,
+                    }}
+                  >
                     <button
                       type="button"
                       onClick={() => selectCard(ref)}
                       aria-current={isSelected ? "true" : undefined}
                       className={[
-                        "tile flex h-20 w-full flex-col items-start justify-center gap-1 px-2.5 text-left transition-colors hover:!translate-y-0 hover:!scale-100",
+                        "tile flex h-full w-full flex-col items-start gap-1.5 px-3 py-2.5 text-left transition-colors hover:!translate-y-0 hover:!scale-100",
                         isSelected
                           ? "turn-highlight border-2 border-accent bg-accent/10"
                           : status === "complete"
@@ -185,44 +218,47 @@ export function EditableBoard() {
                       ].join(" ")}
                     >
                       <span className="flex w-full items-center gap-1.5">
-                        <span className="text-xl font-extrabold tabular-nums text-accent">
+                        <span className="text-[26px] font-extrabold leading-none tabular-nums text-accent">
                           {question.points}
                         </span>
                         {question.isJoker && (
-                          <span className="rounded-full bg-gradient-to-r from-yellow-400 via-red-500 to-purple-500 px-1.5 py-px text-[0.65rem] font-extrabold tracking-wider text-white">
+                          <span className="rounded-full bg-gradient-to-r from-yellow-400 via-red-500 to-purple-500 px-1.5 py-px text-[0.6rem] font-extrabold tracking-wider text-white">
                             JOKER
                           </span>
                         )}
                         {question.code?.trim() && (
                           <Code2
-                            className="h-3 w-3 text-muted-foreground"
+                            className="h-3.5 w-3.5 text-muted-foreground"
                             aria-label="Har kode"
                           />
                         )}
                         {question.imageUrl?.trim() && (
                           <ImageIcon
-                            className="h-3 w-3 text-muted-foreground"
+                            className="h-3.5 w-3.5 text-muted-foreground"
                             aria-label="Har bilde"
                           />
                         )}
                         <span
-                          className={`ml-auto h-[7px] w-[7px] shrink-0 rounded-full ${
+                          className={`ml-auto h-2 w-2 shrink-0 rounded-full ${
                             status === "complete" ? "bg-success" : "bg-destructive"
                           }`}
-                          aria-hidden
                         />
                       </span>
 
+                      {label && (
+                        <span className="text-[11px] font-bold uppercase tracking-wide text-destructive">
+                          {label}
+                        </span>
+                      )}
+
                       <span
-                        className={`line-clamp-2 text-xs leading-snug ${
-                          label
-                            ? "font-semibold text-destructive"
-                            : question.code?.trim() && !question.question.trim()
+                        className={`line-clamp-3 flex-1 text-xs leading-snug ${
+                          question.code?.trim() && !question.question.trim()
                             ? "font-mono text-muted-foreground"
                             : "text-muted-foreground"
                         }`}
                       >
-                        {preview || label}
+                        {preview || "—"}
                       </span>
                     </button>
 
@@ -241,7 +277,11 @@ export function EditableBoard() {
               <button
                 type="button"
                 onClick={() => addQuestionToCategory(categoryIndex)}
-                className="flex h-10 items-center justify-center gap-1.5 rounded-xl border border-dashed border-muted-foreground/40 text-xs text-muted-foreground transition-colors hover:border-accent hover:text-accent"
+                style={{
+                  gridColumn: categoryIndex + 1,
+                  gridRow: Math.max(maxRows, 1) + 2,
+                }}
+                className="flex items-center justify-center gap-1.5 rounded-xl border border-dashed border-muted-foreground/40 py-2 text-xs text-muted-foreground transition-colors hover:border-accent hover:text-accent"
                 title="Legg til et kort nederst i kolonnen"
               >
                 <Plus className="h-4 w-4" />
@@ -254,10 +294,11 @@ export function EditableBoard() {
         <button
           type="button"
           onClick={addCategory}
-          className="flex min-h-[70px] items-center justify-center gap-2 self-start rounded-xl border border-dashed border-muted-foreground/40 px-3 py-5 text-sm text-muted-foreground transition-colors hover:border-accent hover:text-accent"
+          style={{ gridColumn: categories.length + 1, gridRow: "1 / -1" }}
+          className="flex min-h-[200px] flex-col items-center justify-center gap-2 rounded-xl border border-dashed border-muted-foreground/40 text-sm text-muted-foreground transition-colors hover:border-accent hover:text-accent"
           title="Legg til en ny kategori på brettet"
         >
-          <Plus className="h-4 w-4" />
+          <Plus className="h-5 w-5" />
           Ny kategori
         </button>
       </div>
