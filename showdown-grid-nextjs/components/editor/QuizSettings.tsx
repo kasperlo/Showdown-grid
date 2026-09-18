@@ -9,6 +9,7 @@ import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
 import { ThemeSelector } from "@/components/ThemeSelector";
 import { BoardTransfer } from "./BoardTransfer";
+import { ShareAccess } from "./ShareAccess";
 
 const TIMER_PRESETS = [30, 60, 90, 120];
 const JOKER_PRESETS = [5, 10, 15, 20];
@@ -24,6 +25,7 @@ export function QuizSettings() {
   const setJokerTimeLimit = useGameStore((s) => s.setJokerTimeLimit);
   const quizIsPublic = useGameStore((s) => s.quizIsPublic);
   const setQuizIsPublic = useGameStore((s) => s.setQuizIsPublic);
+  const isOwner = useGameStore((s) => s.isOwnerOfActiveQuiz());
 
   // Derived from the store, not synced into local state. The quiz loads
   // asynchronously, and a local copy taken once on mount showed the wrong
@@ -173,6 +175,12 @@ export function QuizSettings() {
           />
         </div>
       </div>
+
+      {isOwner && (
+        <div className="border-t border-border pt-6">
+          <ShareAccess />
+        </div>
+      )}
 
       <div className="border-t border-border pt-6">
         <BoardTransfer />

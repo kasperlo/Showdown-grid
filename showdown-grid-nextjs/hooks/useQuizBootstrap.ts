@@ -18,6 +18,7 @@ interface RawQuizPayload {
   quizTimeLimit: number | null;
   quizTheme: string;
   quizIsPublic: boolean;
+  canEdit?: boolean;
   categories?: unknown;
   teams?: unknown;
   jokerTimeLimit?: unknown;
@@ -101,6 +102,7 @@ export function useQuizBootstrap(): BootstrapState {
           template,
           quizId: data.quizId,
           quizOwnerId: data.quizOwnerId,
+          canEdit: data.canEdit,
           isPublicPlay,
         });
 

@@ -10,6 +10,7 @@ export const quizKeys = {
   detail: (id: string) => [...quizKeys.details(), id] as const,
   active: () => [...quizKeys.all, "active"] as const,
   public: () => [...quizKeys.all, "public"] as const,
+  share: (quizId: string) => [...quizKeys.all, "share", quizId] as const,
 };
 
 // Types
@@ -25,6 +26,8 @@ export interface ActiveQuizData {
   teams: Team[];
   adjustmentLog: AdjustmentEntry[];
   jokerTimeLimit?: number | null;
+  /** Owner or collaborator. Absent on the read-only public-play path. */
+  canEdit?: boolean;
 }
 
 interface QuizListResponse {
@@ -37,6 +40,17 @@ interface PublicQuizzesResponse {
 
 interface QuizDataResponse {
   data: ActiveQuizData;
+}
+
+export interface ShareCollaborator {
+  userId: string;
+  email: string;
+  createdAt: string;
+}
+
+export interface ShareStatus {
+  shareToken: string | null;
+  collaborators: ShareCollaborator[];
 }
 
 // Fetch functions
@@ -85,6 +99,14 @@ async function fetchPublicQuizzes(): Promise<QuizMetadata[]> {
   return result.quizzes || [];
 }
 
+async function fetchShareStatus(quizId: string): Promise<ShareStatus> {
+  const response = await fetch(`/api/quizzes/${quizId}/share`);
+  if (!response.ok) {
+    throw new Error("Kunne ikke laste delingsstatus");
+  }
+  return response.json();
+}
+
 // Query hooks
 export function useActiveQuiz(enabled: boolean = true) {
   return useQuery({
@@ -129,5 +151,13 @@ export function usePublicQuizzes() {
     queryKey: quizKeys.public(),
     queryFn: fetchPublicQuizzes,
     staleTime: 2 * 60 * 1000, // Public quizzes can be cached longer
+  });
+}
+
+export function useShareStatus(quizId: string | null) {
+  return useQuery({
+    queryKey: quizKeys.share(quizId ?? ""),
+    queryFn: () => fetchShareStatus(quizId as string),
+    enabled: Boolean(quizId),
   });
 }

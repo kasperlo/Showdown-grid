@@ -18,12 +18,17 @@ export async function GET() {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    const [{ data, error }, { data: userRow }] = await Promise.all([
+    const SELECT_COLUMNS =
+      "id, title, description, is_public, time_limit, theme, created_at, updated_at, user_id, quiz_data";
+
+    const [
+      { data: owned, error: ownedError },
+      { data: userRow },
+      { data: collabRows, error: collabError },
+    ] = await Promise.all([
       supabase
         .from("quizzes")
-        .select(
-          "id, title, description, is_public, time_limit, theme, created_at, updated_at, quiz_data"
-        )
+        .select(SELECT_COLUMNS)
         .eq("user_id", user.id)
         .order("updated_at", { ascending: false }),
       supabase
@@ -31,21 +36,47 @@ export async function GET() {
         .select("active_quiz_id")
         .eq("user_id", user.id)
         .maybeSingle(),
+      supabase
+        .from("quiz_collaborators")
+        .select("quiz_id")
+        .eq("user_id", user.id),
     ]);
 
-    if (error) {
-      throw error;
+    if (ownedError) throw ownedError;
+    if (collabError) throw collabError;
+
+    const collabIds = (collabRows || []).map((row) => row.quiz_id);
+    let shared: typeof owned = [];
+    if (collabIds.length > 0) {
+      const { data, error: sharedError } = await supabase
+        .from("quizzes")
+        .select(SELECT_COLUMNS)
+        .in("id", collabIds)
+        .order("updated_at", { ascending: false });
+
+      if (sharedError) throw sharedError;
+      shared = data;
     }
 
     // The list view shows how finished each quiz is and which one is active,
     // which needs a count but not the whole board, so the payload is reduced
-    // here rather than in the client.
-    const quizzes = (data || []).map(({ quiz_data, ...quiz }) => ({
-      ...quiz,
-      question_count: countQuestions(quiz_data),
-      category_count: countCategories(quiz_data),
-      is_active: quiz.id === userRow?.active_quiz_id,
-    }));
+    // here rather than in the client. Owner id is reduced to a boolean too:
+    // the card only needs to know whether the current user may delete it or
+    // manage its sharing, not who else owns it.
+    const toCard = (quiz: NonNullable<typeof owned>[number]) => {
+      const { quiz_data, user_id, ...rest } = quiz;
+      return {
+        ...rest,
+        question_count: countQuestions(quiz_data),
+        category_count: countCategories(quiz_data),
+        is_active: quiz.id === userRow?.active_quiz_id,
+        isOwnedByCurrentUser: user_id === user.id,
+      };
+    };
+
+    const quizzes = [...(owned || []).map(toCard), ...(shared || []).map(toCard)].sort(
+      (a, b) => new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime()
+    );
 
     return NextResponse.json({ quizzes });
   } catch (error) {

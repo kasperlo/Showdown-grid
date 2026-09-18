@@ -21,8 +21,16 @@ export function useAuth(): UseAuthReturn {
   useEffect(() => {
     const initAuth = async () => {
       try {
-        // Skip auth check on onboarding, signup, and login pages
-        if (pathname === "/onboarding" || pathname === "/signup" || pathname === "/login") {
+        // Skip auth check on onboarding, signup, login, and the share-link
+        // join page — /join/<token> does its own auth check so it can send
+        // an anonymous or signed-out visitor to /login without losing the
+        // token, instead of being bounced to /onboarding first.
+        if (
+          pathname === "/onboarding" ||
+          pathname === "/signup" ||
+          pathname === "/login" ||
+          pathname.startsWith("/join/")
+        ) {
           setIsAuthReady(true);
           return;
         }

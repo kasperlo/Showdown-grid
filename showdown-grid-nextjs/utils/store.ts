@@ -619,6 +619,7 @@ export const useGameStore = create<GameState>()((set, get) => {
     hasUnsavedChanges: false,
     activeQuizId: null as string | null,
     activeQuizOwnerId: null as string | null,
+    activeQuizCanEdit: false,
     currentUserId: null as string | null,
     currentUserEmail: null as string | null,
     isAnonymousUser: false,
@@ -824,6 +825,7 @@ export const useGameStore = create<GameState>()((set, get) => {
         quizIsPublic: false,
         activeQuizId: null,
         activeQuizOwnerId: null,
+        activeQuizCanEdit: false,
         currentUserId: null,
         currentUserEmail: null,
         isAnonymousUser: false,
@@ -839,6 +841,12 @@ export const useGameStore = create<GameState>()((set, get) => {
     },
 
     canEditActiveQuiz: () => {
+      const { activeQuizCanEdit, isPlayingPublicQuiz } = get();
+      if (isPlayingPublicQuiz) return false;
+      return activeQuizCanEdit;
+    },
+
+    isOwnerOfActiveQuiz: () => {
       const { currentUserId, activeQuizOwnerId, isPlayingPublicQuiz } = get();
       if (isPlayingPublicQuiz) return false;
       if (!currentUserId || !activeQuizOwnerId) return false;
@@ -853,6 +861,7 @@ export const useGameStore = create<GameState>()((set, get) => {
       runId = null,
       runStartedAt = null,
       isPublicPlay = false,
+      canEdit,
     }: LoadQuizInput) => {
       const merged = mergeLiveIntoTemplate(template, live ?? null);
       set({
@@ -868,6 +877,7 @@ export const useGameStore = create<GameState>()((set, get) => {
         quizIsPublic: template.quizIsPublic,
         activeQuizId: quizId,
         activeQuizOwnerId: quizOwnerId,
+        activeQuizCanEdit: canEdit ?? false,
         activeRunId: runId,
         currentRunStartTime: runStartedAt,
         isPlayingPublicQuiz: isPublicPlay,

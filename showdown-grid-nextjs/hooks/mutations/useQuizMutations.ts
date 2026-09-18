@@ -109,6 +109,47 @@ async function deleteQuiz(quizId: string): Promise<void> {
   }
 }
 
+async function enableSharing(quizId: string): Promise<string> {
+  const response = await fetch(`/api/quizzes/${quizId}/share`, {
+    method: "POST",
+  });
+
+  if (!response.ok) {
+    throw new Error("Kunne ikke aktivere deling");
+  }
+
+  const { shareToken } = await response.json();
+  return shareToken;
+}
+
+async function disableSharing(quizId: string): Promise<void> {
+  const response = await fetch(`/api/quizzes/${quizId}/share`, {
+    method: "DELETE",
+  });
+
+  if (!response.ok) {
+    throw new Error("Kunne ikke slå av deling");
+  }
+}
+
+interface RemoveCollaboratorData {
+  quizId: string;
+  userId: string;
+}
+
+async function removeCollaborator({
+  quizId,
+  userId,
+}: RemoveCollaboratorData): Promise<void> {
+  const response = await fetch(`/api/quizzes/${quizId}/collaborators/${userId}`, {
+    method: "DELETE",
+  });
+
+  if (!response.ok) {
+    throw new Error("Kunne ikke fjerne redaktøren");
+  }
+}
+
 export function useCreateQuiz() {
   const queryClient = useQueryClient();
 
@@ -159,6 +200,39 @@ export function useActivateQuiz() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: quizKeys.active() });
       queryClient.invalidateQueries({ queryKey: quizKeys.lists() });
+    },
+  });
+}
+
+export function useEnableSharing() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: enableSharing,
+    onSuccess: (_shareToken, quizId) => {
+      queryClient.invalidateQueries({ queryKey: quizKeys.share(quizId) });
+    },
+  });
+}
+
+export function useDisableSharing() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: disableSharing,
+    onSuccess: (_data, quizId) => {
+      queryClient.invalidateQueries({ queryKey: quizKeys.share(quizId) });
+    },
+  });
+}
+
+export function useRemoveCollaborator() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: removeCollaborator,
+    onSuccess: (_data, { quizId }) => {
+      queryClient.invalidateQueries({ queryKey: quizKeys.share(quizId) });
     },
   });
 }
