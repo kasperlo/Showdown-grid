@@ -2,6 +2,7 @@
 
 import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
+import { Brand } from "@/components/Brand";
 import { useGameStore } from "@/utils/store";
 import { ArrowLeft, CheckCircle, Crown, Minimize2, Tv } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -187,6 +188,14 @@ export default function Results() {
             {answered} av {total} spørsmål spilt
           </p>
         )}
+        {/* The room is looking at this exact screen when it's proudest of
+            itself — the moment someone thinks "I want this for my own game
+            night" happens here, not on the login page. */}
+        <div className="mt-3 flex justify-center">
+          <div className="rounded-full border border-border bg-card px-3 py-1.5 shadow-sm">
+            <Brand size="md" />
+          </div>
+        </div>
       </header>
 
       {!hasTeams ? (
