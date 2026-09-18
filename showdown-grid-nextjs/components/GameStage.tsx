@@ -1,5 +1,6 @@
 "use client";
 
+import { Brand } from "@/components/Brand";
 import { GameBoard } from "@/components/GameBoard";
 import { GameTopBar } from "@/components/GameTopBar";
 import { RoundDock } from "@/components/RoundDock";
@@ -55,9 +56,9 @@ export function GameStage() {
           exact viewport (see the file docstring), so this cannot take part
           in that budget. Stays up in presentation mode too — that is the
           screen the room is actually looking at. */}
-      <span className="pointer-events-none absolute bottom-2 right-3 z-10 rounded-full bg-background/60 px-2 py-0.5 text-xs font-semibold tracking-wide text-foreground/70 backdrop-blur-sm sm:text-sm">
-        jeoparty.no
-      </span>
+      <div className="pointer-events-none absolute bottom-2 right-3 z-10 rounded-full border border-border/60 bg-background/80 px-2.5 py-1 shadow-sm backdrop-blur-sm">
+        <Brand size="sm" />
+      </div>
 
       <GameTopBar presentation={presentation} />
 
