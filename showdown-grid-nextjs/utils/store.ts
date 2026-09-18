@@ -8,7 +8,9 @@ import type {
   QuizTheme,
   LoadQuizInput,
   RoundStep,
+  QuizRun,
 } from "./types";
+import { hasSessionProgress } from "./session-progress";
 import {
   buildQueue,
   normalizePoints,
@@ -1120,10 +1122,41 @@ export const useGameStore = create<GameState>()((set, get) => {
       }
     },
 
+    peekActiveSession: async (quizId: string) => {
+      try {
+        const response = await fetch(`/api/quiz-runs/active?quizId=${quizId}`);
+        if (!response.ok) throw new Error("Failed to check for an active session");
+
+        const { run } = await response.json();
+        if (!run) return null;
+
+        const live = liveStateFromRunState(run.final_state);
+        const state = get();
+
+        return {
+          runId: run.id as string,
+          startedAt: run.started_at as string,
+          answered: live?.answeredKeys.length ?? 0,
+          total: state.categories.reduce(
+            (sum, c) => sum + c.questions.length,
+            0
+          ),
+          teams: state.teams.map((t) => ({
+            name: t.name,
+            score: live?.scores[t.id] ?? t.score,
+          })),
+          hasProgress: hasSessionProgress(live),
+        };
+      } catch (error) {
+        console.error("Error checking for an active session:", error);
+        return null;
+      }
+    },
+
     completeSession: async (runId: string, quizId?: string) => {
       const state = get();
       const sessionQuizId = quizId || state.activeQuizId;
-      if (!sessionQuizId) return;
+      if (!sessionQuizId) return null;
 
       if (pendingSessionSave) {
         clearTimeout(pendingSessionSave);
@@ -1161,6 +1194,8 @@ export const useGameStore = create<GameState>()((set, get) => {
           throw new Error(`Kunne ikke fullføre økten (${response.status})`);
         }
 
+        const { run } = await response.json();
+
         clearSnapshot(sessionQuizId);
         // Finishing a session archives the night and hands the board back
         // clean. Leaving the scores on screen would mean the board disagrees
@@ -1179,6 +1214,8 @@ export const useGameStore = create<GameState>()((set, get) => {
           lastQuestion: null,
           roundStep: null,
         }));
+
+        return run as QuizRun;
       } catch (error) {
         console.error("Error completing session:", error);
         throw error;

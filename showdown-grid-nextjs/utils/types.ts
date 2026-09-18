@@ -172,6 +172,16 @@ export interface QuizRun {
   updated_at?: string; // Timestamp of last update
 }
 
+/** What peekActiveSession reports, before anything is applied to the store. */
+export interface ActiveSessionSummary {
+  runId: string;
+  startedAt: string;
+  answered: number;
+  total: number;
+  teams: { name: string; score: number }[];
+  hasProgress: boolean;
+}
+
 export interface QuizRunSummary {
   id: string;
   quiz_id?: string;
@@ -333,7 +343,10 @@ export interface GameState {
   /** Writes any pending live state immediately, ignoring the rate limit. */
   flushSession: () => Promise<void>;
   restoreActiveSession: (quizId: string) => Promise<void>;
-  completeSession: (runId: string, quizId?: string) => Promise<void>;
+  /** Looks at the active session without applying it — see completeSession
+   * for the terminal state and restoreActiveSession for actually applying it. */
+  peekActiveSession: (quizId: string) => Promise<ActiveSessionSummary | null>;
+  completeSession: (runId: string, quizId?: string) => Promise<QuizRun | null>;
 }
 
 export interface LoadQuizInput {
