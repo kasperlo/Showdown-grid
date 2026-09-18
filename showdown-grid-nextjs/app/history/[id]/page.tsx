@@ -246,10 +246,16 @@ function readCategorySummary(finalState: unknown): CategorySummary[] {
   return [];
 }
 
+/**
+ * Only "manual" and "custom_scoring" entries belong under "Manuelle
+ * justeringer" — every card played now also logs an "award"/"penalty" entry
+ * (for the round-flow undo feature), which would otherwise flood this list.
+ */
 function readAdjustments(finalState: unknown): AdjustmentEntry[] {
   if (!finalState || typeof finalState !== "object") return [];
   const raw = finalState as Record<string, unknown>;
-  return Array.isArray(raw.adjustmentLog)
-    ? (raw.adjustmentLog as AdjustmentEntry[])
-    : [];
+  if (!Array.isArray(raw.adjustmentLog)) return [];
+  return (raw.adjustmentLog as AdjustmentEntry[]).filter(
+    (entry) => entry.type === "manual" || entry.type === "custom_scoring"
+  );
 }

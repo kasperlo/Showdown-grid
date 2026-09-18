@@ -427,3 +427,21 @@ avklart med eier før bygging:
   kan angres.
 - **Merk:** nullstilling avslutter og lagrer økten i historikken slik den står.
   Det er `resetGame` sin eksisterende oppførsel, og bekreftelsesteksten sier det.
+
+## 2026-09-18 — `award`-steget har fått en synlig, men dempet, «Ingen klarte den»
+
+- **Kontekst:** sluttgjennomgangen av Del 2 fant at `N` («ingen fikk poeng») var
+  den eneste veien ut av `award`-steget uten å tildele et lag, og ingenting på
+  skjermen fortalte at tasten fantes. Med `teams.length === 0` var steget en
+  reell blindvei — verken brett eller «legg til lag»-knapp er montert mens en
+  runde pågår, bare teksten «Legg til lagene først».
+- **Beslutning:** en liten, dempet tekstknapp «Ingen klarte den (N)» er lagt
+  under trekk-boksen i `AwardStep`. Den kaller samme `endRound()` som
+  tastetrykket.
+- **Begrunnelse:** spesifikasjonen er eksplisitt på at `award` ikke har noen
+  CTA — lagkortene *er* handlingen. En primærknapp ved siden av dem ville
+  konkurrere med det. En dempet lenke løser blindveien for en vert uten
+  tastatur (mobil, prosjektor-fjernkontroll) uten å bryte «ingen CTA»-reglen.
+- **Vurdert og forkastet:** en synlig `Button`-variant på linje med «Trekk N
+  fra et lag». Det ville lest som to likeverdige handlinger der bare én av dem
+  faktisk er en handling verten skal ta ofte.

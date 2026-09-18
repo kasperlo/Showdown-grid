@@ -130,22 +130,24 @@ function ThinStandingsLine() {
   if (!teams.length) return null;
 
   return (
-    <div className="flex items-center justify-center gap-2 overflow-x-auto border-t border-border/60 px-3 py-1.5 sm:px-6">
-      {teams.map((team) => (
-        <span
-          key={team.id}
-          className={`inline-flex shrink-0 items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs sm:text-sm ${
-            team.id === currentTurnTeamId ? "border-accent" : "border-border"
-          }`}
-        >
-          <span className="max-w-[8rem] truncate font-medium">
-            {team.name}
+    <div className="overflow-x-auto border-t border-border/60 px-3 py-1.5 sm:px-6">
+      <div className="mx-auto flex items-center gap-2">
+        {teams.map((team) => (
+          <span
+            key={team.id}
+            className={`inline-flex shrink-0 items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs sm:text-sm ${
+              team.id === currentTurnTeamId ? "border-accent" : "border-border"
+            }`}
+          >
+            <span className="max-w-[8rem] truncate font-medium">
+              {team.name}
+            </span>
+            <span className="font-bold tabular-nums text-accent">
+              {team.score}
+            </span>
           </span>
-          <span className="font-bold tabular-nums text-accent">
-            {team.score}
-          </span>
-        </span>
-      ))}
+        ))}
+      </div>
     </div>
   );
 }
@@ -415,8 +417,9 @@ function AwardStep({
         const team = teams[index];
         if (!team) return;
         event.preventDefault();
-        if (event.shiftKey) {
+        if (event.shiftKey || penaltyArmed) {
           handlePenalty(team.id);
+          setPenaltyArmed(false);
         } else {
           handleCorrect(team.id);
         }
@@ -430,7 +433,7 @@ function AwardStep({
     };
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
-  }, [teams, handleCorrect, handlePenalty]);
+  }, [teams, handleCorrect, handlePenalty, penaltyArmed]);
 
   if (!lastQuestion) return null;
 
@@ -509,18 +512,28 @@ function AwardStep({
           </div>
         )}
 
-        <button
-          type="button"
-          onClick={() => setPenaltyArmed((armed) => !armed)}
-          className={[
-            "mt-4 rounded-lg border px-4 py-2 text-sm font-semibold transition-colors",
-            penaltyArmed
-              ? "border-destructive bg-destructive text-destructive-foreground"
-              : "border-border text-muted-foreground hover:border-destructive/60 hover:text-destructive",
-          ].join(" ")}
-        >
-          Trekk {penaltyAmount} fra et lag
-        </button>
+        <div className="mt-4 flex flex-col items-center gap-2">
+          <button
+            type="button"
+            onClick={() => setPenaltyArmed((armed) => !armed)}
+            className={[
+              "rounded-lg border px-4 py-2 text-sm font-semibold transition-colors",
+              penaltyArmed
+                ? "border-destructive bg-destructive text-destructive-foreground"
+                : "border-border text-muted-foreground hover:border-destructive/60 hover:text-destructive",
+            ].join(" ")}
+          >
+            Trekk {penaltyAmount} fra et lag
+          </button>
+
+          <button
+            type="button"
+            onClick={() => useGameStore.getState().endRound()}
+            className="text-xs text-muted-foreground/70 underline-offset-4 transition-colors hover:text-muted-foreground hover:underline"
+          >
+            Ingen klarte den (N)
+          </button>
+        </div>
       </div>
     </div>
   );
