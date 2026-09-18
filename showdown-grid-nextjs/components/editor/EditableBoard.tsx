@@ -88,7 +88,7 @@ export function EditableBoard() {
         className="-mx-4 grid gap-3 overflow-x-auto px-4 sm:mx-0 sm:px-0"
         style={{
           ...geometryVars,
-          gridTemplateColumns: `repeat(${categories.length}, var(--col-w)) minmax(180px, var(--col-w))`,
+          gridTemplateColumns: `repeat(${Math.max(categories.length, 1)}, var(--col-w)) minmax(180px, var(--col-w))`,
           gridTemplateRows: `var(--head-h) repeat(${Math.max(maxRows, 1)}, var(--tile-h)) auto`,
         }}
       >
