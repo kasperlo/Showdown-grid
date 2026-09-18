@@ -47,7 +47,7 @@ export function GameStage() {
         className="flex min-h-0 flex-1 justify-center gap-5 px-3 py-2 sm:px-6 sm:py-3"
         style={geometryVars}
       >
-        <section className="min-h-0 min-w-0 overflow-y-auto">
+        <section className="group/board min-h-0 min-w-0 overflow-y-auto">
           <GameBoard />
         </section>
 

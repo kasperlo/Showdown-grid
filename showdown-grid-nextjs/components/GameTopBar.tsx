@@ -68,7 +68,7 @@ export function GameTopBar({
         )}
 
         <h1
-          className="min-w-0 flex-1 truncate text-[clamp(1rem,3vh,2.1rem)] font-extrabold tracking-tight text-accent drop-shadow-sm"
+          className="min-w-0 flex-1 truncate text-[clamp(1rem,3vh,2.1rem)] font-extrabold leading-none tracking-tight text-accent drop-shadow-sm"
           title={quizTitle || "Uten navn"}
         >
           {quizTitle || "Uten navn"}

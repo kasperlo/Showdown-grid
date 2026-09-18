@@ -162,7 +162,7 @@ export function Standings({ layout }: { layout: "column" | "row" }) {
             <Crown className="h-4 w-4 shrink-0 text-accent" aria-label="Leder" />
           )}
 
-          <span className="standings-row-name min-w-0 flex-1 truncate text-sm font-semibold">
+          <span className="standings-row-name min-w-0 flex-1 truncate font-semibold">
             {team.name}
           </span>
 
@@ -204,7 +204,13 @@ export function Standings({ layout }: { layout: "column" | "row" }) {
             </div>
           )}
 
-          <ol className="flex min-h-0 flex-1 flex-col justify-center gap-2 overflow-y-auto pr-0.5">
+          {/* "safe center" (inline: no justify-safe-center in Tailwind v3)
+              falls back to start-aligned once rows overflow, so the
+              top-ranked row stays scrollable into view. */}
+          <ol
+            className="flex min-h-0 flex-1 flex-col gap-2 overflow-y-auto pr-0.5"
+            style={{ justifyContent: "safe center" }}
+          >
             {rows}
           </ol>
 
@@ -227,6 +233,7 @@ export function Standings({ layout }: { layout: "column" | "row" }) {
         <ol className="flex min-w-0 flex-1 items-stretch gap-2 overflow-x-auto pb-0.5">
           {rows}
         </ol>
+        <TurnIndicator />
         <Button
           variant="ghost"
           size="sm"
