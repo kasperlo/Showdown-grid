@@ -138,7 +138,10 @@ export function Standings({ layout }: { layout: "column" | "row" }) {
         className={
           isColumn
             ? "standings-row flex-[1_1_0] min-h-[76px] max-h-[164px]"
-            : "standings-row min-w-0 shrink-0 basis-52"
+            : // container-type: size (in .standings-row) strips this li's
+              // content-based auto height, so unlike the column layout it
+              // needs an explicit height to contain against.
+              "standings-row h-11 min-w-0 shrink-0 basis-52"
         }
       >
         <button
