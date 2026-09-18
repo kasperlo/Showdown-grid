@@ -240,12 +240,12 @@ function InspectorBody() {
         <Field label="Poeng">
           <Input
             type="number"
-            min={0}
+            min={50}
             step={50}
             value={question.points}
             onChange={(e) => {
               const parsed = parseInt(e.target.value, 10);
-              patch({ points: Number.isFinite(parsed) ? Math.max(0, parsed) : 0 });
+              patch({ points: Number.isFinite(parsed) ? Math.max(50, parsed) : 50 });
             }}
             className="w-28"
             aria-label="Poeng"

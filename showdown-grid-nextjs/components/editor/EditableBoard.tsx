@@ -68,7 +68,7 @@ export function EditableBoard() {
     (most, c) => Math.max(most, c.questions.length),
     0
   );
-  const geometry = useBoardGeometry(categories.length || 1, maxRows || 1, {
+  const geometry = useBoardGeometry((categories.length || 1) + 1, maxRows || 1, {
     panelWidthClamp: [360, 0.24, 460],
     boardHeightOverride:
       (typeof window !== "undefined" ? window.innerHeight : 900) -
