@@ -135,14 +135,14 @@ export function Standings({ layout }: { layout: "column" | "row" }) {
     return (
       <li
         key={team.id}
-        className={
+        className={`${
           isColumn
             ? "standings-row flex-[1_1_0] min-h-[76px] max-h-[164px]"
             : // container-type: size (in .standings-row) strips this li's
               // content-based auto height, so unlike the column layout it
               // needs an explicit height to contain against.
               "standings-row h-11 min-w-0 shrink-0 basis-52"
-        }
+        } ${hasTurn ? "ring-2 ring-accent" : ""}`}
       >
         <button
           type="button"
@@ -152,7 +152,7 @@ export function Standings({ layout }: { layout: "column" | "row" }) {
           title={`Juster poeng eller endre navn for ${team.name}`}
           className={`tile flex w-full items-center gap-2.5 px-3 text-left transition-colors hover:bg-accent/10 ${
             isColumn ? "py-3" : "h-full py-2.5"
-          } ${hasTurn ? "ring-2 ring-accent" : ""}`}
+          }`}
         >
           <span className="w-5 shrink-0 text-center text-xs font-bold text-muted-foreground tabular-nums sm:text-[clamp(0.7rem,1.8vh,1.05rem)]">
             {team.rank}

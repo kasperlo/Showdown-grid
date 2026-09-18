@@ -679,6 +679,9 @@ export const useGameStore = create<GameState>()((set, get) => {
     setEditMode: (on: boolean) => {
       // Leaving edit mode closes the panel with it; a selected card with no
       // panel visible is state nothing can act on.
+      if (typeof window !== "undefined") {
+        window.sessionStorage.setItem("editMode", on ? "true" : "false");
+      }
       set(
         on
           ? { editMode: true, lastQuestion: null, roundStep: null }
