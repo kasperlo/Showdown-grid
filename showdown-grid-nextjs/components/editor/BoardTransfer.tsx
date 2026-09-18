@@ -14,6 +14,16 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { Download, FileUp, ClipboardPaste } from "lucide-react";
 import { toast } from "@/hooks/use-toast";
 import {
@@ -41,6 +51,8 @@ export function BoardTransfer() {
   const [pasteOpen, setPasteOpen] = useState(false);
   const [pasteText, setPasteText] = useState("");
   const [replaceMode, setReplaceMode] = useState<"replace" | "append">("replace");
+  const [confirmPasteOpen, setConfirmPasteOpen] = useState(false);
+  const [confirmFile, setConfirmFile] = useState<File | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const handleExport = () => {
@@ -83,6 +95,22 @@ export function BoardTransfer() {
     } finally {
       if (fileInputRef.current) fileInputRef.current.value = "";
     }
+  };
+
+  const requestFile = (file: File) => {
+    if (categories.length > 0) {
+      setConfirmFile(file);
+      return;
+    }
+    void handleFile(file);
+  };
+
+  const requestPaste = () => {
+    if (replaceMode === "replace" && categories.length > 0) {
+      setConfirmPasteOpen(true);
+      return;
+    }
+    handlePaste();
   };
 
   const handlePaste = () => {
@@ -169,7 +197,7 @@ export function BoardTransfer() {
               <Button variant="outline" onClick={() => setPasteOpen(false)}>
                 Avbryt
               </Button>
-              <Button onClick={handlePaste} disabled={!pasteText.trim()}>
+              <Button onClick={requestPaste} disabled={!pasteText.trim()}>
                 Les inn
               </Button>
             </DialogFooter>
@@ -192,7 +220,7 @@ export function BoardTransfer() {
           className="hidden"
           onChange={(e) => {
             const file = e.target.files?.[0];
-            if (file) void handleFile(file);
+            if (file) requestFile(file);
           }}
         />
 
@@ -207,6 +235,66 @@ export function BoardTransfer() {
           Eksporter JSON
         </Button>
       </div>
+
+      <AlertDialog open={confirmPasteOpen} onOpenChange={setConfirmPasteOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Erstatte hele brettet?</AlertDialogTitle>
+            <AlertDialogDescription>
+              {categories.length}{" "}
+              {categories.length === 1 ? "eksisterende kategori" : "eksisterende kategorier"}{" "}
+              forsvinner og erstattes av det du limte inn. Kan ikke angres.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Avbryt</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              onClick={() => {
+                setConfirmPasteOpen(false);
+                handlePaste();
+              }}
+            >
+              Erstatt
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      <AlertDialog
+        open={!!confirmFile}
+        onOpenChange={(open) => {
+          if (!open) {
+            setConfirmFile(null);
+            if (fileInputRef.current) fileInputRef.current.value = "";
+          }
+        }}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Erstatte hele brettet?</AlertDialogTitle>
+            <AlertDialogDescription>
+              {categories.length}{" "}
+              {categories.length === 1 ? "eksisterende kategori" : "eksisterende kategorier"}{" "}
+              forsvinner og erstattes av innholdet i «{confirmFile?.name}».
+              Kan ikke angres.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Avbryt</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              onClick={() => {
+                const file = confirmFile;
+                setConfirmFile(null);
+                if (file) void handleFile(file);
+              }}
+            >
+              Erstatt
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }
