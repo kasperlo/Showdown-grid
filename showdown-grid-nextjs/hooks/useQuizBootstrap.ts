@@ -144,9 +144,26 @@ export function useQuizBootstrap(): BootstrapState {
           run: summary,
           resume: async () => {
             await useGameStore.getState().restoreActiveSession(quizId);
-            if (isCurrent()) setState({ status: "ready", quizId });
+            if (!isCurrent()) return;
+            if (useGameStore.getState().activeRunId !== summary.runId) {
+              // restoreActiveSession swallows its own errors instead of
+              // throwing, so a failed fetch would otherwise look identical
+              // to success. activeRunId is only set on the real success path.
+              setState({
+                status: "error",
+                message: "Kunne ikke gjenoppta økten. Prøv igjen.",
+              });
+              return;
+            }
+            setState({ status: "ready", quizId });
           },
           startFresh: async () => {
+            // completeSession archives whatever is currently in the store, so
+            // the paused progress must be restored first — otherwise it
+            // archives the untouched template (zero scores) and the real
+            // night's progress is lost.
+            await useGameStore.getState().restoreActiveSession(quizId);
+            if (!isCurrent()) return;
             await useGameStore.getState().completeSession(summary.runId, quizId);
             if (isCurrent()) setState({ status: "ready", quizId });
           },
