@@ -480,9 +480,6 @@ export const useGameStore = create<GameState>()((set, get) => {
         round: {
           ...state.round,
           positiveTeamId: wasPositiveAward ? null : state.round.positiveTeamId,
-          negativeAwardedTo: state.round.negativeAwardedTo.filter(
-            (id) => id !== last.teamId
-          ),
         },
         roundStep: "award",
       }));

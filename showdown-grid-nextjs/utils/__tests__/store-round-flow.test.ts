@@ -130,6 +130,25 @@ describe("round flow", () => {
     expect(state.adjustmentLog).toHaveLength(0);
   });
 
+  it("undoLastAward does not clear an earlier penalty from negativeAwardedTo", () => {
+    openFirstQuestion();
+    useGameStore.getState().advanceRoundStep();
+    useGameStore.getState().advanceRoundStep();
+
+    useGameStore.getState().awardNegative("a");
+    useGameStore.getState().awardPositive("a", 100);
+    useGameStore.getState().undoLastAward();
+
+    const state = useGameStore.getState();
+    expect(state.round.negativeAwardedTo).toEqual(["a"]);
+    expect(state.teams.find((t) => t.id === "a")?.score).toBe(850);
+
+    useGameStore.getState().awardNegative("a");
+    expect(useGameStore.getState().teams.find((t) => t.id === "a")?.score).toBe(
+      850
+    );
+  });
+
   it("awardNegative penalizes without ending the award step, for more than one team", () => {
     openFirstQuestion();
     useGameStore.getState().advanceRoundStep();
