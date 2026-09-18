@@ -140,10 +140,19 @@ export default function Results() {
   const colorForRank = (rank: number) =>
     rank === 1 ? "bg-accent" : rank === 2 ? "bg-muted" : "bg-secondary";
 
-  // Gold and light silver read a dark digit; dark bronze needs a light one
-  // — a single text-background/70 for all three vanished on two of them.
+  // Each step's digit uses the foreground paired with that step's own
+  // background token, the same bg-accent/text-accent-foreground contract
+  // GameTopBar and onboarding use, so contrast holds across all three
+  // themes regardless of how light or dark that theme's accent/secondary
+  // happen to be. Rank 2 keeps the plain foreground token rather than
+  // muted-foreground: the latter is tuned for de-emphasized text on the
+  // page background, not for full contrast against a filled muted surface.
   const digitColorForRank = (rank: number) =>
-    rank <= 2 ? "text-foreground/80" : "text-background/80";
+    rank === 1
+      ? "text-accent-foreground/80"
+      : rank === 2
+        ? "text-foreground/80"
+        : "text-secondary-foreground/80";
 
   // The classic silver-gold-bronze arrangement only reads as a podium when all
   // three steps are there. With two, it put the winner on the right and the
