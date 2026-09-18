@@ -55,7 +55,7 @@ export function GameStage() {
           exact viewport (see the file docstring), so this cannot take part
           in that budget. Stays up in presentation mode too — that is the
           screen the room is actually looking at. */}
-      <span className="pointer-events-none absolute bottom-1 right-2 z-10 text-[10px] font-medium tracking-wide text-muted-foreground/40 sm:text-xs">
+      <span className="pointer-events-none absolute bottom-2 right-3 z-10 rounded-full bg-background/60 px-2 py-0.5 text-xs font-semibold tracking-wide text-foreground/70 backdrop-blur-sm sm:text-sm">
         jeoparty.no
       </span>
 
