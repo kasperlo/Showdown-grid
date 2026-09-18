@@ -2,7 +2,6 @@
 
 import { Fragment, useCallback, useState } from "react";
 import { useGameStore } from "@/utils/store";
-import { QuestionModal } from "./QuestionModal";
 import { Image as ImageIcon, RotateCcw, Sparkles } from "lucide-react";
 import { isQuestionComplete } from "@/utils/quiz-template";
 import type { Question } from "@/utils/types";
@@ -230,8 +229,6 @@ export function GameBoard() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
-
-      <QuestionModal />
     </>
   );
 }
