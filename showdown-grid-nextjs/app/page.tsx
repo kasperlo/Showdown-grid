@@ -18,6 +18,7 @@ import {
 import { useAuth } from "@/hooks/useAuth";
 import { useIsWideScreen } from "@/hooks/useMediaQuery";
 import { useQuizBootstrap } from "@/hooks/useQuizBootstrap";
+import { toast } from "@/hooks/use-toast";
 import { useGameStore } from "@/utils/store";
 import { countCompleteQuestions, countQuestions } from "@/utils/quiz-template";
 
@@ -61,6 +62,89 @@ export default function Home() {
               ))}
             </div>
           </div>
+        </div>
+      </main>
+    );
+  }
+
+  if (bootstrap.status === "resumable") {
+    const { run } = bootstrap;
+    const started = new Date(run.startedAt);
+
+    const handleStartFresh = async () => {
+      try {
+        await bootstrap.startFresh();
+      } catch (error) {
+        toast({
+          title: "Kunne ikke starte ny økt",
+          description: error instanceof Error ? error.message : undefined,
+          variant: "destructive",
+        });
+      }
+    };
+
+    const handleResumeAndShowResults = async () => {
+      try {
+        await bootstrap.resume();
+        router.push("/results");
+      } catch (error) {
+        toast({
+          title: "Kunne ikke gjenoppta økten",
+          description: error instanceof Error ? error.message : undefined,
+          variant: "destructive",
+        });
+      }
+    };
+
+    return (
+      <main className="stage flex min-h-dvh items-center justify-center p-6">
+        <div className="glass w-full max-w-xl rounded-2xl p-8">
+          <h2 className="text-xl font-bold">En økt pågår allerede</h2>
+          <p className="mt-1 text-sm text-muted-foreground">
+            Startet{" "}
+            {started.toLocaleString("nb-NO", {
+              dateStyle: "medium",
+              timeStyle: "short",
+            })}{" "}
+            · {run.answered} av {run.total} kort spilt
+          </p>
+
+          {run.teams.length > 0 && (
+            <ul className="mt-4 space-y-1">
+              {run.teams.map((team) => (
+                <li
+                  key={team.name}
+                  className="flex items-center justify-between text-sm"
+                >
+                  <span className="truncate">{team.name}</span>
+                  <span className="font-bold tabular-nums text-accent">
+                    {team.score}
+                  </span>
+                </li>
+              ))}
+            </ul>
+          )}
+
+          <div className="mt-6 flex flex-col gap-2">
+            <Button onClick={() => void bootstrap.resume()}>
+              Fortsett økten
+            </Button>
+            <Button variant="outline" onClick={() => void handleStartFresh()}>
+              Start en ny økt med samme quiz
+            </Button>
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => void handleResumeAndShowResults()}
+            >
+              Se resultatet fra økten som pågår
+            </Button>
+          </div>
+
+          <p className="mt-4 text-xs text-muted-foreground">
+            Økten over lagres i historikken. Brettet nullstilles, og alle lag
+            starter på 0.
+          </p>
         </div>
       </main>
     );
