@@ -3,6 +3,62 @@
 Kontekst, antakelse, beslutning, begrunnelse og oppfølging for valg som ikke er
 åpenbare fra koden. Nyeste først.
 
+## 2026-09-18 — Delt redigeringstilgang via lenke
+
+- **Kontekst:** Kasper ville kunne dele redigeringstilgang til en quiz via
+  lenke. RLS var til da strengt `auth.uid() = user_id` — ingen
+  collaborator-modell fantes.
+- **Beslutning:** ny tabell `quiz_collaborators(quiz_id, user_id)` og
+  `quizzes.share_token` (null = deling av). Én gjenbrukbar lenke per quiz,
+  `/join/<token>`, krever innlogget konto (ikke gjest/anonym). Alle som blir
+  med får full redigeringsrett — samme som eier, unntatt slette quizen og
+  administrere delingen. Avklart med Kasper før bygging (innlogging krevd,
+  gjenbrukbar lenke, ingen roller).
+- **Hvorfor RPC og ikke en INSERT-policy:** en klient kan ikke lese
+  `share_token` på en quiz den ikke har tilgang til ennå, så
+  token-sjekken må skje server-side uansett. Løsningen er to
+  `SECURITY DEFINER`-funksjoner i migrasjonen
+  (`join_quiz_by_token`, `get_quiz_collaborators`) i stedet for en
+  service-role-nøkkel i appen — null ny hemmelighet å holde styr på, og
+  `auth.uid()` inni funksjonen er fortsatt den innloggede brukeren siden
+  PostgREST kjører den med kallerens JWT.
+- **`canEditActiveQuiz()` endret mening:** var `currentUserId ===
+  activeQuizOwnerId`, er nå et eget felt `activeQuizCanEdit` satt av
+  serveren (`/api/quiz` regner ut eier-ELLER-collaborator). Eier-sjekken
+  isolert i ny `isOwnerOfActiveQuiz()`, som styrer delingspanelet og
+  slette-knappen — de skal IKKE åpnes for en collaborator.
+- **Rekkefølge ved deploy — kan knekke Biblioteket:** `GET /api/quizzes`
+  spør nå også `quiz_collaborators`, og feiler eksplisitt (500) hvis
+  tabellen ikke finnes. **Migrasjonen
+  `05_QUIZ_COLLABORATORS.sql` må kjøres i Supabase SQL Editor FØR denne
+  branchen deployes**, ellers knekker biblioteksiden for alle med det
+  samme koden er live. Verifisert i nettleser mot prod (uten migrasjonen
+  kjørt): delingspanelet feiler synlig og ryddig (toast, ingen krasj), men
+  selve biblioteksiden fungerte kun fordi feilen den gang ble slukt
+  stille — det hullet er tettet, se over.
+- **Ikke verifisert ende-til-ende:** selve join-flyten (to kontoer, en
+  lenke) er ikke kjørt i nettleser, siden migrasjonen ikke er kjørt i
+  denne sesjonen (produksjonsdatabase, kjøres ikke uten at Kasper ber om
+  det). Bygg, lint og eksisterende testsuite er grønne.
+- **Bibliotek-lista:** «Mine quizzer» viser nå både egne og delte quizzer,
+  sortert på `updated_at`. Delte har badgen «Delt med deg» og mangler
+  slette-knappen; «Rediger» og «Kopier» fungerer for begge.
+
+## 2026-09-18 — jeoparty.no synlig på brettet
+
+- **Beslutning:** liten, dempet «jeoparty.no»-tekst i hjørnet av
+  spillskjermen (`GameStage.tsx`), absolutt posisjonert og
+  `pointer-events-none` — utenfor `flex`-rekka, og synlig også i
+  «Salen» (presentation mode).
+- **Begrunnelse:** rommet ser projektorskjermen, ikke topplinja på en
+  telefon. Toppraden var allerede tunet til nøyaktig vindushøyde (se
+  «Spillmodus er én skjerm»), og å legge merket der ville spist av det
+  budsjettet. Absolutt posisjon unngår det helt.
+- **Ikke gjort:** app-ikonet (favicon) venter på at Kasper genererer et
+  motiv med en bildemodell. Forslag gitt i chat: et minimalt
+  brett-/rutenett-ikon. Når filen finnes: bytt `app/favicon.ico`, legg
+  `app/icon.png`, sett `metadata.icons` i `app/layout.tsx`.
+
 ## 2026-09-17 — Kodeblokker på kort
 
 - **Kontekst:** en «Kode»-kategori der spørsmålet er «hva printes?» og kortet må

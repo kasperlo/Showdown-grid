@@ -73,7 +73,7 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
   useSessionAutoSave();
   useTemplateAutoSave();
 
-  if (!isAuthReady && !AUTH_PATHS.has(pathname)) {
+  if (!isAuthReady && !AUTH_PATHS.has(pathname) && !pathname.startsWith("/join/")) {
     return <FullScreenLoader message="Laster…" />;
   }
 

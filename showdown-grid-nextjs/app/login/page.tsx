@@ -1,7 +1,7 @@
 "use client";
 
-import { useState } from "react";
-import { useRouter } from "next/navigation";
+import { Suspense, useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import { createClient } from "@/lib/supabase";
 import { useGameStore } from "@/utils/store";
 import { Button } from "@/components/ui/button";
@@ -19,7 +19,24 @@ import Link from "next/link";
 import { toast } from "@/hooks/use-toast";
 
 export default function LoginPage() {
+  return (
+    <Suspense>
+      <LoginForm />
+    </Suspense>
+  );
+}
+
+function LoginForm() {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  // Only ever set by our own links (e.g. the share-link join flow), but
+  // validated anyway: an unvalidated redirect target from a query string is
+  // an open-redirect waiting to happen.
+  const redirectParam = searchParams.get("redirect");
+  const redirectTo =
+    redirectParam && redirectParam.startsWith("/") && !redirectParam.startsWith("//")
+      ? redirectParam
+      : "/";
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [isLoading, setIsLoading] = useState(false);
@@ -65,7 +82,7 @@ export default function LoginPage() {
         description: "Du er nå logget inn.",
       });
 
-      router.replace("/");
+      router.replace(redirectTo);
     } catch (err) {
       console.error("Login error:", err);
       setError("En uventet feil oppstod. Prøv igjen.");

@@ -1,7 +1,7 @@
 "use client";
 
-import { useState } from "react";
-import { useRouter } from "next/navigation";
+import { Suspense, useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import { createClient } from "@/lib/supabase";
 import { useGameStore } from "@/utils/store";
 import { Button } from "@/components/ui/button";
@@ -19,7 +19,21 @@ import Link from "next/link";
 import { toast } from "@/hooks/use-toast";
 
 export default function SignupPage() {
+  return (
+    <Suspense>
+      <SignupForm />
+    </Suspense>
+  );
+}
+
+function SignupForm() {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const redirectParam = searchParams.get("redirect");
+  const redirectTo =
+    redirectParam && redirectParam.startsWith("/") && !redirectParam.startsWith("//")
+      ? redirectParam
+      : "/";
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
@@ -165,7 +179,7 @@ export default function SignupPage() {
       // board has to be reloaded for the new user id rather than kept in memory
       // with the old owner on it.
       useGameStore.getState().resetForNewUser();
-      router.replace("/");
+      router.replace(redirectTo);
       router.refresh();
     } catch (error: unknown) {
       console.error("Signup error:", error);

@@ -53,6 +53,7 @@ import {
   Plus,
   Search,
   Trash2,
+  Users,
 } from "lucide-react";
 import { toast } from "@/hooks/use-toast";
 import { UserMenu } from "@/components/UserMenu";
@@ -187,6 +188,9 @@ export default function QuizzesPage() {
     // so the store does not know which one is active on a fresh visit.
     const isActive = quiz.is_active ?? quiz.id === activeQuizId;
     const isMine = !isPublicList || quiz.isOwnedByCurrentUser;
+    // On "Mine quizzer", a quiz you were given edit access to is not one you
+    // own: same board access, but no delete button and no share management.
+    const isOwned = quiz.isOwnedByCurrentUser ?? true;
 
     return (
       <Card key={quiz.id} className="flex flex-col">
@@ -211,6 +215,12 @@ export default function QuizzesPage() {
               <span className="inline-flex items-center gap-1 rounded-full border border-border px-2 py-0.5">
                 <Globe className="h-3 w-3" />
                 Offentlig
+              </span>
+            )}
+            {!isPublicList && !isOwned && (
+              <span className="inline-flex items-center gap-1 rounded-full border border-border px-2 py-0.5">
+                <Users className="h-3 w-3" />
+                Delt med deg
               </span>
             )}
             <span className="capitalize">{quiz.theme}</span>
@@ -272,16 +282,18 @@ export default function QuizzesPage() {
               >
                 <Copy className="h-4 w-4" />
               </Button>
-              <Button
-                size="sm"
-                variant="ghost"
-                className="ml-auto text-destructive hover:text-destructive"
-                onClick={() => setQuizToDelete(quiz)}
-                title={`Slett ${quiz.title}`}
-                aria-label={`Slett ${quiz.title}`}
-              >
-                <Trash2 className="h-4 w-4" />
-              </Button>
+              {isOwned && (
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  className="ml-auto text-destructive hover:text-destructive"
+                  onClick={() => setQuizToDelete(quiz)}
+                  title={`Slett ${quiz.title}`}
+                  aria-label={`Slett ${quiz.title}`}
+                >
+                  <Trash2 className="h-4 w-4" />
+                </Button>
+              )}
             </>
           )}
         </CardContent>

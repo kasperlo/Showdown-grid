@@ -56,11 +56,14 @@ export async function PATCH(
       updateData.quiz_data = sanitizeQuizData(quizData);
     }
 
+    // No `.eq('user_id', ...)` here: a collaborator may also save the board,
+    // and RLS (owner OR collaborator) is what actually decides who can write
+    // this row. Matches 0 rows for anyone else, which the PGRST116 branch
+    // below turns into a 404 rather than a silent no-op.
     const { data, error } = await supabase
       .from('quizzes')
       .update(updateData)
       .eq('id', id)
-      .eq('user_id', user.id)
       .select()
       .single();
 

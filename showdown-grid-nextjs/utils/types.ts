@@ -245,8 +245,12 @@ export interface GameState {
   setHydrated: (hydrated: boolean) => void;
   /** Replaces the whole board from a stored template + optional live state. */
   loadQuiz: (input: LoadQuizInput) => void;
-  /** Can the signed-in user write to the active quiz? */
+  /** Can the signed-in user write to the active quiz? True for the owner and
+   * for anyone who joined through a share link. */
   canEditActiveQuiz: () => boolean;
+  /** Is the signed-in user the owner (not just a collaborator)? Gates
+   * owner-only actions: deleting the quiz, managing the share link. */
+  isOwnerOfActiveQuiz: () => boolean;
 
   // Quiz metadata
   quizTitle: string;
@@ -265,6 +269,8 @@ export interface GameState {
   // Multiple quizzes support
   activeQuizId: string | null;
   activeQuizOwnerId: string | null;
+  /** Owner-or-collaborator for the active quiz, decided server-side. */
+  activeQuizCanEdit: boolean;
   /** Set once auth resolves, so ownership can be decided without a round trip. */
   currentUserId: string | null;
   currentUserEmail: string | null;
@@ -333,4 +339,6 @@ export interface LoadQuizInput {
   runId?: string | null;
   runStartedAt?: number | null;
   isPublicPlay?: boolean;
+  /** Owner-or-collaborator, decided server-side. Defaults to false. */
+  canEdit?: boolean;
 }

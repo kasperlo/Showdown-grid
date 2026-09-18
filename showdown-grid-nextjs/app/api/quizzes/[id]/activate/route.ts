@@ -19,16 +19,34 @@ export async function POST(
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    // Verify the quiz exists and belongs to the user
+    // Verify the quiz exists and the user may edit it: owner, or a
+    // collaborator added through a share link. Deliberately not just "RLS
+    // lets me read this row" — that would also be true for any public quiz,
+    // and activating one you can't edit would point active_quiz_id at a
+    // board you can only watch.
     const { data: quiz, error: quizError } = await supabase
       .from("quizzes")
-      .select("id")
+      .select("id, user_id")
       .eq("id", id)
-      .eq("user_id", user.id)
-      .single();
+      .maybeSingle();
 
-    if (quizError || !quiz) {
+    if (quizError) throw quizError;
+    if (!quiz) {
       return NextResponse.json({ error: "Quiz not found" }, { status: 404 });
+    }
+
+    if (quiz.user_id !== user.id) {
+      const { data: collaborator, error: collabError } = await supabase
+        .from("quiz_collaborators")
+        .select("quiz_id")
+        .eq("quiz_id", id)
+        .eq("user_id", user.id)
+        .maybeSingle();
+
+      if (collabError) throw collabError;
+      if (!collaborator) {
+        return NextResponse.json({ error: "Quiz not found" }, { status: 404 });
+      }
     }
 
     // Set this quiz as active in users table

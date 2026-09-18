@@ -52,6 +52,17 @@ export async function GET() {
       );
     }
 
+    let canEdit = data.user_id === user.id;
+    if (!canEdit) {
+      const { data: collaborator } = await supabase
+        .from("quiz_collaborators")
+        .select("quiz_id")
+        .eq("quiz_id", data.id)
+        .eq("user_id", user.id)
+        .maybeSingle();
+      canEdit = Boolean(collaborator);
+    }
+
     return NextResponse.json({
       data: {
         ...data.quiz_data,
@@ -62,6 +73,7 @@ export async function GET() {
         quizTimeLimit: data.time_limit,
         quizTheme: data.theme,
         quizIsPublic: data.is_public,
+        canEdit,
       },
     });
   } catch (error) {
