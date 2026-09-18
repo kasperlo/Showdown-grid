@@ -409,8 +409,9 @@ function AwardStep({
       if (useGameStore.getState().roundStep !== "award") return;
       if (isTypingTarget(event)) return;
 
-      if (event.key >= "1" && event.key <= "9") {
-        const index = Number(event.key) - 1;
+      const digitMatch = /^(?:Digit|Numpad)([1-9])$/.exec(event.code);
+      if (digitMatch) {
+        const index = Number(digitMatch[1]) - 1;
         const team = teams[index];
         if (!team) return;
         event.preventDefault();
