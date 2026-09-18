@@ -140,16 +140,18 @@ export default function Results() {
   const colorForRank = (rank: number) =>
     rank === 1 ? "bg-accent" : rank === 2 ? "bg-muted" : "bg-secondary";
 
-  // Each step's digit uses the foreground paired with that step's own
-  // background token, the same bg-accent/text-accent-foreground contract
-  // GameTopBar and onboarding use, so contrast holds across all three
-  // themes regardless of how light or dark that theme's accent/secondary
-  // happen to be. Rank 2 keeps the plain foreground token rather than
-  // muted-foreground: the latter is tuned for de-emphasized text on the
-  // page background, not for full contrast against a filled muted surface.
+  // Ranks 2 and 3 use the foreground paired with that step's own background
+  // token, the same bg-accent/text-accent-foreground contract GameTopBar and
+  // onboarding use, so contrast holds across all three themes regardless of
+  // how light or dark that theme's muted/secondary happen to be. Rank 2 keeps
+  // the plain foreground token rather than muted-foreground: the latter is
+  // tuned for de-emphasized text on the page background, not for full
+  // contrast against a filled muted surface. Rank 1 stays on text-background
+  // instead of text-accent-foreground: the christmas theme's accent-foreground
+  // falls below WCAG's 3:1 large-text floor against bg-accent there.
   const digitColorForRank = (rank: number) =>
     rank === 1
-      ? "text-accent-foreground/80"
+      ? "text-background/80"
       : rank === 2
         ? "text-foreground/80"
         : "text-secondary-foreground/80";

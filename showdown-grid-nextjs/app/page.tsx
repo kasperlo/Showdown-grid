@@ -85,8 +85,16 @@ export default function Home() {
 
     const handleResumeAndShowResults = async () => {
       try {
-        await bootstrap.resume();
-        router.push("/results");
+        const ok = await bootstrap.resume();
+        if (ok) {
+          router.push("/results");
+        } else {
+          toast({
+            title: "Kunne ikke gjenoppta økten",
+            description: "Prøv igjen, eller fortsett økten direkte.",
+            variant: "destructive",
+          });
+        }
       } catch (error) {
         toast({
           title: "Kunne ikke gjenoppta økten",

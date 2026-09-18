@@ -11,8 +11,12 @@ export type BootstrapState =
       status: "resumable";
       quizId: string;
       run: ActiveSessionSummary;
-      /** Applies the paused session's scores and switches to "ready". */
-      resume: () => Promise<void>;
+      /**
+       * Applies the paused session's scores and switches to "ready".
+       * Resolves to whether it succeeded, so a caller that navigates on
+       * success (e.g. straight to /results) doesn't do so on a failure.
+       */
+      resume: () => Promise<boolean>;
       /**
        * Archives the paused session (it lands in history) and starts clean
        * — every team back to 0, every card playable again — then switches
@@ -144,7 +148,7 @@ export function useQuizBootstrap(): BootstrapState {
           run: summary,
           resume: async () => {
             await useGameStore.getState().restoreActiveSession(quizId);
-            if (!isCurrent()) return;
+            if (!isCurrent()) return false;
             if (useGameStore.getState().activeRunId !== summary.runId) {
               // restoreActiveSession swallows its own errors instead of
               // throwing, so a failed fetch would otherwise look identical
@@ -153,9 +157,10 @@ export function useQuizBootstrap(): BootstrapState {
                 status: "error",
                 message: "Kunne ikke gjenoppta økten. Prøv igjen.",
               });
-              return;
+              return false;
             }
             setState({ status: "ready", quizId });
+            return true;
           },
           startFresh: async () => {
             // completeSession archives whatever is currently in the store, so
@@ -164,6 +169,16 @@ export function useQuizBootstrap(): BootstrapState {
             // night's progress is lost.
             await useGameStore.getState().restoreActiveSession(quizId);
             if (!isCurrent()) return;
+            if (useGameStore.getState().activeRunId !== summary.runId) {
+              // restoreActiveSession swallows its own errors instead of
+              // throwing, so a failed fetch would otherwise look identical
+              // to success. activeRunId is only set on the real success path.
+              setState({
+                status: "error",
+                message: "Kunne ikke starte ny økt. Prøv igjen.",
+              });
+              return;
+            }
             await useGameStore.getState().completeSession(summary.runId, quizId);
             if (isCurrent()) setState({ status: "ready", quizId });
           },
