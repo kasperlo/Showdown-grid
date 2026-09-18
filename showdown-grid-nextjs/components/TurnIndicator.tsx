@@ -15,7 +15,11 @@ const Confetti = dynamic(() => import("./Confetti"), { ssr: false });
  * projector that is 72px the board does not get, for one line of text — so it
  * moved onto the bar beside the title.
  */
-export function TurnIndicator() {
+export function TurnIndicator({
+  variant = "pill",
+}: {
+  variant?: "pill" | "panel";
+}) {
   const teams = useGameStore((state) => state.teams);
   const currentTurnTeamId = useGameStore((state) => state.currentTurnTeamId);
   const isInitialTurnSelection = useGameStore(
@@ -50,8 +54,12 @@ export function TurnIndicator() {
     return (
       <Button
         onClick={initializeTurn}
-        size="sm"
-        className="shrink-0 bg-gradient-to-r from-accent/90 to-primary/90 font-semibold hover:from-accent hover:to-primary"
+        size={variant === "panel" ? "default" : "sm"}
+        className={
+          variant === "panel"
+            ? "w-full bg-gradient-to-r from-accent/90 to-primary/90 font-semibold hover:from-accent hover:to-primary"
+            : "shrink-0 bg-gradient-to-r from-accent/90 to-primary/90 font-semibold hover:from-accent hover:to-primary"
+        }
       >
         Hvem skal starte?
       </Button>
@@ -68,14 +76,37 @@ export function TurnIndicator() {
 
   if (!displayTeam) return null;
 
+  const confetti = showConfetti && (
+    <Confetti show={showConfetti} onComplete={() => setShowConfetti(false)} />
+  );
+
+  if (variant === "panel") {
+    return (
+      <>
+        {confetti}
+        <div
+          className={cn(
+            "mt-2 shrink-0 rounded-xl border border-accent bg-gradient-to-r from-accent/20 to-primary/20 px-3 py-2 text-center",
+            !isInitialTurnSelection && currentTeam && "turn-highlight",
+          )}
+        >
+          <p className="text-[11px] font-semibold uppercase tracking-widest text-muted-foreground">
+            Det er turen til
+          </p>
+          <p className="truncate text-2xl font-extrabold text-accent">
+            {displayTeam.name}
+          </p>
+          <span className="sr-only">
+            {isInitialTurnSelection ? "velger lag" : "har turen"}
+          </span>
+        </div>
+      </>
+    );
+  }
+
   return (
     <>
-      {showConfetti && (
-        <Confetti
-          show={showConfetti}
-          onComplete={() => setShowConfetti(false)}
-        />
-      )}
+      {confetti}
 
       <div
         className={cn(
