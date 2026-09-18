@@ -12,6 +12,7 @@ import {
 } from "@/components/ui/dialog";
 import { useGameStore } from "@/utils/store";
 import { Timer } from "@/components/Timer";
+import { Lightbulb } from "lucide-react";
 
 /**
  * Shows the question, then the answer. Points are handed out in RoundDock after
@@ -42,6 +43,7 @@ function QuestionModalContent() {
   const hasCode = Boolean(lastQuestion?.code?.trim());
 
   const [revealed, setRevealed] = useState(false);
+  const [explained, setExplained] = useState(false);
   // Seeded at mount instead of in an effect. This component is keyed per
   // question, so a new question mounts a fresh countdown by itself.
   const [countdown, setCountdown] = useState<number | null>(() =>
@@ -166,13 +168,31 @@ function QuestionModalContent() {
                   </p>
                 </div>
 
-                {lastQuestion.explanation?.trim() && (
-                  /* Smaller than the answer on purpose: the answer is what the
-                     room shouts, this is what the host reads out after. */
-                  <p className="whitespace-pre-wrap px-2 text-center text-[clamp(0.95rem,2.6vh,1.7rem)] leading-snug text-muted-foreground">
-                    {lastQuestion.explanation}
-                  </p>
-                )}
+                {lastQuestion.explanation?.trim() &&
+                  (explained ? (
+                    /* Smaller than the answer on purpose: the answer is what
+                       the room shouts, this is what the host reads out after. */
+                    <p className="whitespace-pre-wrap px-2 text-center text-[clamp(0.95rem,2.6vh,1.7rem)] leading-snug text-muted-foreground">
+                      {lastQuestion.explanation}
+                    </p>
+                  ) : (
+                    /* Behind a button rather than shown with the answer: the
+                       answer is the moment, and a paragraph arriving beside it
+                       splits the room's attention and shrinks the thing they
+                       came for. Only rendered on cards that have one, so it is
+                       never a dead control. */
+                    <div className="flex justify-center">
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => setExplained(true)}
+                        className="gap-2 text-muted-foreground"
+                      >
+                        <Lightbulb className="h-4 w-4" />
+                        Forklar
+                      </Button>
+                    </div>
+                  ))}
                 </div>
               )}
             </>
@@ -206,7 +226,10 @@ function QuestionModalContent() {
           ) : (
             <div className="flex w-full flex-col gap-2 sm:flex-row">
               <Button
-                onClick={() => setRevealed(false)}
+                onClick={() => {
+                  setRevealed(false);
+                  setExplained(false);
+                }}
                 variant="secondary"
                 className="sm:flex-1"
               >
