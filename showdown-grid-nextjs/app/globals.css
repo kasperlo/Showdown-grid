@@ -293,6 +293,18 @@
   .standings-row-score {
     font-size: 42cqh;
   }
+
+  @keyframes round-step-fade-in {
+    from {
+      opacity: 0;
+    }
+    to {
+      opacity: 1;
+    }
+  }
+  .round-step-fade {
+    animation: round-step-fade-in 150ms ease-out;
+  }
 }
 
 /* Christmas theme - Snowfall animation */
