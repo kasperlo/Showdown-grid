@@ -187,7 +187,7 @@ export default function Home() {
         <div
           className={
             isWide
-              ? "grid min-h-screen grid-cols-[minmax(0,1fr)_404px]"
+              ? "grid min-h-screen grid-cols-[minmax(0,1fr)_clamp(360px,24vw,460px)]"
               : undefined
           }
         >
