@@ -31,6 +31,7 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { rankTeams } from "@/utils/ranking";
+import { TurnIndicator } from "./TurnIndicator";
 
 /**
  * The standings, as a column beside the board where there is room and as a
@@ -134,7 +135,14 @@ export function Standings({ layout }: { layout: "column" | "row" }) {
     return (
       <li
         key={team.id}
-        className={isColumn ? "shrink-0" : "min-w-0 shrink-0 basis-52"}
+        className={
+          isColumn
+            ? "standings-row flex-[1_1_0] min-h-[76px] max-h-[164px]"
+            : // container-type: size (in .standings-row) strips this li's
+              // content-based auto height, so unlike the column layout it
+              // needs an explicit height to contain against.
+              "standings-row h-11 min-w-0 shrink-0 basis-52"
+        }
       >
         <button
           type="button"
@@ -154,11 +162,11 @@ export function Standings({ layout }: { layout: "column" | "row" }) {
             <Crown className="h-4 w-4 shrink-0 text-accent" aria-label="Leder" />
           )}
 
-          <span className="min-w-0 flex-1 truncate text-sm font-semibold sm:text-[clamp(0.85rem,2.2vh,1.45rem)]">
+          <span className="standings-row-name min-w-0 flex-1 truncate font-semibold">
             {team.name}
           </span>
 
-          <span className="shrink-0 text-lg font-extrabold text-accent tabular-nums sm:text-[clamp(1.2rem,3.6vh,2.5rem)]">
+          <span className="standings-row-score shrink-0 font-extrabold text-accent tabular-nums">
             {team.score}
           </span>
         </button>
@@ -196,9 +204,17 @@ export function Standings({ layout }: { layout: "column" | "row" }) {
             </div>
           )}
 
-          <ol className="flex min-h-0 flex-1 flex-col gap-2 overflow-y-auto pr-0.5">
+          {/* "safe center" (inline: no justify-safe-center in Tailwind v3)
+              falls back to start-aligned once rows overflow, so the
+              top-ranked row stays scrollable into view. */}
+          <ol
+            className="flex min-h-0 flex-1 flex-col gap-2 overflow-y-auto pr-0.5"
+            style={{ justifyContent: "safe center" }}
+          >
             {rows}
           </ol>
+
+          <TurnIndicator variant="panel" />
         </aside>
 
         <TeamAdjustmentModal
@@ -217,6 +233,7 @@ export function Standings({ layout }: { layout: "column" | "row" }) {
         <ol className="flex min-w-0 flex-1 items-stretch gap-2 overflow-x-auto pb-0.5">
           {rows}
         </ol>
+        <TurnIndicator />
         <Button
           variant="ghost"
           size="sm"

@@ -7,7 +7,10 @@ import type {
   AdjustmentEntry,
   QuizTheme,
   LoadQuizInput,
+  RoundStep,
+  QuizRun,
 } from "./types";
+import { hasSessionProgress } from "./session-progress";
 import {
   buildQueue,
   normalizePoints,
@@ -226,38 +229,6 @@ export const useGameStore = create<GameState>()((set, get) => {
         };
       }),
 
-    /**
-     * Moves a card. The points ladder is re-applied afterwards, so the card
-     * takes on the points of wherever it lands — see normalizePoints.
-     */
-    moveCard: (from: CardRef, to: CardRef) =>
-      set((state) => {
-        const source = state.categories[from.categoryIndex];
-        const question = source?.questions[from.questionIndex];
-        if (!question) return state;
-        if (sameCard(from, to)) return state;
-
-        const categories = state.categories.map((cat) => ({
-          ...cat,
-          questions: [...cat.questions],
-        }));
-
-        categories[from.categoryIndex].questions.splice(from.questionIndex, 1);
-
-        const target = categories[to.categoryIndex];
-        if (!target) return state;
-        const index = Math.max(
-          0,
-          Math.min(to.questionIndex, target.questions.length)
-        );
-        target.questions.splice(index, 0, question);
-
-        return {
-          categories: normalizePoints(categories),
-          selectedCard: { categoryIndex: to.categoryIndex, questionIndex: index },
-        };
-      }),
-
     updateQuestion: (
       categoryIndex: number,
       questionIndex: number,
@@ -319,14 +290,28 @@ export const useGameStore = create<GameState>()((set, get) => {
     setLastQuestion: (question: LastQuestion | null) => {
       set({
         lastQuestion: question,
-        isQuestionOpen: !!question,
+        roundStep: question ? "question" : null,
         round: question
           ? { ...initialRoundState(), active: true }
           : initialRoundState(),
       });
     },
 
-    setQuestionOpen: (open: boolean) => set({ isQuestionOpen: open }),
+    advanceRoundStep: () => {
+      set((state) => {
+        if (state.roundStep === "question") {
+          return {
+            roundStep: state.lastQuestion?.isJoker ? "award" : "answer",
+          };
+        }
+        if (state.roundStep === "answer") return { roundStep: "award" };
+        return state;
+      });
+    },
+
+    cancelRound: () => {
+      set({ lastQuestion: null, roundStep: null, round: initialRoundState() });
+    },
 
     markQuestionAsAnswered: (categoryName: string, questionIndex: number) => {
       set((state) => ({
@@ -359,7 +344,7 @@ export const useGameStore = create<GameState>()((set, get) => {
         })),
         teams: state.teams.map((t) => ({ ...t, score: 0 })),
         lastQuestion: null,
-        isQuestionOpen: false,
+        roundStep: null,
         round: initialRoundState(),
         adjustmentLog: [],
         currentTurnTeamId: null,
@@ -370,75 +355,72 @@ export const useGameStore = create<GameState>()((set, get) => {
     },
 
     awardPositive: (teamId: string, customPoints?: number) => {
-      const { lastQuestion, round, adjustmentLog, teams } = get();
-      if (!lastQuestion || round.positiveTeamId) return;
+      const { lastQuestion, round, roundStep, adjustmentLog, teams } = get();
+      if (!lastQuestion || round.positiveTeamId || roundStep !== "award")
+        return;
+
+      const team = teams.find((t) => t.id === teamId);
+      if (!team) return;
 
       const pointsToAward = customPoints ?? lastQuestion.points;
-      const team = teams.find((t) => t.id === teamId);
 
       get().markQuestionAsAnswered(
         lastQuestion.categoryName,
         lastQuestion.questionIndex
       );
 
-      let newAdjustmentLog = adjustmentLog;
-      if (
-        customPoints !== undefined &&
-        customPoints !== lastQuestion.points &&
-        team
-      ) {
-        const entry: AdjustmentEntry = {
-          id: genId(),
-          teamId,
-          teamNameSnapshot: team.name,
-          delta: customPoints,
-          reason: `Custom scoring på ${lastQuestion.categoryName} (${lastQuestion.points} poeng)`,
-          createdAt: Date.now(),
-          type: "custom_scoring",
-        };
-        newAdjustmentLog = [entry, ...adjustmentLog];
-      }
+      const entry: AdjustmentEntry = {
+        id: genId(),
+        teamId,
+        teamNameSnapshot: team.name,
+        delta: pointsToAward,
+        reason: `Riktig svar på ${lastQuestion.categoryName} (${lastQuestion.points} poeng)`,
+        createdAt: Date.now(),
+        type:
+          customPoints !== undefined && customPoints !== lastQuestion.points
+            ? "custom_scoring"
+            : "award",
+      };
 
       set((state) => ({
         teams: state.teams.map((t) =>
           t.id === teamId ? { ...t, score: t.score + pointsToAward } : t
         ),
         round: { ...state.round, positiveTeamId: teamId },
-        adjustmentLog: newAdjustmentLog,
+        adjustmentLog: [entry, ...adjustmentLog],
+        roundStep: "awarded",
       }));
       snapshotLiveState();
     },
 
     awardNegative: (teamId: string, customPoints?: number) => {
-      const { lastQuestion, round, adjustmentLog, teams } = get();
+      const { lastQuestion, round, roundStep, adjustmentLog, teams } = get();
       if (
         !lastQuestion ||
         round.positiveTeamId ||
-        round.negativeAwardedTo.includes(teamId)
+        round.negativeAwardedTo.includes(teamId) ||
+        roundStep !== "award"
       )
         return;
 
+      const team = teams.find((t) => t.id === teamId);
+      if (!team) return;
+
       const defaultPenalty = -Math.round(lastQuestion.points * 0.5);
       const penalty = customPoints ?? defaultPenalty;
-      const team = teams.find((t) => t.id === teamId);
 
-      let newAdjustmentLog = adjustmentLog;
-      if (
-        customPoints !== undefined &&
-        customPoints !== defaultPenalty &&
-        team
-      ) {
-        const entry: AdjustmentEntry = {
-          id: genId(),
-          teamId,
-          teamNameSnapshot: team.name,
-          delta: customPoints,
-          reason: `Custom penalty på ${lastQuestion.categoryName} (standard: ${defaultPenalty})`,
-          createdAt: Date.now(),
-          type: "custom_scoring",
-        };
-        newAdjustmentLog = [entry, ...adjustmentLog];
-      }
+      const entry: AdjustmentEntry = {
+        id: genId(),
+        teamId,
+        teamNameSnapshot: team.name,
+        delta: penalty,
+        reason: `Feil svar på ${lastQuestion.categoryName} (standard: ${defaultPenalty})`,
+        createdAt: Date.now(),
+        type:
+          customPoints !== undefined && customPoints !== defaultPenalty
+            ? "custom_scoring"
+            : "penalty",
+      };
 
       set((state) => ({
         teams: state.teams.map((t) =>
@@ -448,8 +430,38 @@ export const useGameStore = create<GameState>()((set, get) => {
           ...state.round,
           negativeAwardedTo: [...state.round.negativeAwardedTo, teamId],
         },
-        adjustmentLog: newAdjustmentLog,
+        adjustmentLog: [entry, ...adjustmentLog],
       }));
+      snapshotLiveState();
+    },
+
+    undoLastAward: () => {
+      const { adjustmentLog, roundStep, lastQuestion, round } = get();
+      const last = adjustmentLog[0];
+      if (!last || roundStep !== "awarded" || !lastQuestion) return;
+
+      const wasPositiveAward = round.positiveTeamId === last.teamId;
+
+      set((state) => ({
+        teams: state.teams.map((t) =>
+          t.id === last.teamId ? { ...t, score: t.score - last.delta } : t
+        ),
+        adjustmentLog: state.adjustmentLog.slice(1),
+        round: {
+          ...state.round,
+          positiveTeamId: wasPositiveAward ? null : state.round.positiveTeamId,
+        },
+        roundStep: "award",
+      }));
+
+      if (wasPositiveAward) {
+        get().toggleQuestionAnswered(
+          lastQuestion.categoryName,
+          lastQuestion.questionIndex,
+          false
+        );
+      }
+
       snapshotLiveState();
     },
 
@@ -465,7 +477,7 @@ export const useGameStore = create<GameState>()((set, get) => {
       const winner = round.positiveTeamId;
       set({
         lastQuestion: null,
-        isQuestionOpen: false,
+        roundStep: null,
         round: initialRoundState(),
       });
 
@@ -595,7 +607,7 @@ export const useGameStore = create<GameState>()((set, get) => {
     categories: starterCategories(),
     teams: defaultTeams(),
     lastQuestion: null,
-    isQuestionOpen: false,
+    roundStep: null as RoundStep,
     round: initialRoundState(),
     adjustmentLog: [],
     currentTurnTeamId: null as string | null,
@@ -638,7 +650,6 @@ export const useGameStore = create<GameState>()((set, get) => {
       set
     ),
     moveQuestion: withUnsavedChanges(actions.moveQuestion, set),
-    moveCard: withUnsavedChanges(actions.moveCard, set),
     updateQuestion: withUnsavedChanges(actions.updateQuestion, set),
     addTeam: withUnsavedChanges(actions.addTeam, set),
     removeTeam: withUnsavedChanges(actions.removeTeam, set),
@@ -657,6 +668,7 @@ export const useGameStore = create<GameState>()((set, get) => {
     ),
     manualAdjustScore: withUnsavedChanges(actions.manualAdjustScore, set),
     undoLastAdjustment: withUnsavedChanges(actions.undoLastAdjustment, set),
+    undoLastAward: withUnsavedChanges(actions.undoLastAward, set),
     setQuizTitle: withUnsavedChanges(actions.setQuizTitle, set),
     setQuizDescription: withUnsavedChanges(actions.setQuizDescription, set),
     setQuizTimeLimit: withUnsavedChanges(actions.setQuizTimeLimit, set),
@@ -669,7 +681,7 @@ export const useGameStore = create<GameState>()((set, get) => {
       // panel visible is state nothing can act on.
       set(
         on
-          ? { editMode: true, lastQuestion: null, isQuestionOpen: false }
+          ? { editMode: true, lastQuestion: null, roundStep: null }
           : { editMode: false, selectedCard: null, queue: null }
       );
     },
@@ -768,7 +780,8 @@ export const useGameStore = create<GameState>()((set, get) => {
     },
 
     setLastQuestion: actions.setLastQuestion,
-    setQuestionOpen: actions.setQuestionOpen,
+    advanceRoundStep: actions.advanceRoundStep,
+    cancelRound: actions.cancelRound,
     endRound: actions.endRound,
     setCurrentTurn: actions.setCurrentTurn,
     initializeTurn: actions.initializeTurn,
@@ -808,7 +821,7 @@ export const useGameStore = create<GameState>()((set, get) => {
         categories: starterCategories(),
         teams: defaultTeams(),
         lastQuestion: null,
-        isQuestionOpen: false,
+        roundStep: null,
         round: initialRoundState(),
         adjustmentLog: [],
         currentTurnTeamId: null,
@@ -885,7 +898,7 @@ export const useGameStore = create<GameState>()((set, get) => {
         selectedCard: null,
         queue: null,
         lastQuestion: null,
-        isQuestionOpen: false,
+        roundStep: null,
         round: initialRoundState(),
         isInitialTurnSelection: false,
         hasUnsavedChanges: false,
@@ -1086,10 +1099,41 @@ export const useGameStore = create<GameState>()((set, get) => {
       }
     },
 
+    peekActiveSession: async (quizId: string) => {
+      try {
+        const response = await fetch(`/api/quiz-runs/active?quizId=${quizId}`);
+        if (!response.ok) throw new Error("Failed to check for an active session");
+
+        const { run } = await response.json();
+        if (!run) return null;
+
+        const live = liveStateFromRunState(run.final_state);
+        const state = get();
+
+        return {
+          runId: run.id as string,
+          startedAt: run.started_at as string,
+          answered: live?.answeredKeys.length ?? 0,
+          total: state.categories.reduce(
+            (sum, c) => sum + c.questions.length,
+            0
+          ),
+          teams: state.teams.map((t) => ({
+            name: t.name,
+            score: live?.scores[t.id] ?? t.score,
+          })),
+          hasProgress: hasSessionProgress(live),
+        };
+      } catch (error) {
+        console.error("Error checking for an active session:", error);
+        return null;
+      }
+    },
+
     completeSession: async (runId: string, quizId?: string) => {
       const state = get();
       const sessionQuizId = quizId || state.activeQuizId;
-      if (!sessionQuizId) return;
+      if (!sessionQuizId) return null;
 
       if (pendingSessionSave) {
         clearTimeout(pendingSessionSave);
@@ -1127,6 +1171,8 @@ export const useGameStore = create<GameState>()((set, get) => {
           throw new Error(`Kunne ikke fullføre økten (${response.status})`);
         }
 
+        const { run } = await response.json();
+
         clearSnapshot(sessionQuizId);
         // Finishing a session archives the night and hands the board back
         // clean. Leaving the scores on screen would mean the board disagrees
@@ -1143,8 +1189,10 @@ export const useGameStore = create<GameState>()((set, get) => {
           adjustmentLog: [],
           currentTurnTeamId: null,
           lastQuestion: null,
-          isQuestionOpen: false,
+          roundStep: null,
         }));
+
+        return run as QuizRun;
       } catch (error) {
         console.error("Error completing session:", error);
         throw error;

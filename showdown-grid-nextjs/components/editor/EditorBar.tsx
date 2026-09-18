@@ -25,6 +25,8 @@ import { readiness } from "@/utils/card-status";
 export function EditorBar() {
   const editMode = useGameStore((s) => s.editMode);
   const categories = useGameStore((s) => s.categories);
+  const quizTitle = useGameStore((s) => s.quizTitle);
+  const teams = useGameStore((s) => s.teams);
   const startQueue = useGameStore((s) => s.startQueue);
   const canEdit = useGameStore((s) => s.canEditActiveQuiz());
   const [teamsOpen, setTeamsOpen] = useState(false);
@@ -33,6 +35,10 @@ export function EditorBar() {
   if (!canEdit) return null;
 
   const { missing } = readiness(categories);
+  const missingParts: string[] = [];
+  if (missing > 0) missingParts.push(`${missing} kort`);
+  if (!quizTitle.trim()) missingParts.push("tittel");
+  if (teams.length === 0) missingParts.push("lag");
 
   return (
     <div className="mb-4 flex flex-wrap items-center gap-2">
@@ -42,15 +48,15 @@ export function EditorBar() {
 
       <div className="ml-auto flex items-center gap-2">
         {editMode &&
-          (missing > 0 ? (
+          (missingParts.length > 0 ? (
             <Button
               size="sm"
               className="h-8 gap-1.5 rounded-full bg-accent text-xs font-bold text-accent-foreground hover:bg-accent/90"
-              onClick={() => startQueue("incomplete")}
-              title="Gå gjennom kortene som mangler noe"
+              onClick={() => missing > 0 && startQueue("incomplete")}
+              title={`Mangler: ${missingParts.join(", ")}`}
             >
               <ListChecks className="h-3.5 w-3.5" />
-              {missing} {missing === 1 ? "mangel" : "mangler"}
+              {missingParts.join(", ")} mangler
             </Button>
           ) : (
             <span className="inline-flex h-8 items-center gap-1.5 rounded-full border border-success/50 bg-success/[0.14] px-3 text-xs font-bold text-success">

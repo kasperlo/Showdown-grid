@@ -7,7 +7,6 @@ import { useGameStore } from "@/utils/store";
 import { UserMenu } from "@/components/UserMenu";
 import { SaveIndicator } from "@/components/SaveIndicator";
 import { EditModeToggle } from "@/components/editor/EditModeToggle";
-import { TurnIndicator } from "@/components/TurnIndicator";
 import { countQuestions } from "@/utils/quiz-template";
 import type { PresentationMode } from "@/hooks/usePresentationMode";
 
@@ -69,15 +68,11 @@ export function GameTopBar({
         )}
 
         <h1
-          className="min-w-0 flex-1 truncate text-[clamp(1rem,3vh,2.1rem)] font-extrabold tracking-tight text-accent drop-shadow-sm"
+          className="min-w-0 flex-1 truncate text-[clamp(1rem,3vh,2.1rem)] font-extrabold leading-none tracking-tight text-accent drop-shadow-sm"
           title={quizTitle || "Uten navn"}
         >
           {quizTitle || "Uten navn"}
         </h1>
-
-        <div className="hidden min-w-0 shrink items-center sm:flex">
-          <TurnIndicator />
-        </div>
 
         <div className="flex shrink-0 items-center gap-1">
           {presentation.active ? (

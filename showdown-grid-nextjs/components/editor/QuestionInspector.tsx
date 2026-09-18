@@ -9,7 +9,19 @@ import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
 import { ImageUpload } from "@/components/ImageUpload";
 import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import {
+  ArrowDown,
   ArrowRight,
+  ArrowUp,
   ChevronLeft,
   ChevronRight,
   CircleAlert,
@@ -61,12 +73,14 @@ function InspectorBody() {
   const removeQuestionFromCategory = useGameStore(
     (s) => s.removeQuestionFromCategory
   );
+  const moveQuestion = useGameStore((s) => s.moveQuestion);
 
   const question = cardAt(categories, selectedCard);
   const counts = readiness(categories);
   const [imageOpen, setImageOpen] = useState(false);
   const [codeOpen, setCodeOpen] = useState(false);
   const [explanationOpen, setExplanationOpen] = useState(false);
+  const [confirmingDelete, setConfirmingDelete] = useState(false);
 
   // Keyboard flow. Skipped while typing, so the shortcuts never eat text.
   useEffect(() => {
@@ -223,6 +237,21 @@ function InspectorBody() {
           </p>
         )}
 
+        <Field label="Poeng">
+          <Input
+            type="number"
+            min={50}
+            step={50}
+            value={question.points}
+            onChange={(e) => {
+              const parsed = parseInt(e.target.value, 10);
+              patch({ points: Number.isFinite(parsed) ? Math.max(50, parsed) : 50 });
+            }}
+            className="w-28"
+            aria-label="Poeng"
+          />
+        </Field>
+
         {question.isJoker ? (
           <>
             <Field label="Oppgave">
@@ -272,7 +301,6 @@ function InspectorBody() {
                 value={question.question}
                 onChange={(e) => patch({ question: e.target.value })}
                 rows={3}
-                autoFocus
                 className="text-base font-semibold leading-snug"
               />
             </Field>
@@ -433,23 +461,96 @@ function InspectorBody() {
           </ul>
         )}
 
+        <div className="flex flex-wrap items-center gap-2 border-t border-border pt-4">
+          <Button
+            variant="outline"
+            size="sm"
+            className="gap-1.5"
+            disabled={selectedCard.questionIndex === 0}
+            onClick={() => {
+              const newIndex = selectedCard.questionIndex - 1;
+              moveQuestion(
+                selectedCard.categoryIndex,
+                selectedCard.questionIndex,
+                -1
+              );
+              selectCard({
+                categoryIndex: selectedCard.categoryIndex,
+                questionIndex: newIndex,
+              });
+            }}
+          >
+            <ArrowUp className="h-4 w-4" />
+            Flytt opp
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            className="gap-1.5"
+            disabled={
+              selectedCard.questionIndex >=
+              (category?.questions.length ?? 1) - 1
+            }
+            onClick={() => {
+              const newIndex = selectedCard.questionIndex + 1;
+              moveQuestion(
+                selectedCard.categoryIndex,
+                selectedCard.questionIndex,
+                1
+              );
+              selectCard({
+                categoryIndex: selectedCard.categoryIndex,
+                questionIndex: newIndex,
+              });
+            }}
+          >
+            <ArrowDown className="h-4 w-4" />
+            Flytt ned
+          </Button>
+        </div>
+
         {(category?.questions.length ?? 0) > 1 && (
           <Button
             variant="ghost"
             size="sm"
             className="text-destructive hover:text-destructive"
-            onClick={() => {
-              removeQuestionFromCategory(
-                selectedCard.categoryIndex,
-                selectedCard.questionIndex
-              );
-              selectCard(null);
-            }}
+            onClick={() => setConfirmingDelete(true)}
           >
             <Trash2 className="mr-2 h-4 w-4" />
             Slett kortet
           </Button>
         )}
+
+        <AlertDialog
+          open={confirmingDelete}
+          onOpenChange={setConfirmingDelete}
+        >
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>Slette dette kortet?</AlertDialogTitle>
+              <AlertDialogDescription>
+                {question.points} poeng i «{category?.name}» forsvinner. Kan
+                ikke angres.
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel>Avbryt</AlertDialogCancel>
+              <AlertDialogAction
+                className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                onClick={() => {
+                  removeQuestionFromCategory(
+                    selectedCard.categoryIndex,
+                    selectedCard.questionIndex
+                  );
+                  selectCard(null);
+                  setConfirmingDelete(false);
+                }}
+              >
+                Slett
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
       </div>
 
       <div className="mt-auto flex items-center gap-2 border-t border-border bg-background/60 px-4 py-3">

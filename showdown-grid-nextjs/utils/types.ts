@@ -57,6 +57,12 @@ export interface RoundProgress {
   negativeAwardedTo: string[];
 }
 
+/**
+ * A round's four screens: question -> answer -> award -> awarded. A joker
+ * card skips answer, going straight from question to award.
+ */
+export type RoundStep = "question" | "answer" | "award" | "awarded" | null;
+
 export interface AdjustmentEntry {
   id: string;
   teamId: string;
@@ -64,7 +70,7 @@ export interface AdjustmentEntry {
   delta: number;
   reason?: string;
   createdAt: number;
-  type: "manual" | "custom_scoring";
+  type: "manual" | "custom_scoring" | "award" | "penalty";
 }
 
 export type QuizTheme = "classic" | "modern" | "christmas";
@@ -166,6 +172,16 @@ export interface QuizRun {
   updated_at?: string; // Timestamp of last update
 }
 
+/** What peekActiveSession reports, before anything is applied to the store. */
+export interface ActiveSessionSummary {
+  runId: string;
+  startedAt: string;
+  answered: number;
+  total: number;
+  teams: { name: string; score: number }[];
+  hasProgress: boolean;
+}
+
 export interface QuizRunSummary {
   id: string;
   quiz_id?: string;
@@ -192,7 +208,7 @@ export interface GameState {
   teams: Team[];
 
   lastQuestion: LastQuestion | null;
-  isQuestionOpen: boolean;
+  roundStep: RoundStep;
   round: RoundProgress;
 
   adjustmentLog: AdjustmentEntry[];
@@ -205,7 +221,10 @@ export interface GameState {
   isPlayingPublicQuiz: boolean;
 
   setLastQuestion: (question: LastQuestion | null) => void;
-  setQuestionOpen: (open: boolean) => void;
+  /** question -> answer -> award (joker cards skip answer). */
+  advanceRoundStep: () => void;
+  /** Escape from the question step: no points, the card stays unplayed. */
+  cancelRound: () => void;
 
   addTeam: (name?: string) => void;
   removeTeam: (id: string) => void;
@@ -231,6 +250,8 @@ export interface GameState {
 
   manualAdjustScore: (teamId: string, delta: number, reason?: string) => void;
   undoLastAdjustment: () => void;
+  /** Reverses the award that took the round to "awarded", from there only. */
+  undoLastAward: () => void;
 
   // Database sync
   hasUnsavedChanges: boolean;
@@ -314,9 +335,6 @@ export interface GameState {
   closeQueue: () => void;
   queueNext: () => void;
   queuePrev: () => void;
-  /** Moves a card to another position, re-applying the points ladder. */
-  moveCard: (from: CardRef, to: CardRef) => void;
-
   // Quiz run tracking
   currentRunStartTime: number | null;
   setRunStartTime: (time: number | null) => void;
@@ -328,7 +346,10 @@ export interface GameState {
   /** Writes any pending live state immediately, ignoring the rate limit. */
   flushSession: () => Promise<void>;
   restoreActiveSession: (quizId: string) => Promise<void>;
-  completeSession: (runId: string, quizId?: string) => Promise<void>;
+  /** Looks at the active session without applying it — see completeSession
+   * for the terminal state and restoreActiveSession for actually applying it. */
+  peekActiveSession: (quizId: string) => Promise<ActiveSessionSummary | null>;
+  completeSession: (runId: string, quizId?: string) => Promise<QuizRun | null>;
 }
 
 export interface LoadQuizInput {

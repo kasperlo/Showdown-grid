@@ -259,15 +259,51 @@
 /* Komponent-utilities */
 @layer components {
   .category-header {
-    @apply tile h-24 flex items-center justify-center text-center font-bold uppercase tracking-wider;
+    /* No fixed height: GameBoard's grid track sizes this cell to --head-h,
+       and EditableBoard (Del 5) sets its own explicit height. Both rely on
+       CSS Grid's default stretch to fill the row. */
+    @apply tile flex items-center justify-center text-center font-bold uppercase tracking-wider;
     background-image: linear-gradient(
       135deg,
       hsl(var(--primary) / 0.25),
       hsl(var(--accent) / 0.25)
     );
   }
+  .category-header-label {
+    /* 0.27 x the header's own height, floored at 13px so a single-row
+       board on a short window doesn't shrink the category name past
+       reading distance. */
+    font-size: max(13px, calc(var(--head-h, 6rem) * 0.27));
+  }
   .points-chip {
-    @apply text-3xl md:text-4xl text-accent font-extrabold text-score;
+    @apply text-accent font-extrabold text-score;
+    font-size: calc(var(--tile-h, 4rem) * 0.33);
+  }
+
+  /* Standings rows: team count decides row height (flex-grow, capped), so
+     the height isn't known ahead of time the way a board tile's is. A
+     container query reads it back from the box the browser actually laid
+     out, instead of a second JS measurement pass. */
+  .standings-row {
+    container-type: size;
+  }
+  .standings-row-name {
+    font-size: 22cqh;
+  }
+  .standings-row-score {
+    font-size: 42cqh;
+  }
+
+  @keyframes round-step-fade-in {
+    from {
+      opacity: 0;
+    }
+    to {
+      opacity: 1;
+    }
+  }
+  .round-step-fade {
+    animation: round-step-fade-in 150ms ease-out;
   }
 }
 

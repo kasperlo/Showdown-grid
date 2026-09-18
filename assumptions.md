@@ -502,3 +502,50 @@ avklart med eier før bygging:
   kan angres.
 - **Merk:** nullstilling avslutter og lagrer økten i historikken slik den står.
   Det er `resetGame` sin eksisterende oppførsel, og bekreftelsesteksten sier det.
+
+## 2026-09-18 — `award`-steget har fått en synlig, men dempet, «Ingen klarte den»
+
+- **Kontekst:** sluttgjennomgangen av Del 2 fant at `N` («ingen fikk poeng») var
+  den eneste veien ut av `award`-steget uten å tildele et lag, og ingenting på
+  skjermen fortalte at tasten fantes. Med `teams.length === 0` var steget en
+  reell blindvei — verken brett eller «legg til lag»-knapp er montert mens en
+  runde pågår, bare teksten «Legg til lagene først».
+- **Beslutning:** en liten, dempet tekstknapp «Ingen klarte den (N)» er lagt
+  under trekk-boksen i `AwardStep`. Den kaller samme `endRound()` som
+  tastetrykket.
+- **Begrunnelse:** spesifikasjonen er eksplisitt på at `award` ikke har noen
+  CTA — lagkortene *er* handlingen. En primærknapp ved siden av dem ville
+  konkurrere med det. En dempet lenke løser blindveien for en vert uten
+  tastatur (mobil, prosjektor-fjernkontroll) uten å bryte «ingen CTA»-reglen.
+- **Vurdert og forkastet:** en synlig `Button`-variant på linje med «Trekk N
+  fra et lag». Det ville lest som to likeverdige handlinger der bare én av dem
+  faktisk er en handling verten skal ta ofte.
+
+## 2026-09-18 — Poengfeltet endrer kortet, ikke ladderen `normalizePoints` bygger
+
+- **Kontekst:** Del 5 la til et redigerbart poengfelt i inspektøren.
+  `normalizePoints` (kalt av `moveQuestion`, `addQuestionToCategory` og
+  `removeQuestionFromCategory` i `utils/store.ts`) regner alltid kolonnens
+  ladder ut fra POSISJON etter en strukturendring — se begrunnelsen ved
+  `ladderFor` i `utils/card-status.ts`. Poengfeltet selv kaller ikke
+  `normalizePoints`; det patcher bare kortets `points` direkte.
+- **Beslutning:** feltets nedre grense er satt til `min={50}`, ikke `0`.
+  `ladderFor` filtrerer bort verdier `<= 0` før den bygger ladderen på nytt, så
+  en `0` fra feltet kunne før dette forsvinne sporløst neste gang noen flyttet,
+  la til eller fjernet et kort i samme kolonne — med hele kolonnen omregnet fra
+  de gjenværende, gyldige verdiene.
+- **Begrunnelse:** `min={50}` lukker verstefallet, ikke hele problemet. En
+  egendefinert, ikke-stigende poengverdi (for eksempel en kolonne satt til
+  100-250-300 for hånd) overlever selve redigeringen fint, men blir sortert og
+  skrevet over igjen første gang `normalizePoints` kjører — fordi `ladderFor`
+  sorterer alle gyldige verdier stigende og fordeler dem på nytt etter
+  posisjon, ikke etter hvilket kort de sto på.
+- **Vurdert og forkastet:** å la poengfeltet unnta kortet fra `normalizePoints`,
+  eller å bytte `ladderFor` til å bevare en egendefinert verdi. Begge er større
+  endringer enn denne rettingen ba om, og «poeng følger posisjonen, ikke
+  kortet» er en bevisst beslutning fra 17.09 (se over) — det som manglet var
+  ikke logikken, men at feltet kunne love mer holdbarhet enn den logikken gir.
+- **Kjent begrensning:** en egendefinert poengverdi er ikke sikker mot en
+  senere flytt/legg til/fjern i samme kolonne. Det er en kjent og akseptert
+  begrensning for denne runden, ikke en feil å rette i `normalizePoints` — den
+  skal fortsatt kjøre på de handlingene.
