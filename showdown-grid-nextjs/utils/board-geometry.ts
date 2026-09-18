@@ -32,6 +32,15 @@ export interface BoardGeometryInput {
   viewportHeight: number;
   categoryCount: number;
   maxRows: number;
+  /** Overrides the computed panel width and always treats the panel as
+   * beside the board (skips the MINCOL/panelBeside fit check) — for a
+   * context, like the editor, whose panel visibility is decided elsewhere
+   * (a fixed breakpoint), not by available width. */
+  panelWidth?: number;
+  /** Skips the BAR/PAD/DOCK subtraction and uses this as boardHeight
+   * directly — for a context whose chrome isn't the play board's fixed top
+   * bar and bottom dock. */
+  boardHeightOverride?: number;
 }
 
 export interface BoardGeometry {
@@ -50,20 +59,24 @@ export function computeBoardGeometry({
   viewportHeight,
   categoryCount,
   maxRows,
+  panelWidth: panelWidthOverride,
+  boardHeightOverride,
 }: BoardGeometryInput): BoardGeometry {
   const { BAR, PAD, SIDE, DOCK, GAP, PANELGAP, HEADF, ASPECT, MINCOL } =
     BOARD_GEOMETRY;
   const N = Math.max(1, categoryCount);
   const R = Math.max(1, maxRows);
 
-  const panelWidth = Math.round(clamp(272, 0.19 * viewportWidth, 432));
+  const panelWidth =
+    panelWidthOverride ?? Math.round(clamp(272, 0.19 * viewportWidth, 432));
   const rowAvailable = viewportWidth - 2 * SIDE;
   const panelBeside =
+    panelWidthOverride !== undefined ||
     N * MINCOL + (N - 1) * GAP + panelWidth + PANELGAP <= rowAvailable;
 
   const avail = rowAvailable - (panelBeside ? panelWidth + PANELGAP : 0);
 
-  const boardHeight = viewportHeight - BAR - 2 * PAD - DOCK;
+  const boardHeight = boardHeightOverride ?? viewportHeight - BAR - 2 * PAD - DOCK;
   const tileHeight = Math.floor((boardHeight - (R + 1) * GAP) / (R + HEADF));
   const headerHeight = Math.round(tileHeight * HEADF);
   const columnWidth = Math.floor(
@@ -100,6 +113,6 @@ export function boardGeometryCssVars(
   };
 }
 
-function clamp(min: number, value: number, max: number): number {
+export function clamp(min: number, value: number, max: number): number {
   return Math.min(Math.max(value, min), max);
 }

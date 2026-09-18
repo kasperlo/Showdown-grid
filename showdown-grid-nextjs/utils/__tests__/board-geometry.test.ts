@@ -77,4 +77,48 @@ describe("computeBoardGeometry", () => {
     // horizontal room three categories leave on an ultrawide screen.
     expect(g.columnWidth).toBeLessThanOrEqual(Math.floor(g.tileHeight * 1.9));
   });
+
+  it("uses an explicit panelWidth instead of computing one, and treats the panel as always beside the board", () => {
+    const g = computeBoardGeometry({
+      viewportWidth: 1920,
+      viewportHeight: 1080,
+      categoryCount: 5,
+      maxRows: 5,
+      panelWidth: 460,
+    });
+
+    expect(g.panelWidth).toBe(460);
+    expect(g.panelBeside).toBe(true);
+  });
+
+  it("uses boardHeightOverride instead of BAR/PAD/DOCK when given", () => {
+    const withOverride = computeBoardGeometry({
+      viewportWidth: 1920,
+      viewportHeight: 1080,
+      categoryCount: 5,
+      maxRows: 5,
+      boardHeightOverride: 700,
+    });
+    const withoutOverride = computeBoardGeometry({
+      viewportWidth: 1920,
+      viewportHeight: 1080,
+      categoryCount: 5,
+      maxRows: 5,
+    });
+
+    expect(withOverride.boardHeight).toBe(700);
+    expect(withOverride.tileHeight).not.toBe(withoutOverride.tileHeight);
+  });
+
+  it("panelWidth and boardHeightOverride are both optional and don't change Del 1's numbers when omitted", () => {
+    const g = computeBoardGeometry({
+      viewportWidth: 1920,
+      viewportHeight: 1080,
+      categoryCount: 5,
+      maxRows: 5,
+    });
+
+    expect(g.panelWidth).toBe(365);
+    expect(g.columnWidth).toBe(271);
+  });
 });
