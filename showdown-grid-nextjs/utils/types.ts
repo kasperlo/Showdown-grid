@@ -57,6 +57,12 @@ export interface RoundProgress {
   negativeAwardedTo: string[];
 }
 
+/**
+ * A round's four screens: question -> answer -> award -> awarded. A joker
+ * card skips answer, going straight from question to award.
+ */
+export type RoundStep = "question" | "answer" | "award" | "awarded" | null;
+
 export interface AdjustmentEntry {
   id: string;
   teamId: string;
@@ -64,7 +70,7 @@ export interface AdjustmentEntry {
   delta: number;
   reason?: string;
   createdAt: number;
-  type: "manual" | "custom_scoring";
+  type: "manual" | "custom_scoring" | "award" | "penalty";
 }
 
 export type QuizTheme = "classic" | "modern" | "christmas";
@@ -192,7 +198,7 @@ export interface GameState {
   teams: Team[];
 
   lastQuestion: LastQuestion | null;
-  isQuestionOpen: boolean;
+  roundStep: RoundStep;
   round: RoundProgress;
 
   adjustmentLog: AdjustmentEntry[];
@@ -205,7 +211,10 @@ export interface GameState {
   isPlayingPublicQuiz: boolean;
 
   setLastQuestion: (question: LastQuestion | null) => void;
-  setQuestionOpen: (open: boolean) => void;
+  /** question -> answer -> award (joker cards skip answer). */
+  advanceRoundStep: () => void;
+  /** Escape from the question step: no points, the card stays unplayed. */
+  cancelRound: () => void;
 
   addTeam: (name?: string) => void;
   removeTeam: (id: string) => void;
@@ -231,6 +240,8 @@ export interface GameState {
 
   manualAdjustScore: (teamId: string, delta: number, reason?: string) => void;
   undoLastAdjustment: () => void;
+  /** Reverses the award that took the round to "awarded", from there only. */
+  undoLastAward: () => void;
 
   // Database sync
   hasUnsavedChanges: boolean;

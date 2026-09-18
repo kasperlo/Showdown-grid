@@ -7,6 +7,7 @@ import type {
   AdjustmentEntry,
   QuizTheme,
   LoadQuizInput,
+  RoundStep,
 } from "./types";
 import {
   buildQueue,
@@ -319,14 +320,28 @@ export const useGameStore = create<GameState>()((set, get) => {
     setLastQuestion: (question: LastQuestion | null) => {
       set({
         lastQuestion: question,
-        isQuestionOpen: !!question,
+        roundStep: question ? "question" : null,
         round: question
           ? { ...initialRoundState(), active: true }
           : initialRoundState(),
       });
     },
 
-    setQuestionOpen: (open: boolean) => set({ isQuestionOpen: open }),
+    advanceRoundStep: () => {
+      set((state) => {
+        if (state.roundStep === "question") {
+          return {
+            roundStep: state.lastQuestion?.isJoker ? "award" : "answer",
+          };
+        }
+        if (state.roundStep === "answer") return { roundStep: "award" };
+        return state;
+      });
+    },
+
+    cancelRound: () => {
+      set({ lastQuestion: null, roundStep: null, round: initialRoundState() });
+    },
 
     markQuestionAsAnswered: (categoryName: string, questionIndex: number) => {
       set((state) => ({
@@ -359,7 +374,7 @@ export const useGameStore = create<GameState>()((set, get) => {
         })),
         teams: state.teams.map((t) => ({ ...t, score: 0 })),
         lastQuestion: null,
-        isQuestionOpen: false,
+        roundStep: null,
         round: initialRoundState(),
         adjustmentLog: [],
         currentTurnTeamId: null,
@@ -370,75 +385,72 @@ export const useGameStore = create<GameState>()((set, get) => {
     },
 
     awardPositive: (teamId: string, customPoints?: number) => {
-      const { lastQuestion, round, adjustmentLog, teams } = get();
-      if (!lastQuestion || round.positiveTeamId) return;
+      const { lastQuestion, round, roundStep, adjustmentLog, teams } = get();
+      if (!lastQuestion || round.positiveTeamId || roundStep !== "award")
+        return;
+
+      const team = teams.find((t) => t.id === teamId);
+      if (!team) return;
 
       const pointsToAward = customPoints ?? lastQuestion.points;
-      const team = teams.find((t) => t.id === teamId);
 
       get().markQuestionAsAnswered(
         lastQuestion.categoryName,
         lastQuestion.questionIndex
       );
 
-      let newAdjustmentLog = adjustmentLog;
-      if (
-        customPoints !== undefined &&
-        customPoints !== lastQuestion.points &&
-        team
-      ) {
-        const entry: AdjustmentEntry = {
-          id: genId(),
-          teamId,
-          teamNameSnapshot: team.name,
-          delta: customPoints,
-          reason: `Custom scoring på ${lastQuestion.categoryName} (${lastQuestion.points} poeng)`,
-          createdAt: Date.now(),
-          type: "custom_scoring",
-        };
-        newAdjustmentLog = [entry, ...adjustmentLog];
-      }
+      const entry: AdjustmentEntry = {
+        id: genId(),
+        teamId,
+        teamNameSnapshot: team.name,
+        delta: pointsToAward,
+        reason: `Riktig svar på ${lastQuestion.categoryName} (${lastQuestion.points} poeng)`,
+        createdAt: Date.now(),
+        type:
+          customPoints !== undefined && customPoints !== lastQuestion.points
+            ? "custom_scoring"
+            : "award",
+      };
 
       set((state) => ({
         teams: state.teams.map((t) =>
           t.id === teamId ? { ...t, score: t.score + pointsToAward } : t
         ),
         round: { ...state.round, positiveTeamId: teamId },
-        adjustmentLog: newAdjustmentLog,
+        adjustmentLog: [entry, ...adjustmentLog],
+        roundStep: "awarded",
       }));
       snapshotLiveState();
     },
 
     awardNegative: (teamId: string, customPoints?: number) => {
-      const { lastQuestion, round, adjustmentLog, teams } = get();
+      const { lastQuestion, round, roundStep, adjustmentLog, teams } = get();
       if (
         !lastQuestion ||
         round.positiveTeamId ||
-        round.negativeAwardedTo.includes(teamId)
+        round.negativeAwardedTo.includes(teamId) ||
+        roundStep !== "award"
       )
         return;
 
+      const team = teams.find((t) => t.id === teamId);
+      if (!team) return;
+
       const defaultPenalty = -Math.round(lastQuestion.points * 0.5);
       const penalty = customPoints ?? defaultPenalty;
-      const team = teams.find((t) => t.id === teamId);
 
-      let newAdjustmentLog = adjustmentLog;
-      if (
-        customPoints !== undefined &&
-        customPoints !== defaultPenalty &&
-        team
-      ) {
-        const entry: AdjustmentEntry = {
-          id: genId(),
-          teamId,
-          teamNameSnapshot: team.name,
-          delta: customPoints,
-          reason: `Custom penalty på ${lastQuestion.categoryName} (standard: ${defaultPenalty})`,
-          createdAt: Date.now(),
-          type: "custom_scoring",
-        };
-        newAdjustmentLog = [entry, ...adjustmentLog];
-      }
+      const entry: AdjustmentEntry = {
+        id: genId(),
+        teamId,
+        teamNameSnapshot: team.name,
+        delta: penalty,
+        reason: `Feil svar på ${lastQuestion.categoryName} (standard: ${defaultPenalty})`,
+        createdAt: Date.now(),
+        type:
+          customPoints !== undefined && customPoints !== defaultPenalty
+            ? "custom_scoring"
+            : "penalty",
+      };
 
       set((state) => ({
         teams: state.teams.map((t) =>
@@ -448,8 +460,41 @@ export const useGameStore = create<GameState>()((set, get) => {
           ...state.round,
           negativeAwardedTo: [...state.round.negativeAwardedTo, teamId],
         },
-        adjustmentLog: newAdjustmentLog,
+        adjustmentLog: [entry, ...adjustmentLog],
       }));
+      snapshotLiveState();
+    },
+
+    undoLastAward: () => {
+      const { adjustmentLog, roundStep, lastQuestion, round } = get();
+      const last = adjustmentLog[0];
+      if (!last || roundStep !== "awarded" || !lastQuestion) return;
+
+      const wasPositiveAward = round.positiveTeamId === last.teamId;
+
+      set((state) => ({
+        teams: state.teams.map((t) =>
+          t.id === last.teamId ? { ...t, score: t.score - last.delta } : t
+        ),
+        adjustmentLog: state.adjustmentLog.slice(1),
+        round: {
+          ...state.round,
+          positiveTeamId: wasPositiveAward ? null : state.round.positiveTeamId,
+          negativeAwardedTo: state.round.negativeAwardedTo.filter(
+            (id) => id !== last.teamId
+          ),
+        },
+        roundStep: "award",
+      }));
+
+      if (wasPositiveAward) {
+        get().toggleQuestionAnswered(
+          lastQuestion.categoryName,
+          lastQuestion.questionIndex,
+          false
+        );
+      }
+
       snapshotLiveState();
     },
 
@@ -465,7 +510,7 @@ export const useGameStore = create<GameState>()((set, get) => {
       const winner = round.positiveTeamId;
       set({
         lastQuestion: null,
-        isQuestionOpen: false,
+        roundStep: null,
         round: initialRoundState(),
       });
 
@@ -595,7 +640,7 @@ export const useGameStore = create<GameState>()((set, get) => {
     categories: starterCategories(),
     teams: defaultTeams(),
     lastQuestion: null,
-    isQuestionOpen: false,
+    roundStep: null as RoundStep,
     round: initialRoundState(),
     adjustmentLog: [],
     currentTurnTeamId: null as string | null,
@@ -656,6 +701,7 @@ export const useGameStore = create<GameState>()((set, get) => {
     ),
     manualAdjustScore: withUnsavedChanges(actions.manualAdjustScore, set),
     undoLastAdjustment: withUnsavedChanges(actions.undoLastAdjustment, set),
+    undoLastAward: withUnsavedChanges(actions.undoLastAward, set),
     setQuizTitle: withUnsavedChanges(actions.setQuizTitle, set),
     setQuizDescription: withUnsavedChanges(actions.setQuizDescription, set),
     setQuizTimeLimit: withUnsavedChanges(actions.setQuizTimeLimit, set),
@@ -668,7 +714,7 @@ export const useGameStore = create<GameState>()((set, get) => {
       // panel visible is state nothing can act on.
       set(
         on
-          ? { editMode: true, lastQuestion: null, isQuestionOpen: false }
+          ? { editMode: true, lastQuestion: null, roundStep: null }
           : { editMode: false, selectedCard: null, queue: null }
       );
     },
@@ -767,7 +813,8 @@ export const useGameStore = create<GameState>()((set, get) => {
     },
 
     setLastQuestion: actions.setLastQuestion,
-    setQuestionOpen: actions.setQuestionOpen,
+    advanceRoundStep: actions.advanceRoundStep,
+    cancelRound: actions.cancelRound,
     endRound: actions.endRound,
     setCurrentTurn: actions.setCurrentTurn,
     initializeTurn: actions.initializeTurn,
@@ -807,7 +854,7 @@ export const useGameStore = create<GameState>()((set, get) => {
         categories: starterCategories(),
         teams: defaultTeams(),
         lastQuestion: null,
-        isQuestionOpen: false,
+        roundStep: null,
         round: initialRoundState(),
         adjustmentLog: [],
         currentTurnTeamId: null,
@@ -875,7 +922,7 @@ export const useGameStore = create<GameState>()((set, get) => {
         selectedCard: null,
         queue: null,
         lastQuestion: null,
-        isQuestionOpen: false,
+        roundStep: null,
         round: initialRoundState(),
         isInitialTurnSelection: false,
         hasUnsavedChanges: false,
@@ -1133,7 +1180,7 @@ export const useGameStore = create<GameState>()((set, get) => {
           adjustmentLog: [],
           currentTurnTeamId: null,
           lastQuestion: null,
-          isQuestionOpen: false,
+          roundStep: null,
         }));
       } catch (error) {
         console.error("Error completing session:", error);
