@@ -1,9 +1,16 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useGameStore } from "@/utils/store";
-import { ArrowLeft, CheckCircle, Crown, Minimize2, Tv } from "lucide-react";
+import {
+  AlertCircle,
+  ArrowLeft,
+  CheckCircle,
+  Crown,
+  Minimize2,
+  Tv,
+} from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   AlertDialog,
@@ -18,24 +25,34 @@ import {
 import { toast } from "@/hooks/use-toast";
 import { rankTeams } from "@/utils/ranking";
 import { countQuestions } from "@/utils/quiz-template";
+import { formatDuration } from "@/utils/format";
 import { useQuizBootstrap } from "@/hooks/useQuizBootstrap";
 import { usePresentationMode } from "@/hooks/usePresentationMode";
+import type { QuizRun } from "@/utils/types";
 
 /** Names printed on one podium step before it collapses to a count. */
 const PODIUM_NAMES = 3;
 
+interface DisplayTeam {
+  id: string;
+  name: string;
+  score: number;
+  rank: number;
+  players: string[];
+}
+
 /**
  * The finale, sized for the room rather than for the host's screen.
  *
- * The winning team used to be announced at 14px, once in a "Vinner" section and
- * again on the podium below it. The podium is now the announcement, the names on
- * it scale with the viewport, and the medal legend under it is gone — it
- * explained the numbers 1, 2 and 3, which were already printed above it.
+ * Once a session is saved, completeSession() resets the store's live
+ * scores to 0 — that's correct for the board, which needs to come back
+ * clean, but it means this page can't keep reading `teams`/`categories`
+ * afterward. The server's response to the complete call (duration,
+ * per-team results, answered count) is kept in savedRun instead, and every
+ * number on screen prefers it once it exists.
  */
 export default function Results() {
   const router = useRouter();
-  // Opening /results directly, or refreshing it, used to render the store's
-  // default empty board: "Uten navn", 0 of 25 questions and every team on zero.
   const bootstrap = useQuizBootstrap();
   const presentation = usePresentationMode();
   const teams = useGameStore((s) => s.teams);
@@ -46,17 +63,37 @@ export default function Results() {
 
   const [isCompleting, setIsCompleting] = useState(false);
   const [confirmOpen, setConfirmOpen] = useState(false);
+  const [savedRun, setSavedRun] = useState<QuizRun | null>(null);
 
-  const ranked = useMemo(() => rankTeams(teams), [teams]);
+  // A results page's only job is the live numbers — never make the host
+  // choose here, just apply whatever session is waiting.
+  useEffect(() => {
+    if (bootstrap.status === "resumable") void bootstrap.resume();
+  }, [bootstrap]);
+
+  const liveRanked = useMemo(() => rankTeams(teams), [teams]);
+
+  const ranked: DisplayTeam[] = savedRun
+    ? savedRun.team_results.map((r) => ({
+        id: r.teamId,
+        name: r.teamName,
+        score: r.finalScore,
+        rank: r.rank,
+        players: [],
+      }))
+    : liveRanked;
+
   const hasTeams = ranked.length > 0;
-  const total = countQuestions(categories);
-  const answered = categories.reduce(
-    (sum, c) => sum + c.questions.filter((q) => q.answered).length,
-    0,
-  );
+  const total = savedRun ? savedRun.total_questions : countQuestions(categories);
+  const answered = savedRun
+    ? savedRun.answered_questions
+    : categories.reduce(
+        (sum, c) => sum + c.questions.filter((q) => q.answered).length,
+        0
+      );
 
   const groups = useMemo(() => {
-    const byRank: Record<number, typeof ranked> = {};
+    const byRank: Record<number, DisplayTeam[]> = {};
     for (const team of ranked) {
       if (!byRank[team.rank]) byRank[team.rank] = [];
       byRank[team.rank].push(team);
@@ -71,12 +108,12 @@ export default function Results() {
     if (!activeRunId) return;
     setIsCompleting(true);
     try {
-      await completeSession(activeRunId);
+      const run = await completeSession(activeRunId);
+      setSavedRun(run);
       toast({
         title: "Økten er lagret",
         description: "Du finner den under Historikk.",
       });
-      router.push("/history");
     } catch (error) {
       toast({
         title: "Kunne ikke fullføre økten",
@@ -103,6 +140,11 @@ export default function Results() {
   const colorForRank = (rank: number) =>
     rank === 1 ? "bg-accent" : rank === 2 ? "bg-muted" : "bg-secondary";
 
+  // Gold and light silver read a dark digit; dark bronze needs a light one
+  // — a single text-background/70 for all three vanished on two of them.
+  const digitColorForRank = (rank: number) =>
+    rank <= 2 ? "text-foreground/80" : "text-background/80";
+
   // The classic silver-gold-bronze arrangement only reads as a podium when all
   // three steps are there. With two, it put the winner on the right and the
   // runner-up on the left, which reads as the opposite of what happened.
@@ -111,13 +153,40 @@ export default function Results() {
     return rank === 1 ? "order-2" : rank === 2 ? "order-1" : "order-3";
   };
 
-  if (bootstrap.status === "loading") {
+  if (bootstrap.status === "loading" || bootstrap.status === "resumable") {
     return (
       <div className="stage min-h-dvh p-8">
         <div className="mx-auto max-w-3xl space-y-4">
           <div className="mx-auto h-12 w-64 animate-pulse rounded bg-muted" />
           <div className="h-48 animate-pulse rounded-2xl bg-muted" />
         </div>
+      </div>
+    );
+  }
+
+  if (bootstrap.status === "error") {
+    return (
+      <div className="stage flex min-h-dvh flex-col items-center justify-center gap-4 p-8 text-center">
+        <h1 className="text-2xl font-bold">Kunne ikke laste resultatene</h1>
+        <p className="text-muted-foreground">{bootstrap.message}</p>
+        <div className="flex gap-2">
+          <Button onClick={() => window.location.reload()}>Prøv igjen</Button>
+          <Button variant="outline" onClick={() => router.push("/quizzes")}>
+            Til biblioteket
+          </Button>
+        </div>
+      </div>
+    );
+  }
+
+  if (bootstrap.status === "empty") {
+    return (
+      <div className="stage flex min-h-dvh flex-col items-center justify-center gap-4 p-8 text-center">
+        <h1 className="text-2xl font-bold">Ingen quiz å vise resultater for</h1>
+        <p className="text-muted-foreground">
+          Denne lenken peker ikke på en quiz du har tilgang til lenger.
+        </p>
+        <Button onClick={() => router.push("/quizzes")}>Til biblioteket</Button>
       </div>
     );
   }
@@ -143,34 +212,16 @@ export default function Results() {
               Tilbake til brettet
             </Button>
 
-            <div className="flex items-center gap-2">
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={presentation.enter}
-                className="gap-2"
-                title="Fullskjerm uten verktøylinje — for projektoren"
-              >
-                <Tv className="h-4 w-4" />
-                <span className="hidden sm:inline">Salen</span>
-              </Button>
-              {hasTeams && activeRunId ? (
-                <Button
-                  size="sm"
-                  onClick={() => setConfirmOpen(true)}
-                  disabled={isCompleting}
-                >
-                  <CheckCircle className="mr-2 h-4 w-4" />
-                  {isCompleting ? "Fullfører…" : "Fullfør og lagre"}
-                </Button>
-              ) : (
-                hasTeams && (
-                  <span className="text-sm text-muted-foreground">
-                    Ingen aktiv økt å lagre
-                  </span>
-                )
-              )}
-            </div>
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={presentation.enter}
+              className="gap-2"
+              title="Fullskjerm uten verktøylinje — for projektoren"
+            >
+              <Tv className="h-4 w-4" />
+              <span className="hidden sm:inline">Salen</span>
+            </Button>
           </>
         )}
       </div>
@@ -185,6 +236,16 @@ export default function Results() {
         {total > 0 && (
           <p className="text-xs text-muted-foreground sm:text-sm">
             {answered} av {total} spørsmål spilt
+            {savedRun && (
+              <>
+                {" "}
+                · {formatDuration(savedRun.duration_seconds)} ·{" "}
+                {new Date(savedRun.ended_at ?? Date.now()).toLocaleDateString(
+                  "nb-NO",
+                  { day: "numeric", month: "long" }
+                )}
+              </>
+            )}
           </p>
         )}
       </header>
@@ -250,7 +311,9 @@ export default function Results() {
                     )}`}
                     style={{ height: heightForRank(rank) }}
                   >
-                    <span className="text-[clamp(1.25rem,3.6vh,2.75rem)] font-black text-background/70">
+                    <span
+                      className={`text-[clamp(1.25rem,3.6vh,2.75rem)] font-black ${digitColorForRank(rank)}`}
+                    >
                       {rank}
                     </span>
                   </div>
@@ -303,6 +366,68 @@ export default function Results() {
           )}
         </>
       )}
+
+      <div className="mx-auto mt-10 flex max-w-3xl flex-col items-center justify-between gap-4 border-t border-border pt-6 sm:flex-row">
+        <span
+          className={
+            savedRun
+              ? "inline-flex items-center gap-1.5 rounded-full bg-success/15 px-3 py-1 text-xs font-semibold text-success"
+              : "inline-flex items-center gap-1.5 rounded-full bg-destructive/15 px-3 py-1 text-xs font-semibold text-destructive"
+          }
+        >
+          {savedRun ? (
+            <>
+              <CheckCircle className="h-3.5 w-3.5" />
+              Lagret i historikken kl.{" "}
+              {new Date(savedRun.ended_at ?? Date.now()).toLocaleTimeString(
+                "nb-NO",
+                { hour: "2-digit", minute: "2-digit" }
+              )}
+            </>
+          ) : (
+            <>
+              <AlertCircle className="h-3.5 w-3.5" />
+              Ikke lagret ennå
+            </>
+          )}
+        </span>
+
+        <div className="flex flex-wrap justify-center gap-2">
+          {savedRun ? (
+            <>
+              <Button onClick={() => router.push("/")}>
+                Spill denne quizen igjen
+              </Button>
+              <Button variant="outline" onClick={() => router.push("/history")}>
+                Se økten i historikken
+              </Button>
+              <Button variant="ghost" onClick={() => router.push("/quizzes")}>
+                Til biblioteket
+              </Button>
+            </>
+          ) : hasTeams && activeRunId ? (
+            <Button onClick={() => setConfirmOpen(true)} disabled={isCompleting}>
+              <CheckCircle className="mr-2 h-4 w-4" />
+              {isCompleting ? "Fullfører…" : "Fullfør og lagre økten"}
+            </Button>
+          ) : (
+            <div className="text-center text-sm text-muted-foreground">
+              <p>Ingen aktiv økt å lagre.</p>
+              <p>
+                Åpne{" "}
+                <button
+                  type="button"
+                  className="underline underline-offset-2"
+                  onClick={() => router.push("/")}
+                >
+                  brettet
+                </button>{" "}
+                og spill minst ett spørsmål for å starte en økt.
+              </p>
+            </div>
+          )}
+        </div>
+      </div>
 
       <AlertDialog open={confirmOpen} onOpenChange={setConfirmOpen}>
         <AlertDialogContent>
