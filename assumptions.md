@@ -399,3 +399,31 @@ avklart med eier før bygging:
   1920-visning. Tallene var riktige og layouten var likevel dårlig. Detaljene
   som avslørte det (klemte piller, klippede navn, tomt panel) var usynlige på
   den oppløsningen.
+
+## 2026-09-18 — Tilleggsinfo ligger bak «Forklar»
+
+- **Beslutning:** forklaringen vises ikke sammen med svaret. Under svaret står en
+  liten «Forklar»-knapp, og bare på kort som faktisk har en forklaring.
+- **Begrunnelse:** svaret er øyeblikket. Et avsnitt som kommer samtidig deler
+  rommets oppmerksomhet og krymper det de ventet på. Verten bestemmer når — og
+  om — forklaringen trengs.
+- **Ordvalg:** «Forklar», ikke «Hvorfor?». «Hvorfor?» leser perfekt på et
+  kodekort, men skurrer der forklaringen er kontekst og ikke årsak (Kongehuset
+  500 handler om arverekken, ikke om en årsak).
+- **Detalj:** «Skjul svar» skjuler forklaringen også, så et nytt «Vis svar»
+  starter fra svaret alene.
+
+## 2026-09-18 — Vertsmeny i stillingen: omtrekk og nullstilling
+
+- **Beslutning:** «⋯» i stillingen med «Trekk startlag på nytt» og «Nullstill
+  spillet».
+- **Begrunnelse:** to hull. «Hvem skal starte?» forsvant for godt så snart en
+  tur var satt, så trekningen kunne ikke gjøres om. Og `resetGame` fantes bare i
+  redigeringsmodus — som verten ofte ikke kommer inn i.
+- **Hvorfor her:** stillingen er der lagene bor, den finnes i begge
+  layoutvarianter, og menyen krever ikke redigeringsrettigheter.
+- **Omtrekk har ingen bekreftelse** — den er harmløs og kan kjøres igjen.
+  Nullstilling har bekreftelse med totalsummen som blir borte, siden den ikke
+  kan angres.
+- **Merk:** nullstilling avslutter og lagrer økten i historikken slik den står.
+  Det er `resetGame` sin eksisterende oppførsel, og bekreftelsesteksten sier det.

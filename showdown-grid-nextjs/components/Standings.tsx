@@ -3,10 +3,33 @@
 import { useMemo, useState } from "react";
 import { useGameStore } from "@/utils/store";
 import type { Team } from "@/utils/types";
-import { Crown, UserPlus } from "lucide-react";
+import {
+  Crown,
+  MoreHorizontal,
+  RotateCcw,
+  Shuffle,
+  UserPlus,
+} from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { TeamAdjustmentModal } from "./TeamAdjustmentModal";
 import { AddTeamInline } from "./AddTeamInline";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { rankTeams } from "@/utils/ranking";
 
 /**
@@ -25,8 +48,13 @@ import { rankTeams } from "@/utils/ranking";
 export function Standings({ layout }: { layout: "column" | "row" }) {
   const teams = useGameStore((state) => state.teams);
   const currentTurnTeamId = useGameStore((state) => state.currentTurnTeamId);
+  const initializeTurn = useGameStore((state) => state.initializeTurn);
+  const resetGame = useGameStore((state) => state.resetGame);
   const [selectedTeam, setSelectedTeam] = useState<Team | null>(null);
   const [adding, setAdding] = useState(false);
+  const [confirmReset, setConfirmReset] = useState(false);
+
+  const totalScore = teams.reduce((sum, team) => sum + team.score, 0);
 
   const ranked = useMemo(() => rankTeams(teams), [teams]);
   const isColumn = layout === "column";
@@ -45,6 +73,59 @@ export function Standings({ layout }: { layout: "column" | "row" }) {
       </div>
     );
   }
+
+  const hostMenu = (
+    <>
+      <DropdownMenu>
+        <DropdownMenuTrigger asChild>
+          <Button
+            variant="ghost"
+            size="sm"
+            className="h-7 shrink-0 px-2 text-muted-foreground"
+            title="Trekk startlag på nytt, eller nullstill spillet"
+            aria-label="Flere valg"
+          >
+            <MoreHorizontal className="h-4 w-4" />
+          </Button>
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align="end" className="w-60">
+          <DropdownMenuItem onClick={() => initializeTurn()}>
+            <Shuffle className="mr-2 h-4 w-4" />
+            Trekk startlag på nytt
+          </DropdownMenuItem>
+          <DropdownMenuSeparator />
+          <DropdownMenuItem onClick={() => setConfirmReset(true)}>
+            <RotateCcw className="mr-2 h-4 w-4" />
+            Nullstill spillet
+          </DropdownMenuItem>
+        </DropdownMenuContent>
+      </DropdownMenu>
+
+      <AlertDialog open={confirmReset} onOpenChange={setConfirmReset}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Nullstille spillet?</AlertDialogTitle>
+            <AlertDialogDescription>
+              {totalScore !== 0
+                ? `Til sammen ${totalScore} poeng blir satt til 0. `
+                : ""}
+              Alle spørsmål blir spillbare igjen, og økten lagres i historikken
+              slik den står nå. Kan ikke angres.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Avbryt</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              onClick={() => resetGame()}
+            >
+              Nullstill
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+    </>
+  );
 
   const rows = ranked.map((team) => {
     const isLeader = team.rank === 1 && team.score > 0;
@@ -93,17 +174,20 @@ export function Standings({ layout }: { layout: "column" | "row" }) {
             <h2 className="text-xs font-semibold uppercase tracking-widest text-muted-foreground">
               Stilling
             </h2>
-            <Button
-              variant="ghost"
-              size="sm"
-              className="h-7 gap-1.5 px-2 text-muted-foreground"
-              onClick={() => setAdding((open) => !open)}
-              aria-expanded={adding}
-              title="Legg til et lag som kom for sent"
-            >
-              <UserPlus className="h-4 w-4" />
-              Lag
-            </Button>
+            <div className="flex items-center gap-0.5">
+              <Button
+                variant="ghost"
+                size="sm"
+                className="h-7 gap-1.5 px-2 text-muted-foreground"
+                onClick={() => setAdding((open) => !open)}
+                aria-expanded={adding}
+                title="Legg til et lag som kom for sent"
+              >
+                <UserPlus className="h-4 w-4" />
+                Lag
+              </Button>
+              {hostMenu}
+            </div>
           </div>
 
           {adding && (
@@ -144,6 +228,7 @@ export function Standings({ layout }: { layout: "column" | "row" }) {
           <UserPlus className="h-4 w-4" />
           <span className="sr-only sm:not-sr-only">Lag</span>
         </Button>
+        {hostMenu}
       </div>
 
       {adding && (
