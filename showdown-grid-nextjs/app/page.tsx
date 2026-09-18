@@ -37,10 +37,18 @@ export default function Home() {
   const isWide = useIsWideScreen();
 
   // ?mode=edit makes the editor a shareable link and gives /setup somewhere to
-  // redirect to.
+  // redirect to. Preserved mode takes precedence over URL param — if user was in
+  // edit mode and refreshes, stay in edit mode even without ?mode=edit.
   useEffect(() => {
     if (bootstrap.status !== "ready" || !canEdit) return;
-    if (searchParams.get("mode") === "edit") setEditMode(true);
+    const saved = typeof window !== "undefined"
+      ? window.sessionStorage.getItem("editMode")
+      : null;
+    if (saved !== null) {
+      setEditMode(saved === "true");
+    } else if (searchParams.get("mode") === "edit") {
+      setEditMode(true);
+    }
   }, [bootstrap.status, canEdit, searchParams, setEditMode]);
 
   useEffect(() => {
