@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import dynamic from "next/dynamic";
-import { Lightbulb, Minus, Plus } from "lucide-react";
+import { Lightbulb, Minus, Plus, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Timer } from "@/components/Timer";
 import { useGameStore } from "@/utils/store";
@@ -213,9 +213,20 @@ function QuestionStep() {
         <p className="text-left text-[clamp(1rem,2.8vh,1.8rem)] font-extrabold tracking-tight text-accent">
           {lastQuestion.categoryName} • {lastQuestion.points}
         </p>
-        {isTimerActive && quizTimeLimit && (
-          <Timer initialTime={quizTimeLimit} className="shrink-0" />
-        )}
+        <div className="flex items-center gap-2">
+          {isTimerActive && quizTimeLimit && (
+            <Timer initialTime={quizTimeLimit} className="shrink-0" />
+          )}
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={cancelRound}
+            className="shrink-0 text-muted-foreground hover:text-foreground"
+            title="Avbryt rundt (Esc)"
+          >
+            <X className="h-5 w-5" />
+          </Button>
+        </div>
       </div>
 
       <div className="flex flex-1 flex-col items-center justify-center gap-5 overflow-y-auto p-4 text-center sm:p-8">
@@ -286,6 +297,7 @@ function QuestionStep() {
 function AnswerStep() {
   const lastQuestion = useGameStore((s) => s.lastQuestion);
   const advanceRoundStep = useGameStore((s) => s.advanceRoundStep);
+  const cancelRound = useGameStore((s) => s.cancelRound);
   const [explained, setExplained] = useState(false);
 
   useEffect(() => {
@@ -297,17 +309,35 @@ function AnswerStep() {
       if (event.key === " " || event.key === "Spacebar") {
         event.preventDefault();
         advanceRoundStep();
+      } else if (event.key === "Escape") {
+        event.preventDefault();
+        cancelRound();
       }
     };
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
-  }, [advanceRoundStep]);
+  }, [advanceRoundStep, cancelRound]);
 
   if (!lastQuestion) return null;
   const hasCode = Boolean(lastQuestion.code?.trim());
 
   return (
-    <div className="flex flex-1 flex-col items-center justify-center gap-5 overflow-y-auto p-4 text-center sm:p-8">
+    <div className="flex min-h-0 flex-1 flex-col">
+      <div className="flex items-center justify-between border-b border-border px-4 py-3 sm:px-8">
+        <p className="text-left text-sm font-semibold text-muted-foreground">
+          {lastQuestion.categoryName} • {lastQuestion.points}
+        </p>
+        <Button
+          variant="ghost"
+          size="sm"
+          onClick={cancelRound}
+          className="shrink-0 text-muted-foreground hover:text-foreground"
+          title="Avbryt rundt (Esc)"
+        >
+          <X className="h-5 w-5" />
+        </Button>
+      </div>
+      <div className="flex flex-1 flex-col items-center justify-center gap-5 overflow-y-auto p-4 text-center sm:p-8">
       <p className="text-[clamp(1rem,2.6vh,1.6rem)] font-semibold text-muted-foreground">
         {lastQuestion.categoryName} • {lastQuestion.points}
       </p>
@@ -349,12 +379,13 @@ function AnswerStep() {
           </Button>
         ))}
 
-      <Button
-        onClick={advanceRoundStep}
-        className="mt-auto w-full max-w-md bg-accent py-6 text-lg text-accent-foreground hover:bg-accent/90"
-      >
-        Tildel poeng
-      </Button>
+        <Button
+          onClick={advanceRoundStep}
+          className="mt-auto w-full max-w-md bg-accent py-6 text-lg text-accent-foreground hover:bg-accent/90"
+        >
+          Tildel poeng
+        </Button>
+      </div>
     </div>
   );
 }
@@ -369,6 +400,7 @@ function AwardStep({
   const round = useGameStore((s) => s.round);
   const awardPositive = useGameStore((s) => s.awardPositive);
   const awardNegative = useGameStore((s) => s.awardNegative);
+  const cancelRound = useGameStore((s) => s.cancelRound);
 
   const [points, setPoints] = useState(() => lastQuestion?.points ?? 0);
   const [penaltyArmed, setPenaltyArmed] = useState(false);
@@ -429,22 +461,37 @@ function AwardStep({
       if (event.key.toLowerCase() === "n") {
         event.preventDefault();
         useGameStore.getState().endRound();
+      } else if (event.key === "Escape") {
+        event.preventDefault();
+        cancelRound();
       }
     };
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
-  }, [teams, handleCorrect, handlePenalty, penaltyArmed]);
+  }, [teams, handleCorrect, handlePenalty, penaltyArmed, cancelRound]);
 
   if (!lastQuestion) return null;
 
   return (
-    <div className="flex min-h-0 flex-1">
-      <QuestionAnswerRecap />
+    <div className="flex min-h-0 flex-1 flex-col">
+      <div className="flex items-center justify-end border-b border-border px-4 py-3 sm:px-8">
+        <Button
+          variant="ghost"
+          size="sm"
+          onClick={cancelRound}
+          className="shrink-0 text-muted-foreground hover:text-foreground"
+          title="Avbryt rundt (Esc)"
+        >
+          <X className="h-5 w-5" />
+        </Button>
+      </div>
+      <div className="flex min-h-0 flex-1">
+        <QuestionAnswerRecap />
 
-      <div className="flex flex-1 flex-col items-center justify-center gap-6 p-6">
-        <p className="text-[clamp(1.3rem,3.6vh,2.2rem)] font-bold">
-          Hvem svarte riktig?
-        </p>
+        <div className="flex flex-1 flex-col items-center justify-center gap-6 p-6">
+          <p className="text-[clamp(1.3rem,3.6vh,2.2rem)] font-bold">
+            Hvem svarte riktig?
+          </p>
 
         <div className="flex items-center gap-3">
           <span className="text-sm font-semibold text-muted-foreground">
@@ -533,6 +580,7 @@ function AwardStep({
           >
             Ingen klarte den (N)
           </button>
+        </div>
         </div>
       </div>
     </div>
