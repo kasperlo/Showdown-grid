@@ -140,7 +140,7 @@ export function TeamsEditor() {
               <AlertDialogCancel>Avbryt</AlertDialogCancel>
               <AlertDialogAction
                 className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-                onClick={() => resetGame()}
+                onClick={() => void resetGame()}
               >
                 Nullstill
               </AlertDialogAction>
