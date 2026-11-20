@@ -136,7 +136,7 @@ export default function QuizzesPage() {
       setNewTitle("");
       setNewDescription("");
       toast({ title: "Quiz opprettet", description: quiz.title });
-      router.push("/setup");
+      router.push("/?mode=edit");
     } catch (error) {
       setSwitching(false);
       toast({
@@ -147,7 +147,7 @@ export default function QuizzesPage() {
     }
   };
 
-  const openOwnQuiz = async (quizId: string, destination: "/" | "/setup") => {
+  const openOwnQuiz = async (quizId: string, mode: "play" | "edit") => {
     if (!(await beginSwitch())) return;
     try {
       rememberPublicPlay(null);
@@ -159,7 +159,7 @@ export default function QuizzesPage() {
         activeQuizId: null,
         isPlayingPublicQuiz: false,
       });
-      router.push(destination);
+      router.push(`/?mode=${mode}`);
     } catch {
       setSwitching(false);
       toast({
@@ -177,7 +177,7 @@ export default function QuizzesPage() {
       activeQuizId: null,
       isPlayingPublicQuiz: true,
     });
-    router.push("/");
+    router.push("/?mode=play");
   };
 
   const copyQuiz = async (quiz: QuizMetadata) => {
@@ -257,7 +257,7 @@ export default function QuizzesPage() {
             onClick={() =>
               isPublicList && !isMine
                 ? playPublicQuiz(quiz.id)
-                : openOwnQuiz(quiz.id, "/")
+                : openOwnQuiz(quiz.id, "play")
             }
             disabled={busy}
           >
@@ -270,7 +270,7 @@ export default function QuizzesPage() {
               size="sm"
               variant="outline"
               className="gap-1"
-              onClick={() => openOwnQuiz(quiz.id, "/setup")}
+              onClick={() => openOwnQuiz(quiz.id, "edit")}
               disabled={busy}
             >
               <Pencil className="h-4 w-4" />
