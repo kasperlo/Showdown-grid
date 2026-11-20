@@ -6,7 +6,10 @@ import { GameStage } from "@/components/GameStage";
 import { EditorBar } from "@/components/editor/EditorBar";
 import { EditableBoard } from "@/components/editor/EditableBoard";
 import { EditableQuizTitle } from "@/components/editor/EditableQuizTitle";
-import { QuestionInspector } from "@/components/editor/QuestionInspector";
+import {
+  isTextField,
+  QuestionInspector,
+} from "@/components/editor/QuestionInspector";
 import { BoardLegend } from "@/components/editor/BoardLegend";
 import { Button } from "@/components/ui/button";
 import {
@@ -236,6 +239,11 @@ export default function Home() {
               side="right"
               className="w-full p-0 sm:max-w-md"
               hideCloseButton
+              // Esc in a field leaves the field, as in the wide layout; the
+              // next Esc closes the sheet.
+              onEscapeKeyDown={(event) => {
+                if (isTextField(event.target)) event.preventDefault();
+              }}
             >
               {/* Radix needs a title on every dialog for screen readers; the
                   inspector already shows the card it is editing, so this one is

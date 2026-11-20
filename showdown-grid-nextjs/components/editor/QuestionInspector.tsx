@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useGameStore } from "@/utils/store";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
@@ -41,6 +41,31 @@ import {
 } from "@/utils/card-status";
 
 const JOKER_PRESETS = [5, 10, 15, 20];
+
+/** Widgets that use the arrow keys and Escape themselves. */
+const OWN_KEYS = 'input, textarea, select, [role="menu"], [role="listbox"], [role="tablist"]';
+
+/**
+ * Whether a key is meant for something other than the panel's shortcuts: a
+ * field, a widget with keys of its own, or a dialog the panel is not part of.
+ */
+function keyBelongsElsewhere(
+  target: EventTarget | null,
+  panel: HTMLElement | null
+): boolean {
+  if (!(target instanceof Element)) return false;
+  if (isTextField(target) || target.closest(OWN_KEYS)) return true;
+  const dialog = target.closest('[role="dialog"], [role="alertdialog"]');
+  return dialog !== null && !(panel && dialog.contains(panel));
+}
+
+export function isTextField(target: EventTarget | null): boolean {
+  return (
+    target instanceof HTMLInputElement ||
+    target instanceof HTMLTextAreaElement ||
+    (target instanceof HTMLElement && target.isContentEditable)
+  );
+}
 
 /**
  * The side panel: one card at a time, plus the queue that decides what "next"
@@ -85,27 +110,23 @@ function InspectorBody() {
   // Only a card that was just made a joker sends focus to its task. A card
   // that already was one took the arrow keys away from a Jokere review.
   const [focusTask, setFocusTask] = useState(false);
+  const panelRef = useRef<HTMLElement>(null);
 
-  // Keyboard flow. Skipped while typing, so the shortcuts never eat text.
+  // Keyboard flow. It listens on the whole window, so it leaves alone the keys
+  // meant for a field, a menu, a list, tabs, another dialog or the browser.
   useEffect(() => {
     if (!selectedCard) return;
 
     const onKeyDown = (event: KeyboardEvent) => {
-      const target = event.target as HTMLElement | null;
-      const typing =
-        !!target &&
-        (target.tagName === "INPUT" ||
-          target.tagName === "TEXTAREA" ||
-          target.isContentEditable);
+      if (event.defaultPrevented || event.altKey || event.ctrlKey || event.metaKey) {
+        return;
+      }
+      if (keyBelongsElsewhere(event.target, panelRef.current)) return;
 
       if (event.key === "Escape") {
         event.preventDefault();
         selectCard(null);
-        return;
-      }
-      if (typing) return;
-
-      if (event.key === "ArrowRight") {
+      } else if (event.key === "ArrowRight") {
         event.preventDefault();
         queueNext();
       } else if (event.key === "ArrowLeft") {
@@ -147,7 +168,16 @@ function InspectorBody() {
   const remaining = queue?.ids.slice(queue.position, queue.position + 5) ?? [];
 
   return (
-    <aside className="flex h-full min-h-0 flex-col bg-card/80">
+    <aside
+      ref={panelRef}
+      className="flex h-full min-h-0 flex-col bg-card/80"
+      onKeyDown={(event) => {
+        // Esc leaves the field first and closes the panel the second time.
+        // The code field keeps Tab for indenting, so this is the way out of it.
+        if (event.key !== "Escape" || event.nativeEvent.isComposing) return;
+        if (isTextField(event.target)) (event.target as HTMLElement).blur();
+      }}
+    >
       {queue?.active && (
         <div className="space-y-3 border-b border-border px-4 py-3">
           <div className="flex items-center gap-2">
