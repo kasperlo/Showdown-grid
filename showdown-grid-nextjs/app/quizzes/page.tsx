@@ -71,6 +71,10 @@ export default function QuizzesPage() {
   const createQuiz = useCreateQuiz();
   const activateQuiz = useActivateQuiz();
   const deleteQuiz = useDeleteQuiz();
+  // Two quick clicks used to start two switches, and the board that won the
+  // race could be one that never saved.
+  const [switching, setSwitching] = useState(false);
+  const busy = switching || activateQuiz.isPending || createQuiz.isPending;
 
   const filter = useCallback(
     (quizzes: QuizMetadata[]) => {
@@ -92,6 +96,21 @@ export default function QuizzesPage() {
     [filter, publicQuizzes]
   );
 
+  /** Saves the quiz being left before another one is loaded, and asks before
+   * leaving changes that could not be saved. False when the switch is off. */
+  const beginSwitch = async (): Promise<boolean> => {
+    setSwitching(true);
+    const saved = await useGameStore.getState().saveTemplate();
+    if (
+      saved ||
+      window.confirm("Endringene i quizen du forlater, er ikke lagret. Bytte likevel?")
+    ) {
+      return true;
+    }
+    setSwitching(false);
+    return false;
+  };
+
   const handleCreate = async () => {
     if (!newTitle.trim()) {
       toast({
@@ -102,6 +121,7 @@ export default function QuizzesPage() {
       return;
     }
 
+    if (!(await beginSwitch())) return;
     try {
       // Straight into the editor: a new quiz is empty, and the only useful next
       // step is filling it in. It used to land you back on this list.
@@ -118,6 +138,7 @@ export default function QuizzesPage() {
       toast({ title: "Quiz opprettet", description: quiz.title });
       router.push("/setup");
     } catch (error) {
+      setSwitching(false);
       toast({
         title: "Kunne ikke opprette quiz",
         description: error instanceof Error ? error.message : undefined,
@@ -127,6 +148,7 @@ export default function QuizzesPage() {
   };
 
   const openOwnQuiz = async (quizId: string, destination: "/" | "/setup") => {
+    if (!(await beginSwitch())) return;
     try {
       rememberPublicPlay(null);
       await activateQuiz.mutateAsync(quizId);
@@ -139,6 +161,7 @@ export default function QuizzesPage() {
       });
       router.push(destination);
     } catch {
+      setSwitching(false);
       toast({
         title: "Kunne ikke åpne quizzen",
         variant: "destructive",
@@ -146,7 +169,8 @@ export default function QuizzesPage() {
     }
   };
 
-  const playPublicQuiz = (quizId: string) => {
+  const playPublicQuiz = async (quizId: string) => {
+    if (!(await beginSwitch())) return;
     rememberPublicPlay(quizId);
     useGameStore.setState({
       isHydrated: false,
@@ -235,6 +259,7 @@ export default function QuizzesPage() {
                 ? playPublicQuiz(quiz.id)
                 : openOwnQuiz(quiz.id, "/")
             }
+            disabled={busy}
           >
             <Play className="h-4 w-4" />
             Spill
@@ -246,6 +271,7 @@ export default function QuizzesPage() {
               variant="outline"
               className="gap-1"
               onClick={() => openOwnQuiz(quiz.id, "/setup")}
+              disabled={busy}
             >
               <Pencil className="h-4 w-4" />
               Rediger
@@ -256,7 +282,7 @@ export default function QuizzesPage() {
               variant="outline"
               className="gap-1"
               onClick={() => copyQuiz(quiz)}
-              disabled={createQuiz.isPending}
+              disabled={busy}
             >
               <Copy className="h-4 w-4" />
               Kopier
@@ -270,7 +296,7 @@ export default function QuizzesPage() {
                 variant="ghost"
                 className="gap-1"
                 onClick={() => copyQuiz(quiz)}
-                disabled={createQuiz.isPending}
+                disabled={busy}
                 title="Lag en kopi"
               >
                 <Copy className="h-4 w-4" />
@@ -281,6 +307,7 @@ export default function QuizzesPage() {
                   variant="ghost"
                   className="ml-auto text-destructive hover:text-destructive"
                   onClick={() => setQuizToDelete(quiz)}
+                  disabled={busy}
                   title={`Slett ${quiz.title}`}
                   aria-label={`Slett ${quiz.title}`}
                 >
@@ -329,7 +356,11 @@ export default function QuizzesPage() {
           </div>
 
           <div className="flex items-center gap-2">
-            <Button className="gap-2" onClick={() => setCreateOpen(true)}>
+            <Button
+              className="gap-2"
+              onClick={() => setCreateOpen(true)}
+              disabled={busy}
+            >
               <Plus className="h-4 w-4" />
               Ny quiz
             </Button>
@@ -379,7 +410,7 @@ export default function QuizzesPage() {
                       : "Ingen treff på søket."}
                   </p>
                   {myQuizzes.length === 0 && (
-                    <Button onClick={() => setCreateOpen(true)}>
+                    <Button onClick={() => setCreateOpen(true)} disabled={busy}>
                       <Plus className="mr-2 h-4 w-4" />
                       Lag din første quiz
                     </Button>
@@ -463,7 +494,7 @@ export default function QuizzesPage() {
               >
                 Avbryt
               </Button>
-              <Button type="submit" disabled={createQuiz.isPending}>
+              <Button type="submit" disabled={busy}>
                 {createQuiz.isPending ? "Oppretter…" : "Opprett og rediger"}
               </Button>
             </DialogFooter>
