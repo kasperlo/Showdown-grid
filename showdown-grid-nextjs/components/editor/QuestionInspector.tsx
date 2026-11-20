@@ -8,7 +8,7 @@ import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
 import { ImageUpload } from "@/components/ImageUpload";
-import { DraftInput } from "./DraftInput";
+import { clampedInteger, DraftInput } from "./DraftInput";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -245,8 +245,8 @@ function InspectorBody() {
             step={50}
             value={String(question.points)}
             onCommit={(raw) => {
-              const parsed = parseInt(raw, 10);
-              if (Number.isFinite(parsed)) patch({ points: Math.max(50, parsed) });
+              const points = clampedInteger(raw, 50, Infinity);
+              if (points !== null) patch({ points });
             }}
             className="w-28"
             aria-label="Poeng"

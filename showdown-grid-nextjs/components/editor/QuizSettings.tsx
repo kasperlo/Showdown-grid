@@ -1,6 +1,5 @@
 "use client";
 
-import { useState } from "react";
 import { useGameStore } from "@/utils/store";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -9,11 +8,19 @@ import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
 import { ThemeSelector } from "@/components/ThemeSelector";
 import { BoardTransfer } from "./BoardTransfer";
+import { clampedInteger, DraftInput } from "./DraftInput";
 import { useQuizTitleField } from "./EditableQuizTitle";
 import { ShareAccess } from "./ShareAccess";
 
 const TIMER_PRESETS = [30, 60, 90, 120];
 const JOKER_PRESETS = [5, 10, 15, 20];
+const DEFAULT_TIMER_SECONDS = 60;
+
+/**
+ * What each quiz's timer was before it was switched off, so switching it back
+ * on restores that rather than a default, also after the settings were closed.
+ */
+const secondsBeforeOff = new Map<string, number>();
 
 export function QuizSettings() {
   const titleField = useQuizTitleField();
@@ -26,17 +33,15 @@ export function QuizSettings() {
   const quizIsPublic = useGameStore((s) => s.quizIsPublic);
   const setQuizIsPublic = useGameStore((s) => s.setQuizIsPublic);
   const isOwner = useGameStore((s) => s.isOwnerOfActiveQuiz());
+  const activeQuizId = useGameStore((s) => s.activeQuizId) ?? "";
 
-  // Derived from the store, not synced into local state. The quiz loads
-  // asynchronously, and a local copy taken once on mount showed the wrong
-  // toggle state on a fresh page load. `rememberedSeconds` only holds what to
-  // restore when the switch is turned back on.
-  const [rememberedSeconds, setRememberedSeconds] = useState(60);
-  const timerValue = quizTimeLimit ?? rememberedSeconds;
-
-  const setSeconds = (seconds: number) => {
-    setRememberedSeconds(seconds);
-    setQuizTimeLimit(seconds);
+  const toggleTimer = (on: boolean) => {
+    if (!on && quizTimeLimit !== null) {
+      secondsBeforeOff.set(activeQuizId, quizTimeLimit);
+    }
+    setQuizTimeLimit(
+      on ? secondsBeforeOff.get(activeQuizId) ?? DEFAULT_TIMER_SECONDS : null
+    );
   };
 
   return (
@@ -82,26 +87,22 @@ export function QuizSettings() {
           </Label>
           <Switch
             checked={quizTimeLimit !== null}
-            onCheckedChange={(checked) =>
-              setQuizTimeLimit(checked ? rememberedSeconds : null)
-            }
+            onCheckedChange={toggleTimer}
             aria-label="Slå tidsbegrensning av eller på"
           />
         </div>
 
         {quizTimeLimit !== null && (
           <div className="flex flex-wrap items-center gap-2">
-            <Input
+            <DraftInput
               type="number"
               min={5}
               max={600}
-              value={timerValue}
-              onChange={(e) => {
-                const parsed = parseInt(e.target.value, 10);
-                if (Number.isFinite(parsed)) setSeconds(parsed);
-              }}
-              onBlur={() => {
-                if (!timerValue || timerValue < 5) setSeconds(60);
+              value={String(quizTimeLimit)}
+              onCommit={(raw) => {
+                // The server keeps the timer at 5 seconds or more.
+                const seconds = clampedInteger(raw, 5, 600);
+                if (seconds !== null) setQuizTimeLimit(seconds);
               }}
               className="w-24"
               aria-label="Sekunder per spørsmål"
@@ -111,8 +112,8 @@ export function QuizSettings() {
                 key={seconds}
                 type="button"
                 size="sm"
-                variant={timerValue === seconds ? "default" : "outline"}
-                onClick={() => setSeconds(seconds)}
+                variant={quizTimeLimit === seconds ? "default" : "outline"}
+                onClick={() => setQuizTimeLimit(seconds)}
               >
                 {seconds}s
               </Button>

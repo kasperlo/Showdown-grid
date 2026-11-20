@@ -58,3 +58,10 @@ export function DraftInput({ value, onCommit, ...props }: DraftInputProps) {
     />
   );
 }
+
+/** The whole number in what was typed, kept within [min, max], or null when
+ * there is none. */
+export function clampedInteger(raw: string, min: number, max: number): number | null {
+  const parsed = parseInt(raw, 10);
+  return Number.isFinite(parsed) ? Math.min(max, Math.max(min, parsed)) : null;
+}
