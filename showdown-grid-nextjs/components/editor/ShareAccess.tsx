@@ -32,6 +32,7 @@ export function ShareAccess() {
   if (!activeQuizId) return null;
 
   const shareToken = data?.shareToken ?? null;
+  const collaborators = data?.collaborators ?? [];
   const shareUrl =
     typeof window !== "undefined" && shareToken
       ? `${window.location.origin}/join/${shareToken}`
@@ -85,52 +86,62 @@ export function ShareAccess() {
       </div>
 
       {shareToken && (
-        <>
-          <div className="flex flex-wrap items-center gap-2">
-            <Input value={shareUrl} readOnly className="flex-1" />
-            <Button
-              type="button"
-              size="sm"
-              variant="outline"
-              className="gap-1"
-              onClick={handleCopy}
-            >
-              {copied ? (
-                <Check className="h-4 w-4" />
-              ) : (
-                <Copy className="h-4 w-4" />
-              )}
-              {copied ? "Kopiert" : "Kopier"}
-            </Button>
-          </div>
+        <div className="flex flex-wrap items-center gap-2">
+          <Input value={shareUrl} readOnly className="flex-1" />
+          <Button
+            type="button"
+            size="sm"
+            variant="outline"
+            className="gap-1"
+            onClick={handleCopy}
+          >
+            {copied ? (
+              <Check className="h-4 w-4" />
+            ) : (
+              <Copy className="h-4 w-4" />
+            )}
+            {copied ? "Kopiert" : "Kopier"}
+          </Button>
+        </div>
+      )}
 
-          <div className="space-y-2">
-            <p className="text-xs text-muted-foreground">
-              {data?.collaborators.length
-                ? "Har redigeringstilgang:"
-                : "Ingen har blitt med enda."}
-            </p>
-            {data?.collaborators.map((collaborator) => (
-              <div
-                key={collaborator.userId}
-                className="flex items-center justify-between gap-2 rounded-md border border-border px-3 py-2 text-sm"
+      {/* Turning the link off only stops new people from joining, so the
+          people who already have access are listed either way. */}
+      {collaborators.length > 0 ? (
+        <div className="space-y-2">
+          <p className="text-xs text-muted-foreground">Har redigeringstilgang:</p>
+          {collaborators.map((collaborator) => (
+            <div
+              key={collaborator.userId}
+              className="flex items-center justify-between gap-2 rounded-md border border-border px-3 py-2 text-sm"
+            >
+              <span className="truncate">{collaborator.email}</span>
+              <Button
+                type="button"
+                size="icon"
+                variant="ghost"
+                className="h-6 w-6 shrink-0"
+                onClick={() => handleRemove(collaborator.userId, collaborator.email)}
+                title="Fjern"
+                aria-label={`Fjern ${collaborator.email}`}
               >
-                <span className="truncate">{collaborator.email}</span>
-                <Button
-                  type="button"
-                  size="icon"
-                  variant="ghost"
-                  className="h-6 w-6 shrink-0"
-                  onClick={() => handleRemove(collaborator.userId, collaborator.email)}
-                  title="Fjern"
-                  aria-label={`Fjern ${collaborator.email}`}
-                >
-                  <X className="h-4 w-4" />
-                </Button>
-              </div>
-            ))}
-          </div>
-        </>
+                <X className="h-4 w-4" />
+              </Button>
+            </div>
+          ))}
+          {!shareToken && (
+            <p className="text-xs text-muted-foreground">
+              Lenken er slått av, men de som allerede er med, beholder tilgangen
+              til du fjerner dem.
+            </p>
+          )}
+        </div>
+      ) : (
+        shareToken && (
+          <p className="text-xs text-muted-foreground">
+            Ingen har blitt med ennå.
+          </p>
+        )
       )}
     </div>
   );
