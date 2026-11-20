@@ -495,6 +495,9 @@ export default function QuizzesPage() {
                 if (!target) return;
                 try {
                   await deleteQuiz.mutateAsync(target.id);
+                  if (useGameStore.getState().activeQuizId === target.id) {
+                    useGameStore.getState().unloadQuiz();
+                  }
                   toast({ title: "Slettet", description: target.title });
                 } catch {
                   toast({
