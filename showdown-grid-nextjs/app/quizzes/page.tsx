@@ -115,7 +115,7 @@ export default function QuizzesPage() {
     if (!newTitle.trim()) {
       toast({
         title: "Tittel mangler",
-        description: "Quizzen må ha et navn.",
+        description: "Quizen må ha et navn.",
         variant: "destructive",
       });
       return;
@@ -163,7 +163,7 @@ export default function QuizzesPage() {
     } catch {
       setSwitching(false);
       toast({
-        title: "Kunne ikke åpne quizzen",
+        title: "Kunne ikke åpne quizen",
         variant: "destructive",
       });
     }
@@ -189,7 +189,7 @@ export default function QuizzesPage() {
       });
       toast({
         title: "Kopi laget",
-        description: "Du finner den under Mine quizzer.",
+        description: "Du finner den under Mine quizer.",
       });
     } catch (error) {
       toast({
@@ -205,7 +205,7 @@ export default function QuizzesPage() {
     // so the store does not know which one is active on a fresh visit.
     const isActive = quiz.is_active ?? quiz.id === activeQuizId;
     const isMine = !isPublicList || quiz.isOwnedByCurrentUser;
-    // On "Mine quizzer", a quiz you were given edit access to is not one you
+    // On "Mine quizer", a quiz you were given edit access to is not one you
     // own: same board access, but no delete button and no share management.
     const isOwned = quiz.isOwnedByCurrentUser ?? true;
 
@@ -375,16 +375,16 @@ export default function QuizzesPage() {
           <Input
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            placeholder="Søk i quizzer"
+            placeholder="Søk i quizer"
             className="pl-9"
-            aria-label="Søk i quizzer"
+            aria-label="Søk i quizer"
           />
         </div>
 
         <Tabs defaultValue="mine" className="w-full">
           <TabsList className="mb-6 grid w-full grid-cols-2 bg-popover">
             <TabsTrigger value="mine">
-              Mine quizzer
+              Mine quizer
               {myQuizzes.length > 0 && ` (${myQuizzes.length})`}
             </TabsTrigger>
             <TabsTrigger value="public">
@@ -406,7 +406,7 @@ export default function QuizzesPage() {
                 <CardContent className="space-y-4">
                   <p className="text-muted-foreground">
                     {myQuizzes.length === 0
-                      ? "Du har ingen quizzer enda."
+                      ? "Du har ingen quizer ennå."
                       : "Ingen treff på søket."}
                   </p>
                   {myQuizzes.length === 0 && (
@@ -433,7 +433,7 @@ export default function QuizzesPage() {
                   <Globe className="mx-auto mb-4 h-10 w-10 text-muted-foreground" />
                   <p className="text-muted-foreground">
                     {publicQuizzes.length === 0
-                      ? "Ingen offentlige quizzer enda."
+                      ? "Ingen offentlige quizer ennå."
                       : "Ingen treff på søket."}
                   </p>
                 </CardContent>
@@ -512,7 +512,7 @@ export default function QuizzesPage() {
               Slette «{quizToDelete?.title}»?
             </AlertDialogTitle>
             <AlertDialogDescription>
-              Quizzen og historikken fra øktene som er spilt på den blir borte.
+              Quizen og historikken fra øktene som er spilt på den blir borte.
               Kan ikke angres.
             </AlertDialogDescription>
           </AlertDialogHeader>

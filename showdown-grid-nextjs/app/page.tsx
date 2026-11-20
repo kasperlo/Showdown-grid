@@ -263,11 +263,11 @@ export default function Home() {
     return (
       <main className="stage flex min-h-dvh items-center justify-center p-6">
         <div className="glass w-full max-w-xl rounded-2xl p-8 text-center">
-          <h2 className="text-xl font-bold">Ingen spørsmål enda</h2>
+          <h2 className="text-xl font-bold">Ingen spørsmål ennå</h2>
           <p className="mt-2 text-muted-foreground">
             {total === 0
               ? "Denne quizen har ingen kategorier."
-              : `${total} kort står tomme.`}
+              : `${total} kort står ${total === 1 ? "tomt" : "tomme"}.`}
           </p>
           <div className="mt-4 flex justify-center gap-2">
             {canEdit && (

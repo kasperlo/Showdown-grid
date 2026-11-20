@@ -45,7 +45,7 @@ export function TeamsEditor() {
 
       {teams.length === 0 ? (
         <p className="glass rounded-xl p-8 text-center text-muted-foreground">
-          Ingen lag enda. Du trenger minst ett for å spille.
+          Ingen lag ennå. Du trenger minst ett for å spille.
         </p>
       ) : (
         <div className="grid grid-cols-1 gap-4 md:grid-cols-2">

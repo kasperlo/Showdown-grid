@@ -181,7 +181,7 @@ export function EditableBoard() {
                 </div>
                 <span
                   className="text-[0.65rem] font-normal normal-case tracking-normal text-muted-foreground"
-                  title={`${done} av ${category.questions.length} kort er ferdige`}
+                  title={`${done} av ${category.questions.length} kort er ${done === 1 ? "ferdig" : "ferdige"}`}
                 >
                   {done}/{category.questions.length}
                 </span>
