@@ -8,9 +8,10 @@ historikk. Next.js 16, TypeScript, Tailwind, Supabase. Kjører på jeoparty.no.
 ```
 quizzes.quiz_data          quiz_runs.final_state
 = MALEN                    = ÉN SPILLING
-kategorier, spørsmål,      answeredKeys ["kategori|indeks"],
-laginndeling, tema,        poeng per lag-id, justeringslogg
-tidsbegrensning            (+ localStorage-speil for krasj)
+kategorier (med id),       answeredKeys ["id:kategori-id|indeks"],
+spørsmål, lag, tema,       lagene i økten, poeng per lag-id,
+turregel, tidsbegrensning  justeringslogg, sist spilt
+                           (+ localStorage-speil for krasj)
 ```
 
 Dette skillet er hele poenget med lagringen. Malen er hva quizen **er**;
@@ -26,8 +27,11 @@ run-raden er hva som **skjedde** en kveld. Skriver man dem til samme sted, gjør
 - `hooks/useQuizBootstrap.ts` — laster mal + eventuell pågående økt. Én gang per
   montering, aldri på fokusbytte: en refetch midt i spillet ville overskrevet
   poengene.
-- `hooks/useTemplateAutoSave.ts` — lagrer malen 1,2 s etter siste endring, og
-  bare når malens fingeravtrykk faktisk er endret.
+- `hooks/useTemplateAutoSave.ts` — bestemmer når malen lagres: 1,2 s etter
+  siste endring, når siden skjules og når du bytter quiz. Selve lagringen
+  (`saveTemplate` i `utils/store.ts`) går i kø og sender med `updated_at` fra
+  lastingen; har noen andre lagret i mellomtiden, svarer serveren 409 og
+  appen ber deg laste inn på nytt i stedet for å skrive over.
 - `hooks/useSessionAutoSave.ts` — lagrer økten, maks én skriving per sekund, og
   siste skriving lander alltid (planlegges, forkastes ikke).
 
@@ -43,14 +47,18 @@ run-raden er hva som **skjedde** en kveld. Skriver man dem til samme sted, gjør
 
 ## Verten sine snarveier
 
-Mens en runde er åpen og spørsmålsvinduet er lukket:
+Mens en runde er åpen:
 
 | Tast | Handling |
 |---|---|
-| `1`–`9` | Gi poeng til lag nummer N |
-| `R` / `+` | Riktig svar |
-| `F` / `−` | Feil svar (halv pott i minus) |
-| `Esc` | Avslutt runden |
+| `Mellomrom` | Neste steg: vis svaret, så poengtildeling |
+| `1`–`9` | Riktig svar: poeng til lag nummer N, i lagenes rekkefølge |
+| `Shift` + `1`–`9` | Feil svar: trekk halv pott fra lag nummer N |
+| `N` | «Ingen klarte den», eller neste spørsmål etter poengene |
+| `Esc` | Avbryt runden. Poeng gitt i runden trekkes tilbake |
+
+«Angre forrige kort» i stillingsmenyen tar tilbake poengene, kortet og turen
+for kortet som sist ble spilt ferdig.
 
 ## Lage et brett raskt
 
@@ -86,8 +94,15 @@ npm run build        # produksjonsbygg
 ## Database
 
 Migrasjonene i `supabase/migrations/` kjøres i rekkefølge i Supabase SQL Editor.
-Ingen nye migrasjoner var nødvendige for mal/økt-skillet: `quiz_runs.final_state`
-er `jsonb`, og både den gamle og den nye formen leses.
+`quiz_runs.final_state` er `jsonb`, og både den gamle og den nye formen leses.
+
+- `08_OWNER_ONLY_COLUMNS.sql` — bare eieren kan endre `user_id`, `share_token`
+  og `is_public`. Uten den kan alle som har brukt delingslenken, ta over quizen.
+- `09_RUN_HISTORY_INTEGRITY.sql` — én aktiv økt per quiz, og historikken
+  overlever at quizen slettes.
+
+Begge kan kjøres flere ganger. Appen virker uten dem, men uten beskyttelsen
+de gir.
 
 ## Deploy
 

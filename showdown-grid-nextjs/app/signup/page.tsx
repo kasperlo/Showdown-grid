@@ -65,11 +65,47 @@ function SignupForm() {
     try {
       const supabase = createClient();
 
-      // Check if user is currently anonymous
       const {
         data: { session: currentSession },
       } = await supabase.auth.getSession();
-      const isAnonymous = currentSession?.user?.is_anonymous;
+
+      // A guest becomes a real account by adding an email and a password to
+      // the user it already is. signUp() made a second user instead, and the
+      // guest's quizzes could not be moved over: the database only lets a
+      // user touch its own rows. With email confirmation on, the address is
+      // pending until confirmed, but the password is already set and the
+      // quizzes never leave the user they belong to.
+      if (currentSession?.user?.is_anonymous) {
+        const { data: converted, error: convertError } =
+          await supabase.auth.updateUser({ email, password });
+
+        if (convertError) {
+          setError(
+            convertError.code === "email_exists"
+              ? "Det finnes allerede en konto med denne e-postadressen. Logg inn i stedet – quizene du har laget som gjest, blir ikke med dit."
+              : convertError.message
+          );
+          return;
+        }
+
+        const confirmed =
+          converted.user?.email === email && !converted.user?.is_anonymous;
+        toast(
+          confirmed
+            ? {
+                title: "Kontoen er opprettet",
+                description: "Quizene du laget som gjest, er med.",
+              }
+            : {
+                title: "Sjekk e-posten din",
+                description:
+                  "Bekreft adressen for å fullføre kontoen. Quizene du laget som gjest, er allerede med.",
+              }
+        );
+        router.replace(redirectTo);
+        router.refresh();
+        return;
+      }
 
       // Sign up
       const { data, error: signupError } = await supabase.auth.signUp({
@@ -127,27 +163,6 @@ function SignupForm() {
         return;
       }
 
-      // If user was anonymous, trigger data migration
-      if (isAnonymous && currentSession) {
-        try {
-          const response = await fetch("/api/auth/migrate", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-              fromUserId: currentSession.user.id,
-              toUserId: data.user.id,
-            }),
-          });
-
-          if (!response.ok) {
-            console.error("Migration failed, but signup succeeded");
-          }
-        } catch (migrationError) {
-          console.error("Migration error:", migrationError);
-          // Don't block signup if migration fails
-        }
-      }
-
       // Session should exist if email confirmation is not required
       // But wait a bit for it to be established (especially in production)
       let sessionEstablished = false;
@@ -175,9 +190,8 @@ function SignupForm() {
         return;
       }
 
-      // The migration moved the guest's quizzes to the new account, so the
-      // board has to be reloaded for the new user id rather than kept in memory
-      // with the old owner on it.
+      // A new user: whatever board is in memory belongs to whoever was
+      // signed in before.
       useGameStore.getState().resetForNewUser();
       router.replace(redirectTo);
       router.refresh();
