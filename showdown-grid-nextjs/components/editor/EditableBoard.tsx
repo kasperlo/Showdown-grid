@@ -40,10 +40,16 @@ import {
   type CardRef,
 } from "@/utils/card-status";
 import { useBoardGeometry } from "@/hooks/useBoardGeometry";
+import { useIsWideScreen } from "@/hooks/useMediaQuery";
 import { boardGeometryCssVars } from "@/utils/board-geometry";
 
 /** EditorBar + title + BoardLegend + outer page padding — see Assumption 1. */
 const EDITOR_CHROME = 240;
+
+/** The inspector column beside the board: clamp(360px, 24vw, 460px). */
+const INSPECTOR_COLUMN: [number, number, number] = [360, 0.24, 460];
+/** Below xl the inspector is a sheet over the board, which keeps the width. */
+const NO_COLUMN: [number, number, number] = [0, 0, 0];
 
 /**
  * The board, editable in place. Same one-grid layout the room sees — one
@@ -63,13 +69,14 @@ export function EditableBoard() {
   const moveCategory = useGameStore((s) => s.moveCategory);
   const addQuestionToCategory = useGameStore((s) => s.addQuestionToCategory);
   const [categoryToDelete, setCategoryToDelete] = useState<number | null>(null);
+  const isWide = useIsWideScreen();
 
   const maxRows = categories.reduce(
     (most, c) => Math.max(most, c.questions.length),
     0
   );
   const geometry = useBoardGeometry((categories.length || 1) + 1, maxRows || 1, {
-    panelWidthClamp: [360, 0.24, 460],
+    panelWidthClamp: isWide ? INSPECTOR_COLUMN : NO_COLUMN,
     boardHeightOverride:
       (typeof window !== "undefined" ? window.innerHeight : 900) -
       EDITOR_CHROME,
