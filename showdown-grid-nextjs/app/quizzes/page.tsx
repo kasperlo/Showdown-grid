@@ -2,13 +2,8 @@
 
 import { useCallback, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
-import { useQueryClient } from "@tanstack/react-query";
 import { useGameStore } from "@/utils/store";
-import {
-  usePublicQuizzes,
-  useQuizzesList,
-  quizKeys,
-} from "@/hooks/queries/useQuizzes";
+import { usePublicQuizzes, useQuizzesList } from "@/hooks/queries/useQuizzes";
 import {
   useCreateQuiz,
   useActivateQuiz,
@@ -62,7 +57,6 @@ import type { QuizMetadata } from "@/utils/types";
 
 export default function QuizzesPage() {
   const router = useRouter();
-  const queryClient = useQueryClient();
   const activeQuizId = useGameStore((s) => s.activeQuizId);
 
   const [createOpen, setCreateOpen] = useState(false);
@@ -118,7 +112,6 @@ export default function QuizzesPage() {
       });
       rememberPublicPlay(null);
       useGameStore.setState({ isHydrated: false, activeQuizId: null });
-      queryClient.invalidateQueries({ queryKey: quizKeys.active() });
       setCreateOpen(false);
       setNewTitle("");
       setNewDescription("");
