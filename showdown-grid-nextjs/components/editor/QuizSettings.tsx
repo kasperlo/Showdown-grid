@@ -140,21 +140,21 @@ export function QuizSettings() {
       </div>
 
       <div className="space-y-3 border-t border-border pt-6">
-        <Label
-          className="text-base font-semibold"
-          title="Brukes av joker-oppgaver uten egen tid"
-        >
-          Standard joker-tid
-        </Label>
+        <div className="space-y-1">
+          <Label className="text-base font-semibold">Standard joker-tid</Label>
+          <p className="text-xs text-muted-foreground">
+            Gjelder jokerkort som ikke har fått egen tid.
+          </p>
+        </div>
         <div className="flex flex-wrap items-center gap-2">
-          <Input
+          <DraftInput
             type="number"
-            min={3}
+            min={1}
             max={300}
-            value={jokerTimeLimit ?? 10}
-            onChange={(e) => {
-              const parsed = parseInt(e.target.value, 10);
-              setJokerTimeLimit(Number.isFinite(parsed) ? parsed : 10);
+            value={String(jokerTimeLimit ?? 10)}
+            onCommit={(raw) => {
+              const seconds = clampedInteger(raw, 1, 300);
+              if (seconds !== null) setJokerTimeLimit(seconds);
             }}
             className="w-24"
             aria-label="Standard joker-tid i sekunder"

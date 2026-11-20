@@ -3,7 +3,6 @@
 import { useEffect, useState } from "react";
 import { useGameStore } from "@/utils/store";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
@@ -75,6 +74,7 @@ function InspectorBody() {
     (s) => s.removeQuestionFromCategory
   );
   const moveQuestion = useGameStore((s) => s.moveQuestion);
+  const jokerTimeLimit = useGameStore((s) => s.jokerTimeLimit);
 
   const question = cardAt(categories, selectedCard);
   const counts = readiness(categories);
@@ -82,6 +82,9 @@ function InspectorBody() {
   const [codeOpen, setCodeOpen] = useState(false);
   const [explanationOpen, setExplanationOpen] = useState(false);
   const [confirmingDelete, setConfirmingDelete] = useState(false);
+  // Only a card that was just made a joker sends focus to its task. A card
+  // that already was one took the arrow keys away from a Jokere review.
+  const [focusTask, setFocusTask] = useState(false);
 
   // Keyboard flow. Skipped while typing, so the shortcuts never eat text.
   useEffect(() => {
@@ -112,13 +115,10 @@ function InspectorBody() {
         event.preventDefault();
         const current = cardAt(useGameStore.getState().categories, selectedCard);
         if (!current) return;
-        updateQuestion(
-          selectedCard.categoryIndex,
-          selectedCard.questionIndex,
-          current.isJoker
-            ? { isJoker: false, jokerTask: "" }
-            : { isJoker: true, jokerTimer: current.jokerTimer || 10 }
-        );
+        if (!current.isJoker) setFocusTask(true);
+        updateQuestion(selectedCard.categoryIndex, selectedCard.questionIndex, {
+          isJoker: !current.isJoker,
+        });
       }
     };
 
@@ -129,6 +129,8 @@ function InspectorBody() {
   if (!selectedCard || !question) return null;
 
   const category = categories[selectedCard.categoryIndex];
+  // The same fallback RoundScreen uses when the quiz has no default either.
+  const defaultJokerSeconds = jokerTimeLimit || 10;
   const status = cardStatus(question);
   const warning = statusLabel(status);
   const patch = (changes: Parameters<typeof updateQuestion>[2]) =>
@@ -260,25 +262,39 @@ function InspectorBody() {
                 value={question.jokerTask ?? ""}
                 onChange={(e) => patch({ jokerTask: e.target.value })}
                 rows={4}
-                autoFocus
+                autoFocus={focusTask}
                 className="text-base font-semibold leading-snug"
               />
             </Field>
 
             <Field label="Sekunder">
               <div className="flex flex-wrap items-center gap-1.5">
-                <Input
+                <DraftInput
                   type="number"
-                  min={3}
+                  min={1}
                   max={300}
-                  value={question.jokerTimer ?? 10}
-                  onChange={(e) => {
-                    const parsed = parseInt(e.target.value, 10);
-                    patch({ jokerTimer: Number.isFinite(parsed) ? parsed : 10 });
+                  value={question.jokerTimer == null ? "" : String(question.jokerTimer)}
+                  placeholder={String(defaultJokerSeconds)}
+                  onCommit={(raw) => {
+                    if (!raw.trim()) {
+                      patch({ jokerTimer: null });
+                      return;
+                    }
+                    const seconds = clampedInteger(raw, 1, 300);
+                    if (seconds !== null) patch({ jokerTimer: seconds });
                   }}
                   className="w-20"
                   aria-label="Sekunder"
                 />
+                <Button
+                  type="button"
+                  size="sm"
+                  variant={question.jokerTimer == null ? "default" : "outline"}
+                  onClick={() => patch({ jokerTimer: null })}
+                  title="Bruk standard joker-tid fra Regler"
+                >
+                  Standard: {defaultJokerSeconds} s
+                </Button>
                 {JOKER_PRESETS.map((seconds) => (
                   <Button
                     key={seconds}
@@ -415,13 +431,10 @@ function InspectorBody() {
           <Switch
             id="inspector-joker"
             checked={Boolean(question.isJoker)}
-            onCheckedChange={(checked) =>
-              patch(
-                checked
-                  ? { isJoker: true, jokerTimer: question.jokerTimer || 10 }
-                  : { isJoker: false, jokerTask: "" }
-              )
-            }
+            onCheckedChange={(checked) => {
+              if (checked) setFocusTask(true);
+              patch({ isJoker: checked });
+            }}
           />
         </div>
 
