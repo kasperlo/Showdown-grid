@@ -288,7 +288,9 @@
     container-type: size;
   }
   .standings-row-name {
-    font-size: 22cqh;
+    /* Capped by width as well: a tall row made a long team name too big to
+       fit its own line. */
+    font-size: min(22cqh, 10cqw);
   }
   .standings-row-score {
     font-size: 42cqh;

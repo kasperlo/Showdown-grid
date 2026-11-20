@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import type { ChangeEvent } from "react";
 import { useGameStore } from "@/utils/store";
 
 /**
@@ -14,10 +15,10 @@ import { useGameStore } from "@/utils/store";
 export function EditableQuizTitle() {
   const editMode = useGameStore((s) => s.editMode);
   const quizTitle = useGameStore((s) => s.quizTitle);
-  const setQuizTitle = useGameStore((s) => s.setQuizTitle);
   const quizDescription = useGameStore((s) => s.quizDescription);
   const setQuizDescription = useGameStore((s) => s.setQuizDescription);
   const canEdit = useGameStore((s) => s.canEditActiveQuiz());
+  const titleField = useQuizTitleField();
   const [engaged, setEngaged] = useState(false);
 
   if (!editMode || !canEdit) {
@@ -45,8 +46,7 @@ export function EditableQuizTitle() {
       onFocusCapture={() => setEngaged(true)}
     >
       <input
-        value={quizTitle}
-        onChange={(e) => setQuizTitle(e.target.value)}
+        {...titleField}
         placeholder="Uten navn"
         aria-label="Quiztittel"
         title="Tittelen laget ser"
@@ -63,4 +63,28 @@ export function EditableQuizTitle() {
       )}
     </div>
   );
+}
+
+/**
+ * The title may be emptied while it is retyped, but an empty title is never
+ * stored: the server would refuse it. Leaving the field empty puts back the
+ * last title it had.
+ */
+export function useQuizTitleField() {
+  const quizTitle = useGameStore((s) => s.quizTitle);
+  const setQuizTitle = useGameStore((s) => s.setQuizTitle);
+  const [draft, setDraft] = useState<string | null>(null);
+
+  return {
+    value: draft ?? quizTitle,
+    onChange: (event: ChangeEvent<HTMLInputElement>) => {
+      const next = event.target.value;
+      setDraft(next);
+      if (next.trim()) setQuizTitle(next);
+    },
+    onBlur: () => {
+      setDraft(null);
+      if (!useGameStore.getState().quizTitle.trim()) setQuizTitle("Uten navn");
+    },
+  };
 }

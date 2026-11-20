@@ -78,6 +78,18 @@ export async function POST(request: NextRequest) {
       .select()
       .single();
 
+    if (error?.code === "23505") {
+      // Another device opened its first card at the same moment, and the
+      // one-active-run index (migration 09) let only one insert through.
+      const { data: winner } = await supabase
+        .from("quiz_runs")
+        .select("*")
+        .eq("user_id", user.id)
+        .eq("quiz_id", quizId)
+        .is("ended_at", null)
+        .maybeSingle();
+      if (winner) return NextResponse.json({ run: winner, reused: true });
+    }
     if (error) {
       console.error("[API /quiz-runs POST] Error:", error);
       throw error;

@@ -17,6 +17,7 @@ import {
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
 import { Plus, RotateCcw, Trash2, Users } from "lucide-react";
+import { DraftInput } from "./DraftInput";
 
 export function TeamsEditor() {
   const teams = useGameStore((s) => s.teams);
@@ -44,7 +45,7 @@ export function TeamsEditor() {
 
       {teams.length === 0 ? (
         <p className="glass rounded-xl p-8 text-center text-muted-foreground">
-          Ingen lag enda. Du trenger minst ett for å spille.
+          Ingen lag ennå. Du trenger minst ett for å spille.
         </p>
       ) : (
         <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
@@ -91,13 +92,13 @@ export function TeamsEditor() {
                 >
                   Spillere
                 </Label>
-                <Input
+                <DraftInput
                   id={`team-players-${team.id}`}
                   value={team.players.join(", ")}
-                  onChange={(e) =>
+                  onCommit={(raw) =>
                     updateTeamPlayers(
                       team.id,
-                      e.target.value
+                      raw
                         .split(",")
                         .map((p) => p.trim())
                         .filter(Boolean)
@@ -139,7 +140,7 @@ export function TeamsEditor() {
               <AlertDialogCancel>Avbryt</AlertDialogCancel>
               <AlertDialogAction
                 className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-                onClick={() => resetGame()}
+                onClick={() => void resetGame()}
               >
                 Nullstill
               </AlertDialogAction>

@@ -1,9 +1,17 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase-server";
+import {
+  buildCategorySummary,
+  playedWindow,
+  rankRunTeams,
+  readAnsweredKeys,
+  winnerLabel,
+  type CompletingTeam,
+} from "@/lib/run-summary";
 
 interface CompleteBody {
   finalState?: unknown;
-  teams?: { id: string; name: string; score: number }[];
+  teams?: CompletingTeam[];
   totalQuestions?: number;
   answeredQuestions?: number;
 }
@@ -63,11 +71,13 @@ export async function POST(
       return NextResponse.json({ run: alreadyDone, alreadyCompleted: true });
     }
 
-    const { data: quizData } = await supabase
-      .from("quizzes")
-      .select("title, description, theme, time_limit, quiz_data")
-      .eq("id", existingRun.quiz_id)
-      .single();
+    const { data: quizData } = existingRun.quiz_id
+      ? await supabase
+          .from("quizzes")
+          .select("title, description, theme, time_limit, quiz_data")
+          .eq("id", existingRun.quiz_id)
+          .maybeSingle()
+      : { data: null };
 
     const answeredKeys = readAnsweredKeys(finalState);
     const categorySummary = buildCategorySummary(
@@ -87,33 +97,42 @@ export async function POST(
         ? Math.min(answeredQuestions, resolvedTotal)
         : Math.min(answeredKeys.length, resolvedTotal);
 
-    const rankedTeams = rankTeams(teams ?? []);
+    const rankedTeams = rankRunTeams(teams ?? []);
     const winner = rankedTeams[0];
 
-    const endTime = new Date();
-    const durationSeconds = Math.max(
-      0,
-      Math.round(
-        (endTime.getTime() - new Date(existingRun.started_at).getTime()) / 1000
-      )
+    const now = new Date();
+    const { endedAt, durationSeconds } = playedWindow(
+      existingRun.started_at,
+      (finalState as { lastActionAt?: unknown }).lastActionAt,
+      now
     );
+
+    // The run already holds the quiz's title and settings from when it was
+    // started. They are only refreshed when the quiz can still be read: a
+    // quiz made private or deleted mid-game used to turn the title into
+    // "Uten navn".
+    const quizSnapshot = quizData
+      ? {
+          quiz_title: quizData.title ?? "Uten navn",
+          quiz_description: quizData.description ?? null,
+          quiz_theme: quizData.theme ?? null,
+          quiz_time_limit: quizData.time_limit ?? null,
+        }
+      : {};
 
     const { data, error } = await supabase
       .from("quiz_runs")
       .update({
-        ended_at: endTime.toISOString(),
+        ended_at: endedAt.toISOString(),
         duration_seconds: durationSeconds,
-        quiz_title: quizData?.title ?? "Uten navn",
-        quiz_description: quizData?.description ?? null,
-        quiz_theme: quizData?.theme ?? null,
-        quiz_time_limit: quizData?.time_limit ?? null,
+        ...quizSnapshot,
         final_state: { ...(finalState as object), categorySummary },
         total_questions: resolvedTotal,
         answered_questions: resolvedAnswered,
         team_results: rankedTeams,
-        winning_team_name: winner?.teamName ?? null,
+        winning_team_name: winnerLabel(rankedTeams),
         winning_score: winner ? winner.finalScore : null,
-        updated_at: endTime.toISOString(),
+        updated_at: now.toISOString(),
       })
       .eq("id", id)
       .select()
@@ -135,73 +154,4 @@ export async function POST(
       { status: 500 }
     );
   }
-}
-
-function readAnsweredKeys(finalState: unknown): string[] {
-  if (!finalState || typeof finalState !== "object") return [];
-  const raw = finalState as Record<string, unknown>;
-  if (Array.isArray(raw.answeredKeys)) {
-    return raw.answeredKeys.filter((k): k is string => typeof k === "string");
-  }
-  // Legacy shape: whole board in the run.
-  if (Array.isArray(raw.categories)) {
-    const keys: string[] = [];
-    (raw.categories as { name?: string; questions?: { answered?: boolean }[] }[]).forEach(
-      (category) => {
-        (category.questions ?? []).forEach((question, index) => {
-          if (question?.answered) keys.push(`${category.name}|${index}`);
-        });
-      }
-    );
-    return keys;
-  }
-  return [];
-}
-
-interface CategorySummary {
-  name: string;
-  total: number;
-  answered: number;
-}
-
-function buildCategorySummary(
-  quizData: unknown,
-  answeredKeys: string[]
-): CategorySummary[] {
-  const answered = new Set(answeredKeys);
-  if (!quizData || typeof quizData !== "object") return [];
-  const categories = (quizData as { categories?: unknown }).categories;
-  if (!Array.isArray(categories)) return [];
-
-  return categories.map((category) => {
-    const name = String((category as { name?: unknown })?.name ?? "Uten navn");
-    const questions = (category as { questions?: unknown[] })?.questions;
-    const total = Array.isArray(questions) ? questions.length : 0;
-    let answeredCount = 0;
-    for (let i = 0; i < total; i += 1) {
-      if (answered.has(`${name}|${i}`)) answeredCount += 1;
-    }
-    return { name, total, answered: answeredCount };
-  });
-}
-
-function rankTeams(teams: { id: string; name: string; score: number }[]) {
-  const sorted = [...teams].sort((a, b) => {
-    if (b.score !== a.score) return b.score - a.score;
-    return a.name.localeCompare(b.name, "nb");
-  });
-
-  let lastScore: number | null = null;
-  let lastRank = 0;
-  return sorted.map((team, index) => {
-    const rank = lastScore === null || team.score < lastScore ? index + 1 : lastRank;
-    lastScore = team.score;
-    lastRank = rank;
-    return {
-      teamId: team.id,
-      teamName: team.name,
-      finalScore: team.score,
-      rank,
-    };
-  });
 }

@@ -8,6 +8,7 @@ import {
   MoreHorizontal,
   RotateCcw,
   Shuffle,
+  Undo2,
   UserPlus,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -49,8 +50,11 @@ import { TurnIndicator } from "./TurnIndicator";
 export function Standings({ layout }: { layout: "column" | "row" }) {
   const teams = useGameStore((state) => state.teams);
   const currentTurnTeamId = useGameStore((state) => state.currentTurnTeamId);
+  const isDrawing = useGameStore((state) => state.isInitialTurnSelection);
   const initializeTurn = useGameStore((state) => state.initializeTurn);
   const resetGame = useGameStore((state) => state.resetGame);
+  const lastCompletedRound = useGameStore((state) => state.lastCompletedRound);
+  const undoLastCard = useGameStore((state) => state.undoLastCard);
   const [selectedTeam, setSelectedTeam] = useState<Team | null>(null);
   const [adding, setAdding] = useState(false);
   const [confirmReset, setConfirmReset] = useState(false);
@@ -89,7 +93,16 @@ export function Standings({ layout }: { layout: "column" | "row" }) {
             <MoreHorizontal className="h-4 w-4" />
           </Button>
         </DropdownMenuTrigger>
-        <DropdownMenuContent align="end" className="w-60">
+        <DropdownMenuContent align="end" className="w-64">
+          <DropdownMenuItem
+            disabled={!lastCompletedRound}
+            onClick={() => undoLastCard()}
+          >
+            <Undo2 className="mr-2 h-4 w-4" />
+            {lastCompletedRound
+              ? `Angre forrige kort (${lastCompletedRound.categoryName} ${lastCompletedRound.points})`
+              : "Angre forrige kort"}
+          </DropdownMenuItem>
           <DropdownMenuItem onClick={() => initializeTurn()}>
             <Shuffle className="mr-2 h-4 w-4" />
             Trekk startlag på nytt
@@ -118,7 +131,7 @@ export function Standings({ layout }: { layout: "column" | "row" }) {
             <AlertDialogCancel>Avbryt</AlertDialogCancel>
             <AlertDialogAction
               className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-              onClick={() => resetGame()}
+              onClick={() => void resetGame()}
             >
               Nullstill
             </AlertDialogAction>
@@ -130,7 +143,9 @@ export function Standings({ layout }: { layout: "column" | "row" }) {
 
   const rows = ranked.map((team) => {
     const isLeader = team.rank === 1 && team.score > 0;
-    const hasTurn = team.id === currentTurnTeamId;
+    // While the starting team is being drawn, no row is marked: the old turn
+    // stayed lit for three seconds next to a spinner naming other teams.
+    const hasTurn = !isDrawing && team.id === currentTurnTeamId;
 
     return (
       <li
@@ -150,23 +165,29 @@ export function Standings({ layout }: { layout: "column" | "row" }) {
             setSelectedTeam(teams.find((t) => t.id === team.id) ?? null)
           }
           title={`Juster poeng eller endre navn for ${team.name}`}
-          className={`tile flex w-full items-center gap-2.5 px-3 text-left transition-colors hover:bg-accent/10 ${
-            isColumn ? "py-3" : "h-full py-2.5"
+          className={`tile flex h-full w-full px-3 text-left transition-colors hover:bg-accent/10 ${
+            isColumn
+              ? "flex-col justify-center gap-0.5 py-2"
+              : "items-center gap-2.5 py-2.5"
           }`}
         >
-          <span className="w-5 shrink-0 text-center text-xs font-bold text-muted-foreground tabular-nums sm:text-[clamp(0.7rem,1.8vh,1.05rem)]">
-            {team.rank}
+          {/* In the column the name gets a line of its own: beside a score
+              sized for the back of the room, a leader on four digits was
+              left with one letter of its name. */}
+          <span className="flex w-full min-w-0 items-center gap-2">
+            {isLeader && (
+              <Crown className="h-4 w-4 shrink-0 text-accent" aria-label="Leder" />
+            )}
+            <span className="standings-row-name min-w-0 flex-1 truncate font-semibold">
+              {team.name}
+            </span>
           </span>
 
-          {isLeader && (
-            <Crown className="h-4 w-4 shrink-0 text-accent" aria-label="Leder" />
-          )}
-
-          <span className="standings-row-name min-w-0 flex-1 truncate font-semibold">
-            {team.name}
-          </span>
-
-          <span className="standings-row-score shrink-0 font-extrabold text-accent tabular-nums">
+          <span
+            className={`standings-row-score shrink-0 font-extrabold leading-none text-accent tabular-nums ${
+              isColumn ? "self-end" : ""
+            }`}
+          >
             {team.score}
           </span>
         </button>
@@ -207,8 +228,10 @@ export function Standings({ layout }: { layout: "column" | "row" }) {
           {/* "safe center" (inline: no justify-safe-center in Tailwind v3)
               falls back to start-aligned once rows overflow, so the
               top-ranked row stays scrollable into view. */}
+          {/* The padding keeps the turn ring, which is drawn outside the
+              row, inside the scroll box that would otherwise clip it. */}
           <ol
-            className="flex min-h-0 flex-1 flex-col gap-2 overflow-y-auto pr-0.5"
+            className="flex min-h-0 flex-1 flex-col gap-2 overflow-y-auto p-0.5"
             style={{ justifyContent: "safe center" }}
           >
             {rows}
@@ -230,7 +253,7 @@ export function Standings({ layout }: { layout: "column" | "row" }) {
       <div className="flex items-center gap-2">
         {/* One row that scrolls sideways rather than wrapping: wrapping is what
             produced the two rows of cramped chips. */}
-        <ol className="flex min-w-0 flex-1 items-stretch gap-2 overflow-x-auto pb-0.5">
+        <ol className="flex min-w-0 flex-1 items-stretch gap-2 overflow-x-auto p-0.5">
           {rows}
         </ol>
         <TurnIndicator />

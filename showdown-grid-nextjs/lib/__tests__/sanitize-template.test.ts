@@ -72,7 +72,34 @@ describe("sanitizeQuizData", () => {
       categories: [],
       teams: [],
       jokerTimeLimit: null,
+      turnRule: "winner",
     });
+  });
+
+  it("keeps category ids, makes them unique and gives missing ones a positional id", () => {
+    const result = sanitizeQuizData({
+      categories: [
+        { id: "a", name: "En", questions: [] },
+        { id: "a", name: "To", questions: [] },
+        { name: "Tre", questions: [] },
+      ],
+    });
+    const ids = result.categories.map((c) => c.id);
+    expect(ids[0]).toBe("a");
+    expect(new Set(ids).size).toBe(3);
+    expect(ids[2]).toBe("c2");
+  });
+
+  it("stores a missing joker timer as null, meaning the quiz default", () => {
+    const result = sanitizeQuizData({
+      categories: [{ name: "K", questions: [{ points: 100, isJoker: true }] }],
+    });
+    expect(result.categories[0].questions[0].jokerTimer).toBeNull();
+  });
+
+  it("only accepts the two known turn rules", () => {
+    expect(sanitizeQuizData({ turnRule: "rotation" }).turnRule).toBe("rotation");
+    expect(sanitizeQuizData({ turnRule: "chaos" }).turnRule).toBe("winner");
   });
 
   it("caps runaway strings and player lists", () => {

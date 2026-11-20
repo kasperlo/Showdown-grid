@@ -4,7 +4,7 @@ import { Fragment, useCallback, useState } from "react";
 import { useGameStore } from "@/utils/store";
 import { Image as ImageIcon, RotateCcw, Sparkles } from "lucide-react";
 import { isQuestionComplete } from "@/utils/quiz-template";
-import type { Question } from "@/utils/types";
+import type { Category, Question } from "@/utils/types";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -17,6 +17,7 @@ import {
 } from "@/components/ui/alert-dialog";
 
 interface ReopenTarget {
+  categoryId: string;
   categoryName: string;
   questionIndex: number;
   points: number;
@@ -42,9 +43,14 @@ export function GameBoard() {
   const [reopenTarget, setReopenTarget] = useState<ReopenTarget | null>(null);
 
   const handleQuestionClick = useCallback(
-    (categoryName: string, question: Question, questionIndex: number) => {
-      if (question.answered) return;
-      setLastQuestion({ ...question, categoryName, questionIndex });
+    (category: Category, question: Question, questionIndex: number) => {
+      if (question.answered || !category.id) return;
+      setLastQuestion({
+        ...question,
+        categoryId: category.id,
+        categoryName: category.name,
+        questionIndex,
+      });
     },
     [setLastQuestion],
   );
@@ -84,7 +90,7 @@ export function GameBoard() {
           }}
         >
           {categories.map((category, categoryIndex) => (
-            <Fragment key={`${category.name}-${categoryIndex}`}>
+            <Fragment key={category.id ?? `${category.name}-${categoryIndex}`}>
               <div
                 className="category-header px-2 py-2"
                 style={{ gridColumn: categoryIndex + 1, gridRow: 1 }}
@@ -110,11 +116,7 @@ export function GameBoard() {
                     <button
                       type="button"
                       onClick={() =>
-                        handleQuestionClick(
-                          category.name,
-                          question,
-                          questionIndex,
-                        )
+                        handleQuestionClick(category, question, questionIndex)
                       }
                       disabled={answered}
                       aria-label={
@@ -172,11 +174,12 @@ export function GameBoard() {
                       )}
                     </div>
 
-                    {answered && (
+                    {answered && category.id && (
                       <button
                         type="button"
                         onClick={() =>
                           setReopenTarget({
+                            categoryId: category.id!,
                             categoryName: category.name,
                             questionIndex,
                             points: question.points,
@@ -216,7 +219,7 @@ export function GameBoard() {
               onClick={() => {
                 if (reopenTarget) {
                   toggleQuestionAnswered(
-                    reopenTarget.categoryName,
+                    reopenTarget.categoryId,
                     reopenTarget.questionIndex,
                     false,
                   );

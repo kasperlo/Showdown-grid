@@ -1,5 +1,11 @@
 import { describe, expect, it } from "vitest";
-import { parseBoardText, parseExportedBoard } from "../board-import";
+import {
+  parseBoardText,
+  parseExportedBoard,
+  serializeBoard,
+  type ExportedBoard,
+} from "../board-import";
+import { emptyQuestion } from "../quiz-template";
 
 describe("parseBoardText", () => {
   it("reads tab-separated rows and groups them by category", () => {
@@ -106,17 +112,133 @@ describe("parseBoardText", () => {
 });
 
 describe("parseExportedBoard", () => {
-  it("fills in defaults for a minimal file", () => {
+  it("leaves out the quiz settings a minimal file does not have", () => {
     const board = parseExportedBoard(
       JSON.stringify({
         categories: [{ name: "Mat", questions: [{ points: 100 }] }],
       })
     );
 
-    expect(board.title).toBe("");
-    expect(board.jokerTimeLimit).toBe(10);
+    expect(board).toEqual({
+      categories: [
+        { name: "Mat", questions: [emptyQuestion(100)] },
+      ],
+    });
     expect(board.categories[0].questions[0].answered).toBe(false);
-    expect(board.categories[0].questions[0].question).toBe("");
+    expect(board.categories[0].questions[0].jokerTimer).toBeNull();
+  });
+
+  it("reads back everything an export writes", () => {
+    const exported: ExportedBoard = {
+      version: 1,
+      title: "Julequiz",
+      description: "For hele familien",
+      timeLimit: 90,
+      jokerTimeLimit: 20,
+      theme: "christmas",
+      turnRule: "rotation",
+      teams: [
+        { name: "Nissene", players: ["Kari", "Ola"] },
+        { name: "Reinsdyrene", players: [] },
+      ],
+      categories: [
+        {
+          name: "Mat",
+          questions: [
+            {
+              ...emptyQuestion(100),
+              question: "Hva er ribbe?",
+              answer: "Svinekjøtt",
+            },
+            { ...emptyQuestion(200), isJoker: true, jokerTask: "Syng", jokerTimer: 30 },
+          ],
+        },
+      ],
+    };
+
+    const board = parseExportedBoard(serializeBoard(exported));
+    expect(board).toEqual({ ...exported, version: undefined });
+  });
+
+  it("leaves out settings that make no sense", () => {
+    const board = parseExportedBoard(
+      JSON.stringify({
+        title: "   ",
+        description: 42,
+        timeLimit: "60",
+        jokerTimeLimit: -5,
+        theme: "neon",
+        turnRule: "random",
+        teams: [],
+        categories: [],
+      })
+    );
+
+    expect(board).toEqual({ categories: [] });
+  });
+
+  it("keeps a timer that is switched off", () => {
+    const board = parseExportedBoard(
+      JSON.stringify({ timeLimit: null, jokerTimeLimit: null, categories: [] })
+    );
+
+    expect(board.timeLimit).toBeNull();
+    expect(board.jokerTimeLimit).toBeNull();
+  });
+
+  it("clamps the timers to what the editor allows", () => {
+    const board = parseExportedBoard(
+      JSON.stringify({
+        timeLimit: 2,
+        jokerTimeLimit: 999,
+        categories: [
+          {
+            name: "Mat",
+            questions: [
+              { points: 100, jokerTimer: 999 },
+              { points: 200, jokerTimer: 0.4 },
+              { points: 300, jokerTimer: 0 },
+              { points: 400, jokerTimer: "10" },
+              { points: 500 },
+            ],
+          },
+        ],
+      })
+    );
+
+    expect(board.timeLimit).toBe(5);
+    expect(board.jokerTimeLimit).toBe(300);
+    expect(board.categories[0].questions.map((q) => q.jokerTimer)).toEqual([
+      300,
+      1,
+      null,
+      null,
+      null,
+    ]);
+  });
+
+  it("reads teams by name and players only", () => {
+    const board = parseExportedBoard(
+      JSON.stringify({
+        teams: [
+          { id: "team-9", name: "  Nissene ", score: 900, players: [" Kari ", "", 3] },
+          { players: ["Ola"] },
+          "Reinsdyrene",
+        ],
+        categories: [],
+      })
+    );
+
+    expect(board.teams).toEqual([
+      { name: "Nissene", players: ["Kari"] },
+      { name: "Lag 2", players: ["Ola"] },
+    ]);
+  });
+
+  it("refuses a file that is not JSON", () => {
+    expect(() => parseExportedBoard("{ categories: [")).toThrow(
+      "Fila er ikke gyldig JSON."
+    );
   });
 
   it("refuses a file without categories", () => {

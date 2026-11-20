@@ -6,7 +6,10 @@ import { GameStage } from "@/components/GameStage";
 import { EditorBar } from "@/components/editor/EditorBar";
 import { EditableBoard } from "@/components/editor/EditableBoard";
 import { EditableQuizTitle } from "@/components/editor/EditableQuizTitle";
-import { QuestionInspector } from "@/components/editor/QuestionInspector";
+import {
+  isTextField,
+  QuestionInspector,
+} from "@/components/editor/QuestionInspector";
 import { BoardLegend } from "@/components/editor/BoardLegend";
 import { Button } from "@/components/ui/button";
 import {
@@ -36,20 +39,22 @@ export default function Home() {
   const selectCard = useGameStore((s) => s.selectCard);
   const isWide = useIsWideScreen();
 
-  // ?mode=edit makes the editor a shareable link and gives /setup somewhere to
-  // redirect to. Preserved mode takes precedence over URL param — if user was in
-  // edit mode and refreshes, stay in edit mode even without ?mode=edit.
+  // ?mode=edit and ?mode=play are what the library's Rediger and Spill ask
+  // for, so they win over the mode this tab used last. The parameter is then
+  // dropped, so a reload keeps the mode the user switched to after that.
   useEffect(() => {
-    if (bootstrap.status !== "ready" || !canEdit) return;
-    const saved = typeof window !== "undefined"
-      ? window.sessionStorage.getItem("editMode")
-      : null;
-    if (saved !== null) {
-      setEditMode(saved === "true");
-    } else if (searchParams.get("mode") === "edit") {
-      setEditMode(true);
+    if (bootstrap.status !== "ready") return;
+    const requested = searchParams.get("mode");
+    if (canEdit) {
+      if (requested === "edit" || requested === "play") {
+        setEditMode(requested === "edit");
+      } else {
+        const remembered = rememberedEditMode();
+        if (remembered !== null) setEditMode(remembered);
+      }
     }
-  }, [bootstrap.status, canEdit, searchParams, setEditMode]);
+    if (requested !== null) router.replace("/");
+  }, [bootstrap.status, canEdit, searchParams, setEditMode, router]);
 
   useEffect(() => {
     if (bootstrap.status === "empty") router.replace("/quizzes");
@@ -234,6 +239,11 @@ export default function Home() {
               side="right"
               className="w-full p-0 sm:max-w-md"
               hideCloseButton
+              // Esc in a field leaves the field, as in the wide layout; the
+              // next Esc closes the sheet.
+              onEscapeKeyDown={(event) => {
+                if (isTextField(event.target)) event.preventDefault();
+              }}
             >
               {/* Radix needs a title on every dialog for screen readers; the
                   inspector already shows the card it is editing, so this one is
@@ -253,11 +263,11 @@ export default function Home() {
     return (
       <main className="stage flex min-h-dvh items-center justify-center p-6">
         <div className="glass w-full max-w-xl rounded-2xl p-8 text-center">
-          <h2 className="text-xl font-bold">Ingen spørsmål enda</h2>
+          <h2 className="text-xl font-bold">Ingen spørsmål ennå</h2>
           <p className="mt-2 text-muted-foreground">
             {total === 0
               ? "Denne quizen har ingen kategorier."
-              : `${total} kort står tomme.`}
+              : `${total} kort står ${total === 1 ? "tomt" : "tomme"}.`}
           </p>
           <div className="mt-4 flex justify-center gap-2">
             {canEdit && (
@@ -273,4 +283,14 @@ export default function Home() {
   }
 
   return <GameStage />;
+}
+
+/** The mode setEditMode wrote for this tab, or null when there is none. */
+function rememberedEditMode(): boolean | null {
+  try {
+    const saved = window.sessionStorage.getItem("editMode");
+    return saved === null ? null : saved === "true";
+  } catch {
+    return null;
+  }
 }

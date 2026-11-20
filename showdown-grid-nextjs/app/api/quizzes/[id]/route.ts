@@ -21,7 +21,30 @@ export async function PATCH(
     }
 
     const body = await request.json();
-    const { title, description, timeLimit, theme, isPublic, quizData } = body;
+    const {
+      title,
+      description,
+      timeLimit,
+      theme,
+      isPublic,
+      quizData,
+      expectedUpdatedAt,
+    } = body;
+
+    // RLS decides who may write at all (owner or collaborator); this read
+    // finds out which of the two the caller is.
+    const { data: current, error: currentError } = await supabase
+      .from('quizzes')
+      .select('user_id, is_public, updated_at')
+      .eq('id', id)
+      .maybeSingle();
+
+    if (currentError) throw currentError;
+    if (!current) {
+      return NextResponse.json({ error: 'Quiz not found' }, { status: 404 });
+    }
+
+    const isOwner = current.user_id === user.id;
 
     const updateData: Record<string, unknown> = {
       updated_at: new Date().toISOString(),
@@ -48,7 +71,15 @@ export async function PATCH(
       const allowed = ['classic', 'modern', 'christmas'];
       updateData.theme = allowed.includes(theme) ? theme : 'classic';
     }
-    if (isPublic !== undefined) {
+    // Publishing is the owner's call (migration 08 enforces it in the
+    // database too). The client sends the flag with every save, so for a
+    // collaborator it is dropped rather than rejected: a stale value from a
+    // tab opened before the owner changed it must not fail the whole save.
+    if (
+      isOwner &&
+      isPublic !== undefined &&
+      Boolean(isPublic) !== current.is_public
+    ) {
       updateData.is_public = Boolean(isPublic);
     }
     if (quizData !== undefined) {
@@ -60,15 +91,24 @@ export async function PATCH(
     // and RLS (owner OR collaborator) is what actually decides who can write
     // this row. Matches 0 rows for anyone else, which the PGRST116 branch
     // below turns into a 404 rather than a silent no-op.
-    const { data, error } = await supabase
-      .from('quizzes')
-      .update(updateData)
-      .eq('id', id)
-      .select()
-      .single();
+    //
+    // With expectedUpdatedAt, the write only lands on the version the client
+    // loaded. Without it, a stale tab — the projector PC from last time —
+    // replaced everything saved elsewhere since, with no one the wiser.
+    let query = supabase.from('quizzes').update(updateData).eq('id', id);
+    if (typeof expectedUpdatedAt === 'string' && expectedUpdatedAt) {
+      query = query.eq('updated_at', expectedUpdatedAt);
+    }
+    const { data, error } = await query.select().single();
 
     if (error) {
       if (error.code === 'PGRST116') {
+        if (typeof expectedUpdatedAt === 'string' && expectedUpdatedAt) {
+          return NextResponse.json(
+            { error: 'Quizen er endret et annet sted', updatedAt: current.updated_at },
+            { status: 409 }
+          );
+        }
         return NextResponse.json(
           { error: 'Quiz not found' },
           { status: 404 }

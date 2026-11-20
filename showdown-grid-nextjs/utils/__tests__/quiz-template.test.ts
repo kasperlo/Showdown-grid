@@ -8,6 +8,7 @@ import {
   liveStateFromRunState,
   mergeLiveIntoTemplate,
   templateFromQuizData,
+  withCategoryIds,
 } from "../quiz-template";
 import type { Category, Team } from "../types";
 
@@ -109,8 +110,8 @@ describe("extractLiveState", () => {
     });
 
     expect(live.answeredKeys).toEqual([
-      answeredKey("Historie", 0),
-      answeredKey("Mat", 0),
+      answeredKey({ name: "Historie" }, 0),
+      answeredKey({ name: "Mat" }, 0),
     ]);
     expect(live.scores).toEqual({ a: 400, b: -100 });
     expect(live.currentTurnTeamId).toBe("b");
@@ -270,5 +271,168 @@ describe("completeness", () => {
 
     expect(isQuestionComplete(categories[0].questions[0])).toBe(false);
     expect(countCompleteQuestions(categories)).toBe(0);
+  });
+});
+
+describe("category ids", () => {
+  const withIds = (): Category[] =>
+    board().map((category, index) => ({ ...category, id: `k${index}` }));
+
+  it("keys answered cards on the category id, so equal names stay apart", () => {
+    const categories: Category[] = [
+      { ...board()[0], id: "x", name: "Musikk" },
+      { ...board()[0], id: "y", name: "Musikk" },
+    ];
+    categories[1].questions = categories[1].questions.map((q) => ({
+      ...q,
+      answered: false,
+    }));
+    const live = extractLiveState({
+      categories,
+      teams,
+      adjustmentLog: [],
+      currentTurnTeamId: null,
+    });
+    const merged = mergeLiveIntoTemplate(
+      extractTemplate({ categories, teams, ...meta }),
+      live
+    );
+
+    expect(live.answeredKeys).toEqual(["id:x|0"]);
+    expect(merged.categories[0].questions[0].answered).toBe(true);
+    expect(merged.categories[1].questions[0].answered).toBe(false);
+  });
+
+  it("keeps used cards used after a rename, since the key no longer has the name", () => {
+    const categories = withIds();
+    const live = extractLiveState({
+      categories,
+      teams,
+      adjustmentLog: [],
+      currentTurnTeamId: null,
+    });
+    const renamed = categories.map((c) => ({ ...c, name: "" }));
+    const merged = mergeLiveIntoTemplate(
+      extractTemplate({ categories: renamed, teams, ...meta }),
+      live
+    );
+
+    expect(merged.categories[0].questions[0].answered).toBe(true);
+  });
+
+  it("still reads name keys from runs written before categories had ids", () => {
+    const merged = mergeLiveIntoTemplate(
+      extractTemplate({ categories: withIds(), teams, ...meta }),
+      {
+        answeredKeys: ["Historie|1"],
+        scores: {},
+        adjustmentLog: [],
+        currentTurnTeamId: null,
+        version: 2,
+      }
+    );
+
+    expect(merged.categories[0].questions[1].answered).toBe(true);
+  });
+
+  it("gives stored categories without ids the same ids on every load", () => {
+    const meta2 = {
+      quizTitle: "Lagret",
+      quizDescription: "",
+      quizTimeLimit: null,
+      quizTheme: "classic" as const,
+      quizIsPublic: false,
+    };
+    const first = templateFromQuizData({ categories: board() }, meta2);
+    const second = templateFromQuizData({ categories: board() }, meta2);
+
+    expect(first.categories.map((c) => c.id)).toEqual(["c0", "c1"]);
+    expect(second.categories.map((c) => c.id)).toEqual(["c0", "c1"]);
+  });
+
+  it("makes repeated ids unique", () => {
+    const ids = withCategoryIds(
+      [
+        { id: "same", name: "A", questions: [] },
+        { id: "same", name: "B", questions: [] },
+      ],
+      "positional"
+    ).map((c) => c.id);
+
+    expect(new Set(ids).size).toBe(2);
+  });
+});
+
+describe("the teams of a playthrough", () => {
+  it("restores a team that exists only in the live state, with its score", () => {
+    const template = extractTemplate({ categories: board(), teams, ...meta });
+    const merged = mergeLiveIntoTemplate(template, {
+      answeredKeys: [],
+      scores: { a: 100, late: 300 },
+      adjustmentLog: [],
+      currentTurnTeamId: "late",
+      teams: [
+        { id: "a", name: "Alfa", players: [] },
+        { id: "late", name: "Kom sent", players: ["Ola"] },
+      ],
+      version: 2,
+    });
+
+    expect(merged.teams.map((t) => [t.name, t.score])).toEqual([
+      ["Alfa", 100],
+      ["Kom sent", 300],
+    ]);
+    expect(merged.currentTurnTeamId).toBe("late");
+  });
+
+  it("falls back to the quiz's teams for runs without a roster", () => {
+    const template = extractTemplate({ categories: board(), teams, ...meta });
+    const merged = mergeLiveIntoTemplate(template, {
+      answeredKeys: [],
+      scores: { a: 50 },
+      adjustmentLog: [],
+      currentTurnTeamId: null,
+      version: 2,
+    });
+
+    expect(merged.teams.map((t) => t.name)).toEqual(["Alfa", "Bravo"]);
+  });
+
+  it("round-trips the roster and the time of the last action through a run row", () => {
+    const live = extractLiveState({
+      categories: board(),
+      teams,
+      adjustmentLog: [],
+      currentTurnTeamId: null,
+      lastActionAt: 1234,
+    });
+    const read = liveStateFromRunState(JSON.parse(JSON.stringify(live)));
+
+    expect(read?.teams?.map((t) => t.name)).toEqual(["Alfa", "Bravo"]);
+    expect(read?.lastActionAt).toBe(1234);
+  });
+});
+
+describe("quiz settings in the template", () => {
+  const meta2 = {
+    quizTitle: "Lagret",
+    quizDescription: "",
+    quizTimeLimit: null,
+    quizTheme: "classic" as const,
+    quizIsPublic: false,
+  };
+
+  it("defaults the turn rule to the team that answered", () => {
+    expect(templateFromQuizData({ categories: [] }, meta2).turnRule).toBe("winner");
+    expect(
+      templateFromQuizData({ categories: [], turnRule: "rotation" }, meta2).turnRule
+    ).toBe("rotation");
+  });
+
+  it("reads the old default joker timer of 10 as 'use the quiz default'", () => {
+    const template = templateFromQuizData({ categories: board() }, meta2);
+
+    expect(template.categories[0].questions[0].jokerTimer).toBeNull();
+    expect(template.categories[1].questions[0].jokerTimer).toBe(15);
   });
 });

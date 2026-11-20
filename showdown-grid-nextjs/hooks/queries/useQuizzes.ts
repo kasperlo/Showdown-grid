@@ -1,5 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
-import type { QuizMetadata, Category, Team, AdjustmentEntry } from "@/utils/types";
+import type { QuizMetadata } from "@/utils/types";
 
 // Query keys
 export const quizKeys = {
@@ -8,38 +8,17 @@ export const quizKeys = {
   list: (filters: string) => [...quizKeys.lists(), { filters }] as const,
   details: () => [...quizKeys.all, "detail"] as const,
   detail: (id: string) => [...quizKeys.details(), id] as const,
-  active: () => [...quizKeys.all, "active"] as const,
   public: () => [...quizKeys.all, "public"] as const,
   share: (quizId: string) => [...quizKeys.all, "share", quizId] as const,
 };
 
 // Types
-export interface ActiveQuizData {
-  quizId: string;
-  quizOwnerId: string;
-  quizTitle: string;
-  quizDescription: string;
-  quizTimeLimit: number | null;
-  quizTheme: string;
-  quizIsPublic: boolean;
-  categories: Category[];
-  teams: Team[];
-  adjustmentLog: AdjustmentEntry[];
-  jokerTimeLimit?: number | null;
-  /** Owner or collaborator. Absent on the read-only public-play path. */
-  canEdit?: boolean;
-}
-
 interface QuizListResponse {
   quizzes: QuizMetadata[];
 }
 
 interface PublicQuizzesResponse {
   quizzes: QuizMetadata[];
-}
-
-interface QuizDataResponse {
-  data: ActiveQuizData;
 }
 
 export interface ShareCollaborator {
@@ -54,25 +33,6 @@ export interface ShareStatus {
 }
 
 // Fetch functions
-async function fetchActiveQuiz(): Promise<ActiveQuizData | null> {
-  const response = await fetch("/api/quiz");
-
-  if (response.status === 404) {
-    return null; // No active quiz found
-  }
-
-  if (response.status === 401) {
-    throw new Error("Unauthorized");
-  }
-
-  if (!response.ok) {
-    throw new Error(`Failed to load quiz: ${response.status}`);
-  }
-
-  const result: QuizDataResponse = await response.json();
-  return result.data;
-}
-
 async function fetchQuizzesList(): Promise<QuizMetadata[]> {
   const response = await fetch("/api/quizzes");
 
@@ -108,30 +68,6 @@ async function fetchShareStatus(quizId: string): Promise<ShareStatus> {
 }
 
 // Query hooks
-export function useActiveQuiz(enabled: boolean = true) {
-  return useQuery({
-    queryKey: quizKeys.active(),
-    queryFn: fetchActiveQuiz,
-    enabled, // Only fetch if enabled (false when playing public quiz)
-    // Load-once semantics on purpose. With refetch-on-focus, switching back to
-    // the tab mid-quiz refetched the stored quiz and the page synced it into the
-    // store, wiping the scores and answered questions of the running game.
-    refetchOnWindowFocus: false,
-    refetchOnReconnect: false,
-    staleTime: Infinity,
-    retry: (failureCount, error) => {
-      // Don't retry on 401 or 404
-      if (
-        error instanceof Error &&
-        (error.message === "Unauthorized" || error.message.includes("404"))
-      ) {
-        return false;
-      }
-      return failureCount < 1;
-    },
-  });
-}
-
 export function useQuizzesList() {
   return useQuery({
     queryKey: quizKeys.lists(),

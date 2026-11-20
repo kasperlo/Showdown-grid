@@ -36,7 +36,7 @@ export function RoundScreen() {
   if (!lastQuestion) return null;
   return (
     <RoundScreenBody
-      key={`${lastQuestion.categoryName}-${lastQuestion.questionIndex}`}
+      key={`${lastQuestion.categoryId}-${lastQuestion.questionIndex}`}
     />
   );
 }
@@ -84,11 +84,39 @@ function RoundScreenBody() {
   );
 }
 
+/** The team that picked this card, for the steps of a round. */
+function TurnChip() {
+  const team = useGameStore((s) =>
+    s.teams.find((t) => t.id === s.currentTurnTeamId)
+  );
+  if (!team) return null;
+  return (
+    <span className="inline-flex max-w-[16rem] shrink-0 items-center gap-1.5 rounded-full border border-accent bg-accent/15 px-3 py-1 text-[clamp(0.8rem,2vh,1.1rem)] font-semibold text-accent">
+      <span aria-hidden>👉</span>
+      <span className="truncate">{team.name}</span>
+      <span className="sr-only">valgte kortet</span>
+    </span>
+  );
+}
+
 /** Left-column recap shown beside the award and awarded steps. */
 function QuestionAnswerRecap() {
   const lastQuestion = useGameStore((s) => s.lastQuestion);
   if (!lastQuestion) return null;
   const hasCode = Boolean(lastQuestion.code?.trim());
+
+  if (lastQuestion.isJoker) {
+    return (
+      <aside className="w-[480px] shrink-0 overflow-y-auto border-r border-border p-6">
+        <p className="text-xs font-semibold uppercase tracking-widest text-muted-foreground">
+          {lastQuestion.categoryName} • {lastQuestion.points} • Joker
+        </p>
+        <p className="mt-3 text-[2rem] font-bold leading-tight text-accent">
+          {lastQuestion.jokerTask?.trim() || "(Ingen oppgavetekst)"}
+        </p>
+      </aside>
+    );
+  }
 
   return (
     <aside className="w-[480px] shrink-0 overflow-y-auto border-r border-border p-6">
@@ -136,7 +164,9 @@ function ThinStandingsLine() {
           <span
             key={team.id}
             className={`inline-flex shrink-0 items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs sm:text-sm ${
-              team.id === currentTurnTeamId ? "border-accent" : "border-border"
+              team.id === currentTurnTeamId
+                ? "border-accent bg-accent/15 ring-2 ring-accent"
+                : "border-border"
             }`}
           >
             <span className="max-w-[8rem] truncate font-medium">
@@ -210,9 +240,12 @@ function QuestionStep() {
   return (
     <div className="flex min-h-0 flex-1 flex-col">
       <div className="flex items-center justify-between gap-4 border-b border-border px-4 py-3 sm:px-8">
-        <p className="text-left text-[clamp(1rem,2.8vh,1.8rem)] font-extrabold tracking-tight text-accent">
-          {lastQuestion.categoryName} • {lastQuestion.points}
-        </p>
+        <div className="flex min-w-0 items-center gap-3">
+          <p className="text-left text-[clamp(1rem,2.8vh,1.8rem)] font-extrabold tracking-tight text-accent">
+            {lastQuestion.categoryName} • {lastQuestion.points}
+          </p>
+          <TurnChip />
+        </div>
         <div className="flex items-center gap-2">
           {isTimerActive && quizTimeLimit && (
             <Timer initialTime={quizTimeLimit} className="shrink-0" />
@@ -222,7 +255,7 @@ function QuestionStep() {
             size="sm"
             onClick={cancelRound}
             className="shrink-0 text-muted-foreground hover:text-foreground"
-            title="Avbryt rundt (Esc)"
+            title="Avbryt runden (Esc)"
           >
             <X className="h-5 w-5" />
           </Button>
@@ -324,15 +357,18 @@ function AnswerStep() {
   return (
     <div className="flex min-h-0 flex-1 flex-col">
       <div className="flex items-center justify-between border-b border-border px-4 py-3 sm:px-8">
-        <p className="text-left text-sm font-semibold text-muted-foreground">
-          {lastQuestion.categoryName} • {lastQuestion.points}
-        </p>
+        <div className="flex min-w-0 items-center gap-3">
+          <p className="text-left text-sm font-semibold text-muted-foreground">
+            {lastQuestion.categoryName} • {lastQuestion.points}
+          </p>
+          <TurnChip />
+        </div>
         <Button
           variant="ghost"
           size="sm"
           onClick={cancelRound}
           className="shrink-0 text-muted-foreground hover:text-foreground"
-          title="Avbryt rundt (Esc)"
+          title="Avbryt runden (Esc)"
         >
           <X className="h-5 w-5" />
         </Button>
@@ -398,6 +434,7 @@ function AwardStep({
   const lastQuestion = useGameStore((s) => s.lastQuestion);
   const teams = useGameStore((s) => s.teams);
   const round = useGameStore((s) => s.round);
+  const currentTurnTeamId = useGameStore((s) => s.currentTurnTeamId);
   const awardPositive = useGameStore((s) => s.awardPositive);
   const awardNegative = useGameStore((s) => s.awardNegative);
   const cancelRound = useGameStore((s) => s.cancelRound);
@@ -474,13 +511,14 @@ function AwardStep({
 
   return (
     <div className="flex min-h-0 flex-1 flex-col">
-      <div className="flex items-center justify-end border-b border-border px-4 py-3 sm:px-8">
+      <div className="flex items-center justify-between gap-3 border-b border-border px-4 py-3 sm:px-8">
+        <TurnChip />
         <Button
           variant="ghost"
           size="sm"
           onClick={cancelRound}
           className="shrink-0 text-muted-foreground hover:text-foreground"
-          title="Avbryt rundt (Esc)"
+          title="Avbryt runden (Esc)"
         >
           <X className="h-5 w-5" />
         </Button>
@@ -490,7 +528,7 @@ function AwardStep({
 
         <div className="flex flex-1 flex-col items-center justify-center gap-6 p-6">
           <p className="text-[clamp(1.3rem,3.6vh,2.2rem)] font-bold">
-            Hvem svarte riktig?
+            {lastQuestion.isJoker ? "Hvem klarte oppgaven?" : "Hvem svarte riktig?"}
           </p>
 
         <div className="flex items-center gap-3">
@@ -528,6 +566,7 @@ function AwardStep({
               const disabled =
                 Boolean(round.positiveTeamId) ||
                 (penaltyArmed && round.negativeAwardedTo.includes(team.id));
+              const pickedCard = team.id === currentTurnTeamId;
               return (
                 <button
                   key={team.id}
@@ -540,12 +579,18 @@ function AwardStep({
                     penaltyArmed
                       ? "border-2 border-destructive bg-destructive/10"
                       : "hover:border-accent/70",
+                    pickedCard && !penaltyArmed ? "ring-2 ring-accent" : "",
                   ].join(" ")}
                 >
                   {index < 9 && (
                     <kbd className="rounded bg-muted px-1.5 text-xs text-muted-foreground">
                       {index + 1}
                     </kbd>
+                  )}
+                  {pickedCard && (
+                    <span className="text-[11px] font-semibold uppercase tracking-wide text-accent">
+                      Valgte kortet
+                    </span>
                   )}
                   <span className="max-w-full truncate text-lg font-bold">
                     {team.name}
@@ -590,6 +635,8 @@ function AwardStep({
 function AwardedStep() {
   const round = useGameStore((s) => s.round);
   const teams = useGameStore((s) => s.teams);
+  const turnRule = useGameStore((s) => s.turnRule);
+  const currentTurnTeamId = useGameStore((s) => s.currentTurnTeamId);
   const adjustmentLog = useGameStore((s) => s.adjustmentLog);
   const endRound = useGameStore((s) => s.endRound);
   const undoLastAward = useGameStore((s) => s.undoLastAward);
@@ -610,9 +657,16 @@ function AwardedStep() {
   }, [endRound]);
 
   const winner = teams.find((t) => t.id === round.positiveTeamId) ?? null;
-  const lastEntry = adjustmentLog[0];
+  const lastEntry = adjustmentLog.find((e) => e.id === round.positiveEntryId);
   if (!winner || !lastEntry) return null;
   const before = winner.score - lastEntry.delta;
+  const currentIndex = teams.findIndex((t) => t.id === currentTurnTeamId);
+  const picksNext =
+    turnRule === "rotation"
+      ? currentIndex >= 0
+        ? teams[(currentIndex + 1) % teams.length]
+        : null
+      : winner;
 
   return (
     <div className="flex min-h-0 flex-1">
@@ -625,9 +679,11 @@ function AwardedStep() {
         <p className="text-[clamp(1.4rem,4.4vh,2.6rem)] font-bold tabular-nums text-muted-foreground">
           {before} <span aria-hidden>→</span> {winner.score}
         </p>
-        <p className="text-lg text-muted-foreground">
-          {winner.name} velger neste kort
-        </p>
+        {picksNext && (
+          <p className="text-lg text-muted-foreground">
+            {picksNext.name} velger neste kort
+          </p>
+        )}
 
         <div className="mt-4 flex gap-3">
           <Button variant="ghost" onClick={undoLastAward}>

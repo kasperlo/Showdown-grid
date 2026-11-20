@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useGameStore } from "@/utils/store";
 import { templateFromQuizData } from "@/utils/quiz-template";
-import { readPublicPlay } from "@/utils/live-snapshot";
+import { readPublicPlay, rememberPublicPlay } from "@/utils/live-snapshot";
 import type { ActiveSessionSummary, QuizTheme } from "@/utils/types";
 
 export type BootstrapState =
@@ -35,10 +35,12 @@ interface RawQuizPayload {
   quizTimeLimit: number | null;
   quizTheme: string;
   quizIsPublic: boolean;
+  quizUpdatedAt?: string | null;
   canEdit?: boolean;
   categories?: unknown;
   teams?: unknown;
   jokerTimeLimit?: unknown;
+  turnRule?: unknown;
 }
 
 /**
@@ -82,10 +84,16 @@ export function useQuizBootstrap(): BootstrapState {
         : "/api/quiz";
 
       try {
+        // A quiz left a moment ago may still be saving; loading before that
+        // lands would show the old board and make the next save a conflict.
+        await useGameStore.getState().waitForTemplateSaves();
         const response = await fetch(url);
         if (!isCurrent()) return;
 
         if (response.status === 404 || response.status === 403) {
+          // A public quiz that is gone or no longer public: forget it, or
+          // every visit to the board would bounce back to the library.
+          if (publicQuizId) rememberPublicPlay(null);
           useGameStore.getState().setHydrated(true);
           setState({ status: "empty" });
           return;
@@ -107,6 +115,7 @@ export function useQuizBootstrap(): BootstrapState {
             categories: data.categories,
             teams: data.teams,
             jokerTimeLimit: data.jokerTimeLimit,
+            turnRule: data.turnRule,
           },
           {
             quizTitle: data.quizTitle,
@@ -121,16 +130,32 @@ export function useQuizBootstrap(): BootstrapState {
           template,
           quizId: data.quizId,
           quizOwnerId: data.quizOwnerId,
+          updatedAt: data.quizUpdatedAt ?? null,
           canEdit: data.canEdit,
           isPublicPlay,
         });
 
         const quizId = data.quizId;
-        const summary = await useGameStore.getState().peekActiveSession(quizId);
+        let summary: ActiveSessionSummary | null;
+        try {
+          summary = await useGameStore.getState().peekActiveSession(quizId);
+        } catch {
+          // Not knowing is not the same as "no session": the first card
+          // would then take over a running game. Better to stop here.
+          if (!isCurrent()) return;
+          setState({
+            status: "error",
+            message:
+              "Fikk ikke sjekket om en økt allerede pågår. Sjekk nettet og prøv igjen.",
+          });
+          return;
+        }
         if (!isCurrent()) return;
 
         if (!summary) {
-          // No session at all. The board from loadQuiz() is already usable.
+          // No session on the server. A game started before the first card
+          // (teams typed in, a starting team drawn) only exists here.
+          useGameStore.getState().applySnapshotWithoutRun(quizId);
           setState({ status: "ready", quizId });
           return;
         }

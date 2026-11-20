@@ -1,24 +1,20 @@
 import { useEffect, useRef } from "react";
-import {
-  reportSaveError,
-  reportSaved,
-  reportSaving,
-  useGameStore,
-} from "@/utils/store";
+import { useGameStore } from "@/utils/store";
 import { extractTemplate, templateFingerprint } from "@/utils/quiz-template";
 import { useDebounce } from "@/utils/useDebounce";
-import { useSaveTemplate } from "@/hooks/mutations/useQuizMutations";
+import type { QuizTemplate } from "@/utils/types";
 
 /**
- * Saves the quiz template when it actually changes.
+ * Saves the quiz template when it actually changes. The saving itself, and
+ * the queue that keeps saves from overlapping, live in the store
+ * (saveTemplate); this hook decides when.
  *
- * Three rules, each of which was broken before:
- *
- * 1. It compares a fingerprint of the TEMPLATE, so playing a game — which
- *    changes scores and answered flags but not the template — writes nothing.
- * 2. It only writes once the debounce has settled. The old effect listed the raw
- *    state in its dependency array too, so the debounce held nothing back.
- * 3. Loading a quiz is not an edit, and neither is switching between them.
+ * - It compares a fingerprint of the TEMPLATE, so playing a game — which
+ *   changes scores and answered flags but not the template — writes nothing.
+ * - It writes once the debounce has settled, and shows "pending" until then
+ *   rather than the time of the previous save.
+ * - Leaving the page, hiding it, or switching to another quiz saves what is
+ *   pending instead of dropping it.
  */
 export function useTemplateAutoSave() {
   const categories = useGameStore((s) => s.categories);
@@ -29,87 +25,89 @@ export function useTemplateAutoSave() {
   const jokerTimeLimit = useGameStore((s) => s.jokerTimeLimit);
   const quizTheme = useGameStore((s) => s.quizTheme);
   const quizIsPublic = useGameStore((s) => s.quizIsPublic);
+  const turnRule = useGameStore((s) => s.turnRule);
   const activeQuizId = useGameStore((s) => s.activeQuizId);
+  const quizUpdatedAt = useGameStore((s) => s.quizUpdatedAt);
   const isHydrated = useGameStore((s) => s.isHydrated);
+  const templateBaseline = useGameStore((s) => s.templateBaseline);
+  const saveTemplate = useGameStore((s) => s.saveTemplate);
 
-  const fingerprint = templateFingerprint(
-    extractTemplate({
-      categories,
-      teams,
-      quizTitle,
-      quizDescription,
-      quizTimeLimit,
-      jokerTimeLimit,
-      quizTheme,
-      quizIsPublic,
-    })
-  );
-
+  const template: QuizTemplate = extractTemplate({
+    categories,
+    teams,
+    quizTitle,
+    quizDescription,
+    quizTimeLimit,
+    jokerTimeLimit,
+    quizTheme,
+    quizIsPublic,
+    turnRule,
+  });
+  const fingerprint = templateFingerprint(template);
   const debouncedFingerprint = useDebounce(fingerprint, 1200);
-  const baseline = useRef<{ quizId: string | null; fingerprint: string | null }>(
-    { quizId: null, fingerprint: null }
-  );
-  const { mutate: save } = useSaveTemplate();
+  const unsaved = isHydrated && !!activeQuizId && fingerprint !== templateBaseline;
 
-  // The baseline has to come from the CURRENT fingerprint, not the debounced
-  // one. Loading a quiz changes both the id and the board in the same update,
-  // and the debounced value still holds the previous board for another 1200 ms —
-  // so taking the baseline from it made every load write the quiz straight back.
+  // What was on screen for which quiz, for when the library switches away
+  // before the debounce has settled.
+  const latest = useRef<{
+    quizId: string | null;
+    template: QuizTemplate;
+    updatedAt: string | null;
+    unsaved: boolean;
+  } | null>(null);
+
   useEffect(() => {
-    if (baseline.current.quizId !== activeQuizId) {
-      baseline.current = { quizId: activeQuizId, fingerprint };
+    const previous = latest.current;
+    if (previous?.quizId && previous.quizId !== activeQuizId && previous.unsaved) {
+      void saveTemplate({
+        target: {
+          quizId: previous.quizId,
+          template: previous.template,
+          expectedUpdatedAt: previous.updatedAt,
+        },
+      });
     }
-  }, [activeQuizId, fingerprint]);
+    latest.current = { quizId: activeQuizId, template, updatedAt: quizUpdatedAt, unsaved };
+  });
 
   useEffect(() => {
     if (!isHydrated || !activeQuizId) return;
+    const state = useGameStore.getState();
 
     // A quiz that is not the user's own cannot be written at all, and the
     // indicator should say so rather than pretend to save.
-    if (!useGameStore.getState().canEditActiveQuiz()) {
-      const { isPlayingPublicQuiz, saveStatus } = useGameStore.getState();
-      const next = isPlayingPublicQuiz ? "readonly" : "idle";
-      if (saveStatus !== next) useGameStore.setState({ saveStatus: next });
+    if (!state.canEditActiveQuiz()) {
+      const next = state.isPlayingPublicQuiz ? "readonly" : "idle";
+      if (state.saveStatus !== next) useGameStore.setState({ saveStatus: next });
       return;
     }
 
-    // The effect above owns the baseline; until it has one for this quiz there
-    // is nothing to compare against.
-    if (
-      baseline.current.quizId !== activeQuizId ||
-      baseline.current.fingerprint === null
-    ) {
-      return;
+    if (!unsaved) return;
+    if (state.saveStatus === "idle" || state.saveStatus === "saved") {
+      useGameStore.setState({ saveStatus: "pending" });
     }
 
-    // The debounced value can be OLDER than the baseline, not just newer:
-    // loading a quiz changes the board instantly while the debounce still holds
-    // the previous one for 1200 ms. Saving then wrote the state the app had
-    // before the load — an empty board with an empty title, which the server
-    // rejected with 400. Only a settled debounce is a real edit.
+    // Only a settled debounce is a real edit; an unsettled one can even hold
+    // the board from before a load.
     if (debouncedFingerprint !== fingerprint) return;
+    void saveTemplate();
+  }, [debouncedFingerprint, fingerprint, activeQuizId, isHydrated, unsaved, saveTemplate]);
 
-    if (baseline.current.fingerprint === debouncedFingerprint) return;
-
-    const target = debouncedFingerprint;
-    const template = JSON.parse(target);
-
-    reportSaving();
-    save(
-      { quizId: activeQuizId, template },
-      {
-        onSuccess: () => {
-          baseline.current = { quizId: activeQuizId, fingerprint: target };
-          reportSaved();
-        },
-        onError: (error: unknown) => {
-          // The baseline deliberately does not advance, so the next change
-          // retries this content instead of treating it as stored.
-          reportSaveError(
-            error instanceof Error ? error.message : "Ukjent lagringsfeil"
-          );
-        },
-      }
-    );
-  }, [debouncedFingerprint, fingerprint, activeQuizId, isHydrated, save]);
+  // Closing the lid or the tab should not drop the last edit.
+  useEffect(() => {
+    const flush = () => {
+      const state = useGameStore.getState();
+      if (!state.activeQuizId || !state.canEditActiveQuiz()) return;
+      void state.saveTemplate({ keepalive: true });
+    };
+    const onVisibility = () => {
+      if (document.visibilityState === "hidden") flush();
+    };
+    window.addEventListener("pagehide", flush);
+    document.addEventListener("visibilitychange", onVisibility);
+    return () => {
+      window.removeEventListener("pagehide", flush);
+      document.removeEventListener("visibilitychange", onVisibility);
+    };
+  }, []);
 }

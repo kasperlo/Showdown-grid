@@ -6,19 +6,28 @@ import type {
   LastQuestion,
   AdjustmentEntry,
   QuizTheme,
+  QuizTemplate,
   LoadQuizInput,
+  LiveGameState,
+  RoundProgress,
   RoundStep,
   QuizRun,
+  SaveTemplateOptions,
+  Team,
+  TurnRule,
 } from "./types";
 import { hasSessionProgress } from "./session-progress";
 import {
   buildQueue,
+  ladderAfterRemoval,
+  nextRung,
   normalizePoints,
   sameCard,
   type CardRef,
   type QueueFilter,
 } from "./card-status";
 import {
+  DEFAULT_TURN_RULE,
   defaultTeams,
   emptyCategory,
   emptyQuestion,
@@ -26,27 +35,29 @@ import {
   extractTemplate,
   liveStateFromRunState,
   mergeLiveIntoTemplate,
+  newCategoryId,
   starterCategories,
-  DEFAULT_POINTS,
+  templateFingerprint,
+  withCategoryIds,
 } from "./quiz-template";
 import {
   clearSnapshot,
   readSnapshot,
   rememberPublicPlay,
   snapshotIsAhead,
+  isSnapshotUsable,
   writeSnapshot,
 } from "./live-snapshot";
+import { toast } from "@/hooks/use-toast";
+import { getQueryClient } from "@/lib/query-client";
+import { quizRunKeys } from "@/hooks/queries/useQuizRuns";
 
-interface RoundState {
-  active: boolean;
-  positiveTeamId: string | null;
-  negativeAwardedTo: string[];
-}
-
-const initialRoundState = (): RoundState => ({
+const initialRoundState = (): RoundProgress => ({
   active: false,
   positiveTeamId: null,
   negativeAwardedTo: [],
+  entryIds: [],
+  positiveEntryId: null,
 });
 
 const genId = () => `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
@@ -62,6 +73,26 @@ let pendingSessionSave: ReturnType<typeof setTimeout> | null = null;
  * leaving an orphan run that a later restore could pick instead of the real one.
  */
 let startSessionInFlight: Promise<string | null> | null = null;
+
+/** The starting-team draw. A second draw replaces the first instead of both
+ * landing, one after the other, after the spin had already shown a team. */
+let drawTimer: ReturnType<typeof setTimeout> | null = null;
+
+/**
+ * Template saves run one at a time. Each save sends the updated_at the
+ * previous one got back, so two in flight would reject each other, and
+ * without the queue a slow early save could land after a later one.
+ */
+let templateSaveChain: Promise<unknown> = Promise.resolve();
+let templateRetryTimer: ReturnType<typeof setTimeout> | null = null;
+let templateRetryCount = 0;
+const TEMPLATE_RETRY_LIMIT = 3;
+/** A quiz dropped from memory (deleted, or the user signed out): an edit
+ * still pending for it is not saved on the way out. */
+let unloadedQuizId: string | null = null;
+
+export const SAVE_CONFLICT_MESSAGE =
+  "Quizen er endret et annet sted. Det du har endret her siden sist, er ikke lagret.";
 
 /**
  * Save status lives in the store, including the timed fade from "Lagret" back
@@ -83,7 +114,6 @@ export function reportSaved(): void {
   useGameStore.setState({
     saveStatus: "saved",
     isSaving: false,
-    hasUnsavedChanges: false,
     lastSavedAt: Date.now(),
     saveError: null,
   });
@@ -105,47 +135,220 @@ export function reportSaveError(message: string): void {
   });
 }
 
-const withUnsavedChanges = <T extends (...args: never[]) => unknown>(
-  fn: T,
-  set: (partial: Partial<GameState>) => void
-): T => {
-  return ((...args: Parameters<T>) => {
-    set({ hasUnsavedChanges: true });
-    return fn(...args);
-  }) as T;
-};
+/** The PATCH body for a template. An empty title is left out: the server
+ * rejects it, and with it every other change in the same save. */
+function templateRequestBody(
+  template: QuizTemplate,
+  expectedUpdatedAt: string | null
+): string {
+  const title = template.quizTitle.trim();
+  return JSON.stringify({
+    ...(title ? { title } : {}),
+    description: template.quizDescription,
+    timeLimit: template.quizTimeLimit,
+    theme: template.quizTheme,
+    isPublic: template.quizIsPublic,
+    quizData: {
+      categories: template.categories,
+      teams: template.teams,
+      jokerTimeLimit: template.jokerTimeLimit,
+      turnRule: template.turnRule,
+    },
+    expectedUpdatedAt,
+  });
+}
+
+async function sendTemplate(
+  quizId: string,
+  body: string,
+  keepalive: boolean
+): Promise<Response> {
+  const init: RequestInit = {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body,
+  };
+  if (!keepalive) return fetch(`/api/quizzes/${quizId}`, init);
+  try {
+    return await fetch(`/api/quizzes/${quizId}`, { ...init, keepalive: true });
+  } catch {
+    // keepalive bodies are capped at 64 KB; a bigger board goes as a normal
+    // request and may or may not finish before the page is gone.
+    return fetch(`/api/quizzes/${quizId}`, init);
+  }
+}
+
+function uniqueCategoryName(base: string, categories: Category[]): string {
+  const taken = new Set(categories.map((c) => c.name));
+  if (!taken.has(base)) return base;
+  let n = 2;
+  while (taken.has(`${base} ${n}`)) n += 1;
+  return `${base} ${n}`;
+}
+
+function nextFreeCategoryName(categories: Category[]): string {
+  const taken = new Set(categories.map((c) => c.name));
+  let n = categories.length + 1;
+  while (taken.has(`Kategori ${n}`)) n += 1;
+  return `Kategori ${n}`;
+}
+
+/** Moves the selection and the review queue along with a structural edit, so
+ * the panel keeps showing the card it showed before. */
+function remapCards(
+  selected: CardRef | null,
+  queue: GameState["queue"],
+  map: (ref: CardRef) => CardRef | null
+): Pick<GameState, "selectedCard" | "queue"> {
+  const nextSelected = selected ? map(selected) : null;
+  if (!queue) return { selectedCard: nextSelected, queue: null };
+  const ids = queue.ids.flatMap((ref) => {
+    const mapped = map(ref);
+    return mapped ? [mapped] : [];
+  });
+  if (!ids.length) return { selectedCard: nextSelected, queue: null };
+  const position = nextSelected
+    ? Math.max(0, ids.findIndex((ref) => sameCard(ref, nextSelected)))
+    : Math.min(queue.position, ids.length - 1);
+  return { selectedCard: nextSelected, queue: { ...queue, ids, position } };
+}
 
 export const useGameStore = create<GameState>()((set, get) => {
   /** Mirrors the live state to localStorage after every scoring action. */
   const snapshotLiveState = () => {
     const state = get();
     if (!state.activeQuizId) return;
-    writeSnapshot(
-      state.activeQuizId,
-      extractLiveState({
-        categories: state.categories,
-        teams: state.teams,
-        adjustmentLog: state.adjustmentLog,
-        currentTurnTeamId: state.currentTurnTeamId,
-      }),
-      state.activeRunId
-    );
+    writeSnapshot(state.activeQuizId, extractLiveState(state), state.activeRunId);
   };
 
-  const actions = {
-    setCategories: (categories: Category[]) => set({ categories }),
+  /** Lays a live state over the board that is loaded now. */
+  const applyLive = (live: LiveGameState) => {
+    const merged = mergeLiveIntoTemplate(extractTemplate(get()), live);
+    set({
+      categories: merged.categories,
+      teams: merged.teams,
+      adjustmentLog: merged.adjustmentLog,
+      currentTurnTeamId: merged.currentTurnTeamId,
+      lastActionAt: merged.lastActionAt,
+    });
+  };
+
+  /** Takes the given log entries back out of the scores and the log. */
+  const withoutEntries = (
+    state: Pick<GameState, "teams" | "adjustmentLog">,
+    ids: string[]
+  ): Pick<GameState, "teams" | "adjustmentLog"> => {
+    if (!ids.length) return { teams: state.teams, adjustmentLog: state.adjustmentLog };
+    const removed = state.adjustmentLog.filter((entry) => ids.includes(entry.id));
+    const deltaByTeam = new Map<string, number>();
+    removed.forEach((entry) => {
+      deltaByTeam.set(entry.teamId, (deltaByTeam.get(entry.teamId) ?? 0) + entry.delta);
+    });
+    return {
+      teams: state.teams.map((team) =>
+        deltaByTeam.has(team.id)
+          ? { ...team, score: team.score - (deltaByTeam.get(team.id) ?? 0) }
+          : team
+      ),
+      adjustmentLog: state.adjustmentLog.filter((entry) => !ids.includes(entry.id)),
+    };
+  };
+
+  const setAnswered = (categoryId: string, questionIndex: number, answered: boolean) => {
+    set((state) => ({
+      categories: state.categories.map((cat) => {
+        if (cat.id !== categoryId) return cat;
+        const questions = [...cat.questions];
+        const q = questions[questionIndex];
+        if (q) questions[questionIndex] = { ...q, answered };
+        return { ...cat, questions };
+      }),
+    }));
+  };
+
+  const scheduleTemplateRetry = () => {
+    if (templateRetryTimer || templateRetryCount >= TEMPLATE_RETRY_LIMIT) return;
+    const delay = 5000 * 3 ** templateRetryCount;
+    templateRetryCount += 1;
+    templateRetryTimer = setTimeout(() => {
+      templateRetryTimer = null;
+      void get().saveTemplate();
+    }, delay);
+  };
+
+  return {
+    // A new quiz starts from a blank board, not from the old English demo data:
+    // a board already full of someone else's questions is harder to clear than
+    // to fill.
+    categories: starterCategories(),
+    teams: defaultTeams(),
+    lastQuestion: null,
+    roundStep: null as RoundStep,
+    round: initialRoundState(),
+    adjustmentLog: [],
+    currentTurnTeamId: null as string | null,
+    isInitialTurnSelection: false,
+    turnRule: DEFAULT_TURN_RULE,
+    lastCompletedRound: null,
+    lastActionAt: null,
+    isPlayingPublicQuiz: false,
+    editMode: false,
+    selectedCard: null as CardRef | null,
+    queue: null,
+    quizTitle: "",
+    quizDescription: "",
+    quizTimeLimit: null as number | null,
+    jokerTimeLimit: 10 as number | null,
+    quizTheme: "classic" as QuizTheme,
+    quizIsPublic: false,
+    isLoading: true,
+    isHydrated: false,
+    isSaving: false,
+    saveStatus: "idle",
+    saveError: null as string | null,
+    lastSavedAt: null as number | null,
+    templateBaseline: null,
+    quizUpdatedAt: null,
+    saveConflict: false,
+    sessionSaveFailed: false,
+    activeQuizId: null as string | null,
+    activeQuizOwnerId: null as string | null,
+    activeQuizCanEdit: false,
+    currentUserId: null as string | null,
+    currentUserEmail: null as string | null,
+    isAnonymousUser: false,
+    currentRunStartTime: null as number | null,
+    activeRunId: null as string | null,
+
+    // ---- The board -------------------------------------------------------
+
+    /** Replaces the whole board, as an import does: new categories get new
+     * ids, and the panel lets go of a card that may no longer exist. */
+    setCategories: (categories: Category[]) =>
+      set({
+        categories: withCategoryIds(categories, "random"),
+        selectedCard: null,
+        queue: null,
+      }),
 
     addCategory: () =>
       set((state) => ({
         categories: [
           ...state.categories,
-          emptyCategory(`Kategori ${state.categories.length + 1}`),
+          emptyCategory(nextFreeCategoryName(state.categories)),
         ],
       })),
 
     removeCategory: (index: number) =>
       set((state) => ({
         categories: state.categories.filter((_, i) => i !== index),
+        ...remapCards(state.selectedCard, state.queue, (ref) =>
+          ref.categoryIndex === index
+            ? null
+            : ref.categoryIndex > index
+              ? { ...ref, categoryIndex: ref.categoryIndex - 1 }
+              : ref
+        ),
       })),
 
     renameCategory: (categoryIndex: number, name: string) =>
@@ -160,12 +363,20 @@ export const useGameStore = create<GameState>()((set, get) => {
         const source = state.categories[categoryIndex];
         if (!source) return state;
         const copy: Category = {
-          name: `${source.name} (kopi)`,
+          id: newCategoryId(),
+          name: uniqueCategoryName(`${source.name} (kopi)`, state.categories),
           questions: source.questions.map((q) => ({ ...q, answered: false })),
         };
         const next = [...state.categories];
         next.splice(categoryIndex + 1, 0, copy);
-        return { categories: next };
+        return {
+          categories: next,
+          ...remapCards(state.selectedCard, state.queue, (ref) =>
+            ref.categoryIndex > categoryIndex
+              ? { ...ref, categoryIndex: ref.categoryIndex + 1 }
+              : ref
+          ),
+        };
       }),
 
     moveCategory: (categoryIndex: number, direction: -1 | 1) =>
@@ -174,7 +385,16 @@ export const useGameStore = create<GameState>()((set, get) => {
         if (target < 0 || target >= state.categories.length) return state;
         const next = [...state.categories];
         [next[categoryIndex], next[target]] = [next[target], next[categoryIndex]];
-        return { categories: next };
+        return {
+          categories: next,
+          ...remapCards(state.selectedCard, state.queue, (ref) =>
+            ref.categoryIndex === categoryIndex
+              ? { ...ref, categoryIndex: target }
+              : ref.categoryIndex === target
+                ? { ...ref, categoryIndex }
+                : ref
+          ),
+        };
       }),
 
     addQuestionToCategory: (categoryIndex: number) =>
@@ -184,7 +404,10 @@ export const useGameStore = create<GameState>()((set, get) => {
             i === categoryIndex
               ? {
                   ...cat,
-                  questions: [...cat.questions, emptyQuestion(DEFAULT_POINTS[0])],
+                  questions: [
+                    ...cat.questions,
+                    emptyQuestion(nextRung(cat.questions.map((q) => q.points))),
+                  ],
                 }
               : cat
           )
@@ -193,16 +416,28 @@ export const useGameStore = create<GameState>()((set, get) => {
 
     removeQuestionFromCategory: (categoryIndex: number, questionIndex: number) =>
       set((state) => ({
-        categories: normalizePoints(
-          state.categories.map((cat, i) =>
-            i === categoryIndex
-              ? {
-                  ...cat,
-                  questions: cat.questions.filter((_, qi) => qi !== questionIndex),
-                }
-              : cat
-          )
-        ),
+        categories: state.categories.map((cat, i) => {
+          if (i !== categoryIndex) return cat;
+          const questions = cat.questions.filter((_, qi) => qi !== questionIndex);
+          const evenLadder = ladderAfterRemoval(
+            cat.questions.map((q) => q.points),
+            questions.length
+          );
+          if (!evenLadder) return normalizePoints([{ ...cat, questions }])[0];
+          return {
+            ...cat,
+            questions: questions.map((q, qi) =>
+              q.points === evenLadder[qi] ? q : { ...q, points: evenLadder[qi] }
+            ),
+          };
+        }),
+        ...remapCards(state.selectedCard, state.queue, (ref) => {
+          if (ref.categoryIndex !== categoryIndex) return ref;
+          if (ref.questionIndex === questionIndex) return null;
+          return ref.questionIndex > questionIndex
+            ? { ...ref, questionIndex: ref.questionIndex - 1 }
+            : ref;
+        }),
       })),
 
     moveQuestion: (
@@ -226,6 +461,12 @@ export const useGameStore = create<GameState>()((set, get) => {
               i === categoryIndex ? { ...cat, questions } : cat
             )
           ),
+          ...remapCards(state.selectedCard, state.queue, (ref) => {
+            if (ref.categoryIndex !== categoryIndex) return ref;
+            if (ref.questionIndex === questionIndex) return { ...ref, questionIndex: target };
+            if (ref.questionIndex === target) return { ...ref, questionIndex };
+            return ref;
+          }),
         };
       }),
 
@@ -246,6 +487,8 @@ export const useGameStore = create<GameState>()((set, get) => {
         }),
       })),
 
+    // ---- Teams -----------------------------------------------------------
+
     addTeam: (name?: string) => {
       set((state) => ({
         teams: [
@@ -258,18 +501,25 @@ export const useGameStore = create<GameState>()((set, get) => {
           },
         ],
       }));
-      // Teams are usually typed in while the room finds its tables, before the
-      // first question has created a run. Until then the snapshot is the only
-      // thing holding them, so a refresh would otherwise lose the lot.
       snapshotLiveState();
     },
 
     removeTeam: (id: string) => {
-      set((state) => ({
-        teams: state.teams.filter((t) => t.id !== id),
-        currentTurnTeamId:
-          state.currentTurnTeamId === id ? null : state.currentTurnTeamId,
-      }));
+      set((state) => {
+        const index = state.teams.findIndex((t) => t.id === id);
+        const teams = state.teams.filter((t) => t.id !== id);
+        // The team that would have come after the removed one picks next,
+        // rather than the room having to draw again.
+        const heir =
+          state.currentTurnTeamId === id && teams.length
+            ? teams[index % teams.length].id
+            : null;
+        return {
+          teams,
+          currentTurnTeamId:
+            state.currentTurnTeamId === id ? heir : state.currentTurnTeamId,
+        };
+      });
       snapshotLiveState();
     },
 
@@ -282,10 +532,14 @@ export const useGameStore = create<GameState>()((set, get) => {
       snapshotLiveState();
     },
 
-    updateTeamPlayers: (id: string, players: string[]) =>
+    updateTeamPlayers: (id: string, players: string[]) => {
       set((state) => ({
         teams: state.teams.map((t) => (t.id === id ? { ...t, players } : t)),
-      })),
+      }));
+      snapshotLiveState();
+    },
+
+    // ---- A round -----------------------------------------------------------
 
     setLastQuestion: (question: LastQuestion | null) => {
       set({
@@ -310,52 +564,37 @@ export const useGameStore = create<GameState>()((set, get) => {
     },
 
     cancelRound: () => {
-      set({ lastQuestion: null, roundStep: null, round: initialRoundState() });
-    },
-
-    markQuestionAsAnswered: (categoryName: string, questionIndex: number) => {
+      const { round, lastQuestion } = get();
+      const reverted = round.entryIds.length > 0;
       set((state) => ({
-        categories: state.categories.map((cat) => {
-          if (cat.name !== categoryName) return cat;
-          const qs = [...cat.questions];
-          const q = qs[questionIndex];
-          if (q) qs[questionIndex] = { ...q, answered: true };
-          return { ...cat, questions: qs };
-        }),
-      }));
-    },
-
-    resetGame: () => {
-      const state = get();
-
-      if (state.activeRunId) {
-        get()
-          .completeSession(state.activeRunId)
-          .catch((error) => {
-            console.error("Failed to complete session on reset:", error);
-          });
-      }
-      if (state.activeQuizId) clearSnapshot(state.activeQuizId);
-
-      set({
-        categories: state.categories.map((cat) => ({
-          ...cat,
-          questions: cat.questions.map((q) => ({ ...q, answered: false })),
-        })),
-        teams: state.teams.map((t) => ({ ...t, score: 0 })),
+        ...withoutEntries(state, state.round.entryIds),
         lastQuestion: null,
         roundStep: null,
         round: initialRoundState(),
-        adjustmentLog: [],
-        currentTurnTeamId: null,
-        isInitialTurnSelection: false,
-        activeRunId: null,
-        currentRunStartTime: null,
-      });
+        ...(reverted ? { lastActionAt: Date.now() } : {}),
+      }));
+      if (round.positiveEntryId && lastQuestion) {
+        setAnswered(lastQuestion.categoryId, lastQuestion.questionIndex, false);
+      }
+      if (reverted) snapshotLiveState();
+    },
+
+    markQuestionAsAnswered: (categoryId: string, questionIndex: number) => {
+      setAnswered(categoryId, questionIndex, true);
+    },
+
+    toggleQuestionAnswered: (
+      categoryId: string,
+      questionIndex: number,
+      answered: boolean
+    ) => {
+      setAnswered(categoryId, questionIndex, answered);
+      set({ lastActionAt: Date.now() });
+      snapshotLiveState();
     },
 
     awardPositive: (teamId: string, customPoints?: number) => {
-      const { lastQuestion, round, roundStep, adjustmentLog, teams } = get();
+      const { lastQuestion, round, roundStep, teams } = get();
       if (!lastQuestion || round.positiveTeamId || roundStep !== "award")
         return;
 
@@ -364,10 +603,7 @@ export const useGameStore = create<GameState>()((set, get) => {
 
       const pointsToAward = customPoints ?? lastQuestion.points;
 
-      get().markQuestionAsAnswered(
-        lastQuestion.categoryName,
-        lastQuestion.questionIndex
-      );
+      setAnswered(lastQuestion.categoryId, lastQuestion.questionIndex, true);
 
       const entry: AdjustmentEntry = {
         id: genId(),
@@ -386,15 +622,21 @@ export const useGameStore = create<GameState>()((set, get) => {
         teams: state.teams.map((t) =>
           t.id === teamId ? { ...t, score: t.score + pointsToAward } : t
         ),
-        round: { ...state.round, positiveTeamId: teamId },
-        adjustmentLog: [entry, ...adjustmentLog],
+        round: {
+          ...state.round,
+          positiveTeamId: teamId,
+          positiveEntryId: entry.id,
+          entryIds: [...state.round.entryIds, entry.id],
+        },
+        adjustmentLog: [entry, ...state.adjustmentLog],
         roundStep: "awarded",
+        lastActionAt: entry.createdAt,
       }));
       snapshotLiveState();
     },
 
     awardNegative: (teamId: string, customPoints?: number) => {
-      const { lastQuestion, round, roundStep, adjustmentLog, teams } = get();
+      const { lastQuestion, round, roundStep, teams } = get();
       if (
         !lastQuestion ||
         round.positiveTeamId ||
@@ -429,49 +671,38 @@ export const useGameStore = create<GameState>()((set, get) => {
         round: {
           ...state.round,
           negativeAwardedTo: [...state.round.negativeAwardedTo, teamId],
+          entryIds: [...state.round.entryIds, entry.id],
         },
-        adjustmentLog: [entry, ...adjustmentLog],
+        adjustmentLog: [entry, ...state.adjustmentLog],
+        lastActionAt: entry.createdAt,
       }));
       snapshotLiveState();
     },
 
     undoLastAward: () => {
-      const { adjustmentLog, roundStep, lastQuestion, round } = get();
-      const last = adjustmentLog[0];
-      if (!last || roundStep !== "awarded" || !lastQuestion) return;
-
-      const wasPositiveAward = round.positiveTeamId === last.teamId;
+      const { roundStep, lastQuestion, round } = get();
+      const entryId = round.positiveEntryId;
+      if (roundStep !== "awarded" || !lastQuestion || !entryId) return;
 
       set((state) => ({
-        teams: state.teams.map((t) =>
-          t.id === last.teamId ? { ...t, score: t.score - last.delta } : t
-        ),
-        adjustmentLog: state.adjustmentLog.slice(1),
+        ...withoutEntries(state, [entryId]),
         round: {
           ...state.round,
-          positiveTeamId: wasPositiveAward ? null : state.round.positiveTeamId,
+          positiveTeamId: null,
+          positiveEntryId: null,
+          entryIds: state.round.entryIds.filter((id) => id !== entryId),
         },
         roundStep: "award",
+        lastActionAt: Date.now(),
       }));
-
-      if (wasPositiveAward) {
-        get().toggleQuestionAnswered(
-          lastQuestion.categoryName,
-          lastQuestion.questionIndex,
-          false
-        );
-      }
-
+      setAnswered(lastQuestion.categoryId, lastQuestion.questionIndex, false);
       snapshotLiveState();
     },
 
     endRound: () => {
-      const { round, lastQuestion } = get();
+      const { round, lastQuestion, currentTurnTeamId, turnRule } = get();
       if (round.active && lastQuestion) {
-        get().markQuestionAsAnswered(
-          lastQuestion.categoryName,
-          lastQuestion.questionIndex
-        );
+        setAnswered(lastQuestion.categoryId, lastQuestion.questionIndex, true);
       }
 
       const winner = round.positiveTeamId;
@@ -479,13 +710,27 @@ export const useGameStore = create<GameState>()((set, get) => {
         lastQuestion: null,
         roundStep: null,
         round: initialRoundState(),
+        lastCompletedRound: lastQuestion
+          ? {
+              categoryId: lastQuestion.categoryId,
+              categoryName: lastQuestion.categoryName,
+              questionIndex: lastQuestion.questionIndex,
+              points: lastQuestion.points,
+              entryIds: round.entryIds,
+              turnBefore: currentTurnTeamId,
+            }
+          : null,
+        lastActionAt: Date.now(),
       });
 
-      // Whoever took the card picks the next one — that is how the game is
-      // played at the table. Rotating in team order regardless of who answered
-      // meant the host had to say "no, it's still your turn" out loud after
-      // every card. Rotation is the fallback for a card nobody won.
-      if (winner && get().teams.some((t) => t.id === winner)) {
+      // The quiz decides who picks next: the team that took the card, or the
+      // next team in order regardless of who answered. With "winner", a card
+      // nobody won passes the turn on in order.
+      if (
+        turnRule === "winner" &&
+        winner &&
+        get().teams.some((t) => t.id === winner)
+      ) {
         set({ currentTurnTeamId: winner, isInitialTurnSelection: false });
       } else {
         get().nextTurn();
@@ -494,20 +739,20 @@ export const useGameStore = create<GameState>()((set, get) => {
       snapshotLiveState();
     },
 
-    toggleQuestionAnswered: (
-      categoryName: string,
-      questionIndex: number,
-      answered: boolean
-    ) => {
+    undoLastCard: () => {
+      const record = get().lastCompletedRound;
+      if (!record || get().roundStep) return;
       set((state) => ({
-        categories: state.categories.map((cat) => {
-          if (cat.name !== categoryName) return cat;
-          const questions = [...cat.questions];
-          const q = questions[questionIndex];
-          if (q) questions[questionIndex] = { ...q, answered };
-          return { ...cat, questions };
-        }),
+        ...withoutEntries(state, record.entryIds),
+        currentTurnTeamId:
+          record.turnBefore === null ||
+          state.teams.some((t) => t.id === record.turnBefore)
+            ? record.turnBefore
+            : state.currentTurnTeamId,
+        lastCompletedRound: null,
+        lastActionAt: Date.now(),
       }));
+      setAnswered(record.categoryId, record.questionIndex, false);
       snapshotLiveState();
     },
 
@@ -531,24 +776,54 @@ export const useGameStore = create<GameState>()((set, get) => {
             t.id === teamId ? { ...t, score: t.score + delta } : t
           ),
           adjustmentLog: [entry, ...state.adjustmentLog],
+          lastActionAt: entry.createdAt,
         };
       });
       snapshotLiveState();
     },
 
-    undoLastAdjustment: () => {
-      set((state) => {
-        const last = state.adjustmentLog[0];
-        if (!last) return state;
-        return {
-          teams: state.teams.map((t) =>
-            t.id === last.teamId ? { ...t, score: t.score - last.delta } : t
-          ),
-          adjustmentLog: state.adjustmentLog.slice(1),
-        };
-      });
-      snapshotLiveState();
+    resetGame: async () => {
+      const state = get();
+
+      if (state.activeRunId) {
+        try {
+          await get().completeSession(state.activeRunId);
+        } catch {
+          // Resetting anyway left the night's run active on the server, where
+          // the next card picked it up and wrote the empty board over it.
+          toast({
+            title: "Kunne ikke lagre økten",
+            description:
+              "Brettet er ikke nullstilt. Sjekk nettet og prøv igjen.",
+            variant: "destructive",
+          });
+          return false;
+        }
+      }
+      if (state.activeQuizId) clearSnapshot(state.activeQuizId);
+
+      set((current) => ({
+        categories: current.categories.map((cat) => ({
+          ...cat,
+          questions: cat.questions.map((q) => ({ ...q, answered: false })),
+        })),
+        teams: current.teams.map((t) => ({ ...t, score: 0 })),
+        lastQuestion: null,
+        roundStep: null,
+        round: initialRoundState(),
+        adjustmentLog: [],
+        currentTurnTeamId: null,
+        isInitialTurnSelection: false,
+        lastCompletedRound: null,
+        lastActionAt: null,
+        activeRunId: null,
+        currentRunStartTime: null,
+        sessionSaveFailed: false,
+      }));
+      return true;
     },
+
+    // ---- Quiz settings -----------------------------------------------------
 
     setQuizTitle: (title: string) => set({ quizTitle: title }),
     setQuizDescription: (description: string) =>
@@ -559,8 +834,15 @@ export const useGameStore = create<GameState>()((set, get) => {
       set({ jokerTimeLimit: timeLimit }),
     setQuizTheme: (theme: QuizTheme) => set({ quizTheme: theme }),
     setQuizIsPublic: (isPublic: boolean) => set({ quizIsPublic: isPublic }),
+    setTurnRule: (rule: TurnRule) => set({ turnRule: rule }),
+
+    // ---- The turn ----------------------------------------------------------
 
     setCurrentTurn: (teamId: string | null) => {
+      if (drawTimer) {
+        clearTimeout(drawTimer);
+        drawTimer = null;
+      }
       set({ currentTurnTeamId: teamId, isInitialTurnSelection: false });
       snapshotLiveState();
     },
@@ -569,10 +851,12 @@ export const useGameStore = create<GameState>()((set, get) => {
       const teams = get().teams;
       if (!teams.length) return;
 
+      if (drawTimer) clearTimeout(drawTimer);
       const randomTeamId = teams[Math.floor(Math.random() * teams.length)].id;
       set({ isInitialTurnSelection: true });
 
-      setTimeout(() => {
+      drawTimer = setTimeout(() => {
+        drawTimer = null;
         // Teams can be edited while the wheel spins; drop the pick if the team
         // is gone rather than pointing the turn at a team that no longer exists.
         const stillThere = get().teams.some((t) => t.id === randomTeamId);
@@ -584,103 +868,28 @@ export const useGameStore = create<GameState>()((set, get) => {
       }, 3000);
     },
 
+    /** Passes the turn to the next team in order. With nobody holding the turn
+     * it stays empty: a random draw in the middle of a game came as a surprise
+     * to everyone, and "Hvem skal starte?" is still there for the host. */
     nextTurn: () => {
-      const teams = get().teams;
-      const currentId = get().currentTurnTeamId;
-
-      if (!teams.length) return;
-      if (!currentId) {
-        get().initializeTurn();
-        return;
-      }
-
-      const currentIndex = teams.findIndex((t) => t.id === currentId);
-      const nextIndex = (currentIndex + 1) % teams.length;
-      set({ currentTurnTeamId: teams[nextIndex].id });
+      const { teams, currentTurnTeamId } = get();
+      if (!teams.length || !currentTurnTeamId) return;
+      const currentIndex = teams.findIndex((t) => t.id === currentTurnTeamId);
+      const next = teams[(currentIndex + 1) % teams.length];
+      set({ currentTurnTeamId: next.id });
     },
-  };
 
-  return {
-    // A new quiz starts from a blank board, not from the old English demo data:
-    // a board already full of someone else's questions is harder to clear than
-    // to fill.
-    categories: starterCategories(),
-    teams: defaultTeams(),
-    lastQuestion: null,
-    roundStep: null as RoundStep,
-    round: initialRoundState(),
-    adjustmentLog: [],
-    currentTurnTeamId: null as string | null,
-    isInitialTurnSelection: false,
-    isPlayingPublicQuiz: false,
-    editMode: false,
-    selectedCard: null as CardRef | null,
-    queue: null,
-    quizTitle: "",
-    quizDescription: "",
-    quizTimeLimit: null as number | null,
-    jokerTimeLimit: 10 as number | null,
-    quizTheme: "classic" as QuizTheme,
-    quizIsPublic: false,
-    isLoading: true,
-    isHydrated: false,
-    isSaving: false,
-    saveStatus: "idle",
-    saveError: null as string | null,
-    lastSavedAt: null as number | null,
-    hasUnsavedChanges: false,
-    activeQuizId: null as string | null,
-    activeQuizOwnerId: null as string | null,
-    activeQuizCanEdit: false,
-    currentUserId: null as string | null,
-    currentUserEmail: null as string | null,
-    isAnonymousUser: false,
-    currentRunStartTime: null as number | null,
-    activeRunId: null as string | null,
-
-    setCategories: withUnsavedChanges(actions.setCategories, set),
-    addCategory: withUnsavedChanges(actions.addCategory, set),
-    removeCategory: withUnsavedChanges(actions.removeCategory, set),
-    renameCategory: withUnsavedChanges(actions.renameCategory, set),
-    duplicateCategory: withUnsavedChanges(actions.duplicateCategory, set),
-    moveCategory: withUnsavedChanges(actions.moveCategory, set),
-    addQuestionToCategory: withUnsavedChanges(actions.addQuestionToCategory, set),
-    removeQuestionFromCategory: withUnsavedChanges(
-      actions.removeQuestionFromCategory,
-      set
-    ),
-    moveQuestion: withUnsavedChanges(actions.moveQuestion, set),
-    updateQuestion: withUnsavedChanges(actions.updateQuestion, set),
-    addTeam: withUnsavedChanges(actions.addTeam, set),
-    removeTeam: withUnsavedChanges(actions.removeTeam, set),
-    updateTeamName: withUnsavedChanges(actions.updateTeamName, set),
-    updateTeamPlayers: withUnsavedChanges(actions.updateTeamPlayers, set),
-    markQuestionAsAnswered: withUnsavedChanges(
-      actions.markQuestionAsAnswered,
-      set
-    ),
-    resetGame: withUnsavedChanges(actions.resetGame, set),
-    awardPositive: withUnsavedChanges(actions.awardPositive, set),
-    awardNegative: withUnsavedChanges(actions.awardNegative, set),
-    toggleQuestionAnswered: withUnsavedChanges(
-      actions.toggleQuestionAnswered,
-      set
-    ),
-    manualAdjustScore: withUnsavedChanges(actions.manualAdjustScore, set),
-    undoLastAdjustment: withUnsavedChanges(actions.undoLastAdjustment, set),
-    undoLastAward: withUnsavedChanges(actions.undoLastAward, set),
-    setQuizTitle: withUnsavedChanges(actions.setQuizTitle, set),
-    setQuizDescription: withUnsavedChanges(actions.setQuizDescription, set),
-    setQuizTimeLimit: withUnsavedChanges(actions.setQuizTimeLimit, set),
-    setJokerTimeLimit: withUnsavedChanges(actions.setJokerTimeLimit, set),
-    setQuizTheme: withUnsavedChanges(actions.setQuizTheme, set),
-    setQuizIsPublic: withUnsavedChanges(actions.setQuizIsPublic, set),
+    // ---- Editing -----------------------------------------------------------
 
     setEditMode: (on: boolean) => {
       // Leaving edit mode closes the panel with it; a selected card with no
       // panel visible is state nothing can act on.
       if (typeof window !== "undefined") {
-        window.sessionStorage.setItem("editMode", on ? "true" : "false");
+        try {
+          window.sessionStorage.setItem("editMode", on ? "true" : "false");
+        } catch {
+          // Without it, a reload starts in play mode.
+        }
       }
       set(
         on
@@ -782,13 +991,7 @@ export const useGameStore = create<GameState>()((set, get) => {
       set({ queue: { ...queue, position: prev }, selectedCard: queue.ids[prev] });
     },
 
-    setLastQuestion: actions.setLastQuestion,
-    advanceRoundStep: actions.advanceRoundStep,
-    cancelRound: actions.cancelRound,
-    endRound: actions.endRound,
-    setCurrentTurn: actions.setCurrentTurn,
-    initializeTurn: actions.initializeTurn,
-    nextTurn: actions.nextTurn,
+    // ---- Who is signed in, and which quiz is loaded ---------------------------
 
     setHydrated: (hydrated: boolean) =>
       set({ isHydrated: hydrated, isLoading: !hydrated }),
@@ -816,9 +1019,28 @@ export const useGameStore = create<GameState>()((set, get) => {
      * activeQuizId instead of loading the right one.
      */
     resetForNewUser: () => {
-      const { activeQuizId } = get();
-      if (activeQuizId) clearSnapshot(activeQuizId);
+      get().unloadQuiz();
       rememberPublicPlay(null);
+      set({
+        currentUserId: null,
+        currentUserEmail: null,
+        isAnonymousUser: false,
+      });
+    },
+
+    unloadQuiz: () => {
+      const { activeQuizId } = get();
+      unloadedQuizId = activeQuizId;
+      if (activeQuizId) clearSnapshot(activeQuizId);
+      if (drawTimer) {
+        clearTimeout(drawTimer);
+        drawTimer = null;
+      }
+      if (templateRetryTimer) {
+        clearTimeout(templateRetryTimer);
+        templateRetryTimer = null;
+      }
+      templateRetryCount = 0;
 
       set({
         categories: starterCategories(),
@@ -829,6 +1051,9 @@ export const useGameStore = create<GameState>()((set, get) => {
         adjustmentLog: [],
         currentTurnTeamId: null,
         isInitialTurnSelection: false,
+        turnRule: DEFAULT_TURN_RULE,
+        lastCompletedRound: null,
+        lastActionAt: null,
         isPlayingPublicQuiz: false,
         editMode: false,
         selectedCard: null,
@@ -842,17 +1067,17 @@ export const useGameStore = create<GameState>()((set, get) => {
         activeQuizId: null,
         activeQuizOwnerId: null,
         activeQuizCanEdit: false,
-        currentUserId: null,
-        currentUserEmail: null,
-        isAnonymousUser: false,
         activeRunId: null,
         currentRunStartTime: null,
         isHydrated: false,
         isLoading: true,
-        hasUnsavedChanges: false,
         saveStatus: "idle",
         saveError: null,
         lastSavedAt: null,
+        templateBaseline: null,
+        quizUpdatedAt: null,
+        saveConflict: false,
+        sessionSaveFailed: false,
       });
     },
 
@@ -874,23 +1099,35 @@ export const useGameStore = create<GameState>()((set, get) => {
       live,
       quizId,
       quizOwnerId,
+      updatedAt = null,
       runId = null,
       runStartedAt = null,
       isPublicPlay = false,
       canEdit,
     }: LoadQuizInput) => {
-      const merged = mergeLiveIntoTemplate(template, live ?? null);
+      const normalized: QuizTemplate = {
+        ...template,
+        categories: withCategoryIds(template.categories, "positional"),
+      };
+      const merged = mergeLiveIntoTemplate(normalized, live ?? null);
+      unloadedQuizId = null;
+      if (drawTimer) {
+        clearTimeout(drawTimer);
+        drawTimer = null;
+      }
       set({
         categories: merged.categories,
         teams: merged.teams,
         adjustmentLog: merged.adjustmentLog,
         currentTurnTeamId: merged.currentTurnTeamId,
-        quizTitle: template.quizTitle,
-        quizDescription: template.quizDescription,
-        quizTimeLimit: template.quizTimeLimit,
-        jokerTimeLimit: template.jokerTimeLimit,
-        quizTheme: template.quizTheme,
-        quizIsPublic: template.quizIsPublic,
+        lastActionAt: merged.lastActionAt,
+        quizTitle: normalized.quizTitle,
+        quizDescription: normalized.quizDescription,
+        quizTimeLimit: normalized.quizTimeLimit,
+        jokerTimeLimit: normalized.jokerTimeLimit,
+        quizTheme: normalized.quizTheme,
+        quizIsPublic: normalized.quizIsPublic,
+        turnRule: normalized.turnRule ?? DEFAULT_TURN_RULE,
         activeQuizId: quizId,
         activeQuizOwnerId: quizOwnerId,
         activeQuizCanEdit: canEdit ?? false,
@@ -904,55 +1141,96 @@ export const useGameStore = create<GameState>()((set, get) => {
         roundStep: null,
         round: initialRoundState(),
         isInitialTurnSelection: false,
-        hasUnsavedChanges: false,
+        lastCompletedRound: null,
+        quizUpdatedAt: updatedAt,
+        saveConflict: false,
+        sessionSaveFailed: false,
         saveStatus: isPublicPlay ? "readonly" : "idle",
         saveError: null,
         isHydrated: true,
         isLoading: false,
       });
+      // The baseline is what was loaded, so loading is never mistaken for an edit.
+      set({ templateBaseline: templateFingerprint(extractTemplate(get())) });
     },
 
-    /** Writes the TEMPLATE only. Scores and answered questions never go here. */
-    saveQuizToDB: async () => {
-      const state = get();
-      if (!state.canEditActiveQuiz() || !state.activeQuizId) {
-        set({ saveStatus: state.isPlayingPublicQuiz ? "readonly" : "idle" });
-        return;
-      }
+    // ---- Saving the quiz --------------------------------------------------------
 
-      reportSaving();
-      try {
-        const template = extractTemplate(state);
-        const response = await fetch(`/api/quizzes/${state.activeQuizId}`, {
-          method: "PATCH",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            title: template.quizTitle,
-            description: template.quizDescription,
-            timeLimit: template.quizTimeLimit,
-            theme: template.quizTheme,
-            isPublic: template.quizIsPublic,
-            quizData: {
-              categories: template.categories,
-              teams: template.teams,
-              jokerTimeLimit: template.jokerTimeLimit,
-            },
-          }),
-        });
+    saveTemplate: (options: SaveTemplateOptions = {}) => {
+      const attempt = async (): Promise<boolean> => {
+        const state = get();
+        const quizId = options.target?.quizId ?? state.activeQuizId;
+        if (!quizId) return true;
+        if (options.target && quizId === unloadedQuizId) return true;
+        const isActive = quizId === state.activeQuizId;
 
-        if (!response.ok) {
-          const body = await response.json().catch(() => ({}));
-          throw new Error(body.error || `Lagring feilet (${response.status})`);
+        if (isActive && !state.canEditActiveQuiz()) return true;
+        if (isActive && state.saveConflict) return false;
+
+        const template =
+          options.target && !isActive ? options.target.template : extractTemplate(state);
+        const fingerprint = templateFingerprint(template);
+        if (isActive && fingerprint === state.templateBaseline) {
+          if (state.saveStatus === "pending") set({ saveStatus: "idle" });
+          return true;
         }
+        const expectedUpdatedAt =
+          options.target && !isActive
+            ? options.target.expectedUpdatedAt
+            : state.quizUpdatedAt;
 
-        reportSaved();
-      } catch (error) {
-        const message =
-          error instanceof Error ? error.message : "Ukjent lagringsfeil";
-        console.error("Failed to save quiz template:", error);
-        reportSaveError(message);
-      }
+        if (isActive) reportSaving();
+        try {
+          const response = await sendTemplate(
+            quizId,
+            templateRequestBody(template, expectedUpdatedAt),
+            Boolean(options.keepalive)
+          );
+
+          if (response.status === 409) {
+            if (get().activeQuizId === quizId) {
+              set({ saveConflict: true });
+              reportSaveError(SAVE_CONFLICT_MESSAGE);
+            }
+            return false;
+          }
+
+          const body = await response.json().catch(() => ({}));
+          if (!response.ok) {
+            throw new Error(body.error || `Lagring feilet (${response.status})`);
+          }
+
+          templateRetryCount = 0;
+          if (get().activeQuizId === quizId) {
+            set({
+              templateBaseline: fingerprint,
+              quizUpdatedAt: body?.quiz?.updated_at ?? get().quizUpdatedAt,
+            });
+            reportSaved();
+          }
+          return true;
+        } catch (error) {
+          console.error("Failed to save quiz template:", error);
+          if (get().activeQuizId === quizId) {
+            reportSaveError(
+              error instanceof Error ? error.message : "Ukjent lagringsfeil"
+            );
+            scheduleTemplateRetry();
+          }
+          return false;
+        }
+      };
+
+      const result = templateSaveChain.then(attempt, attempt);
+      templateSaveChain = result.catch(() => undefined);
+      return result;
     },
+
+    waitForTemplateSaves: async () => {
+      await templateSaveChain.catch(() => undefined);
+    },
+
+    // ---- The live game on the server --------------------------------------------
 
     setRunStartTime: (time: number | null) => {
       set({ currentRunStartTime: time });
@@ -973,12 +1251,7 @@ export const useGameStore = create<GameState>()((set, get) => {
             body: JSON.stringify({
               quizId,
               startedAt: new Date().toISOString(),
-              finalState: extractLiveState({
-                categories: get().categories,
-                teams: get().teams,
-                adjustmentLog: get().adjustmentLog,
-                currentTurnTeamId: get().currentTurnTeamId,
-              }),
+              finalState: extractLiveState(get()),
             }),
           });
 
@@ -986,7 +1259,22 @@ export const useGameStore = create<GameState>()((set, get) => {
             throw new Error(`Kunne ikke starte økt (${response.status})`);
           }
 
-          const { run } = await response.json();
+          const { run, reused } = await response.json();
+          if (get().activeQuizId !== quizId) return null;
+
+          // This tab did not know about the run, or it would have used
+          // activeRunId. If something already happened in it, writing this
+          // board over it would erase that game, so the game is continued.
+          const serverLive = reused ? liveStateFromRunState(run.final_state) : null;
+          if (serverLive && hasSessionProgress(serverLive)) {
+            applyLive(serverLive);
+            toast({
+              title: "Fortsetter økten som allerede pågikk",
+              description:
+                "Poengene derfra er hentet inn. Vil du starte på nytt, velg «Nullstill spillet».",
+            });
+          }
+
           set({
             activeRunId: run.id,
             currentRunStartTime: new Date(run.started_at).getTime(),
@@ -1033,28 +1321,29 @@ export const useGameStore = create<GameState>()((set, get) => {
       }
 
       lastSessionSaveTime = Date.now();
-      const live = extractLiveState({
-        categories: state.categories,
-        teams: state.teams,
-        adjustmentLog: state.adjustmentLog,
-        currentTurnTeamId: state.currentTurnTeamId,
-      });
+      const runId = state.activeRunId;
+      const live = extractLiveState(state);
 
       if (state.activeQuizId) {
-        writeSnapshot(state.activeQuizId, live, state.activeRunId);
+        writeSnapshot(state.activeQuizId, live, runId);
       }
 
       try {
-        const response = await fetch(`/api/quiz-runs/${state.activeRunId}`, {
+        const response = await fetch(`/api/quiz-runs/${runId}`, {
           method: "PATCH",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ finalState: live }),
         });
         if (!response.ok) throw new Error(`Status ${response.status}`);
+        if (get().activeRunId === runId && get().sessionSaveFailed) {
+          set({ sessionSaveFailed: false });
+        }
       } catch (error) {
         // The local snapshot above already holds this state, so the game keeps
-        // going and the next successful write catches up.
+        // going and the next successful write catches up. The host is told,
+        // since a game that only exists in this browser is lost with it.
         console.error("Error saving session:", error);
+        if (get().activeRunId === runId) set({ sessionSaveFailed: true });
       }
     },
 
@@ -1065,18 +1354,13 @@ export const useGameStore = create<GameState>()((set, get) => {
 
         const { run } = await response.json();
         if (!run) {
-          // No server session. A local snapshot can still hold a game that was
-          // played before the first successful write.
-          const snapshot = readSnapshot(quizId);
-          if (snapshotIsAhead(snapshot, null) && snapshot) {
-            applyLive(snapshot.live);
-          }
+          get().applySnapshotWithoutRun(quizId);
           return;
         }
 
         const serverLive = liveStateFromRunState(run.final_state);
         const snapshot = readSnapshot(quizId);
-        const live = snapshotIsAhead(snapshot, serverLive)
+        const live = snapshotIsAhead(snapshot, serverLive, run.id)
           ? snapshot!.live
           : serverLive;
 
@@ -1088,49 +1372,44 @@ export const useGameStore = create<GameState>()((set, get) => {
       } catch (error) {
         console.error("Error restoring active session:", error);
       }
+    },
 
-      function applyLive(live: NonNullable<ReturnType<typeof liveStateFromRunState>>) {
-        const state = get();
-        const merged = mergeLiveIntoTemplate(extractTemplate(state), live);
-        set({
-          categories: merged.categories,
-          teams: merged.teams,
-          adjustmentLog: merged.adjustmentLog,
-          currentTurnTeamId: merged.currentTurnTeamId,
-          hasUnsavedChanges: false,
-        });
+    applySnapshotWithoutRun: (quizId: string) => {
+      const snapshot = readSnapshot(quizId);
+      if (!snapshot) return;
+      // A snapshot that belongs to a run is from a game that has since been
+      // finished, on this device or another; it is not this game.
+      if (snapshot.runId || !isSnapshotUsable(snapshot)) {
+        clearSnapshot(quizId);
+        return;
       }
+      applyLive(snapshot.live);
     },
 
     peekActiveSession: async (quizId: string) => {
-      try {
-        const response = await fetch(`/api/quiz-runs/active?quizId=${quizId}`);
-        if (!response.ok) throw new Error("Failed to check for an active session");
-
-        const { run } = await response.json();
-        if (!run) return null;
-
-        const live = liveStateFromRunState(run.final_state);
-        const state = get();
-
-        return {
-          runId: run.id as string,
-          startedAt: run.started_at as string,
-          answered: live?.answeredKeys.length ?? 0,
-          total: state.categories.reduce(
-            (sum, c) => sum + c.questions.length,
-            0
-          ),
-          teams: state.teams.map((t) => ({
-            name: t.name,
-            score: live?.scores[t.id] ?? t.score,
-          })),
-          hasProgress: hasSessionProgress(live),
-        };
-      } catch (error) {
-        console.error("Error checking for an active session:", error);
-        return null;
+      const response = await fetch(`/api/quiz-runs/active?quizId=${quizId}`);
+      if (!response.ok) {
+        throw new Error(`Kunne ikke sjekke om en økt pågår (${response.status})`);
       }
+
+      const { run } = await response.json();
+      if (!run) return null;
+
+      const live = liveStateFromRunState(run.final_state);
+      const state = get();
+      const merged = mergeLiveIntoTemplate(extractTemplate(state), live);
+
+      return {
+        runId: run.id as string,
+        startedAt: run.started_at as string,
+        answered: merged.categories.reduce(
+          (sum, c) => sum + c.questions.filter((q) => q.answered).length,
+          0
+        ),
+        total: state.categories.reduce((sum, c) => sum + c.questions.length, 0),
+        teams: merged.teams.map((t) => ({ name: t.name, score: t.score })),
+        hasProgress: hasSessionProgress(live),
+      };
     },
 
     completeSession: async (runId: string, quizId?: string) => {
@@ -1143,64 +1422,68 @@ export const useGameStore = create<GameState>()((set, get) => {
         pendingSessionSave = null;
       }
 
-      try {
-        const response = await fetch(`/api/quiz-runs/${runId}/complete`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            finalState: extractLiveState({
-              categories: state.categories,
-              teams: state.teams,
-              adjustmentLog: state.adjustmentLog,
-              currentTurnTeamId: state.currentTurnTeamId,
-            }),
-            teams: state.teams.map((t) => ({
-              id: t.id,
-              name: t.name,
-              score: t.score,
-            })),
-            totalQuestions: state.categories.reduce(
-              (sum, c) => sum + c.questions.length,
-              0
-            ),
-            answeredQuestions: state.categories.reduce(
-              (sum, c) => sum + c.questions.filter((q) => q.answered).length,
-              0
-            ),
-          }),
-        });
-
-        if (!response.ok) {
-          throw new Error(`Kunne ikke fullføre økten (${response.status})`);
-        }
-
-        const { run } = await response.json();
-
-        clearSnapshot(sessionQuizId);
-        // Finishing a session archives the night and hands the board back
-        // clean. Leaving the scores on screen would mean the board disagrees
-        // with what is stored the moment anyone reloads, since the live state
-        // this came from no longer exists.
-        set((state) => ({
-          activeRunId: null,
-          currentRunStartTime: null,
-          categories: state.categories.map((cat) => ({
-            ...cat,
-            questions: cat.questions.map((q) => ({ ...q, answered: false })),
+      const response = await fetch(`/api/quiz-runs/${runId}/complete`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          finalState: extractLiveState(state),
+          teams: state.teams.map((t: Team) => ({
+            id: t.id,
+            name: t.name,
+            score: t.score,
+            players: t.players,
           })),
-          teams: state.teams.map((t) => ({ ...t, score: 0 })),
-          adjustmentLog: [],
-          currentTurnTeamId: null,
-          lastQuestion: null,
-          roundStep: null,
-        }));
+          totalQuestions: state.categories.reduce(
+            (sum, c) => sum + c.questions.length,
+            0
+          ),
+          answeredQuestions: state.categories.reduce(
+            (sum, c) => sum + c.questions.filter((q) => q.answered).length,
+            0
+          ),
+        }),
+      });
 
-        return run as QuizRun;
-      } catch (error) {
-        console.error("Error completing session:", error);
-        throw error;
+      if (!response.ok) {
+        throw new Error(`Kunne ikke fullføre økten (${response.status})`);
       }
+
+      const { run } = await response.json();
+
+      try {
+        void getQueryClient().invalidateQueries({ queryKey: quizRunKeys.all });
+      } catch {
+        // History refetches on its own the next time it goes stale.
+      }
+
+      // A late answer for a run this tab has already left must not wipe the
+      // game that is being played now.
+      if (get().activeRunId !== runId) return run as QuizRun;
+
+      clearSnapshot(sessionQuizId);
+      // Finishing a session archives the night and hands the board back
+      // clean. Leaving the scores on screen would mean the board disagrees
+      // with what is stored the moment anyone reloads, since the live state
+      // this came from no longer exists.
+      set((current) => ({
+        activeRunId: null,
+        currentRunStartTime: null,
+        categories: current.categories.map((cat) => ({
+          ...cat,
+          questions: cat.questions.map((q) => ({ ...q, answered: false })),
+        })),
+        teams: current.teams.map((t) => ({ ...t, score: 0 })),
+        adjustmentLog: [],
+        currentTurnTeamId: null,
+        lastCompletedRound: null,
+        lastActionAt: null,
+        lastQuestion: null,
+        roundStep: null,
+        round: initialRoundState(),
+        sessionSaveFailed: false,
+      }));
+
+      return run as QuizRun;
     },
   };
 });
-

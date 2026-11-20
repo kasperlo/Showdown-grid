@@ -92,7 +92,9 @@ export async function PATCH(
       );
     }
 
-    // Update the session state
+    // Update the session state. The ended_at filter closes the gap between
+    // the check above and this write: a save that arrives just after the run
+    // was completed must not replace its final state.
     const { data, error } = await supabase
       .from("quiz_runs")
       .update({
@@ -100,9 +102,16 @@ export async function PATCH(
         updated_at: new Date().toISOString(),
       })
       .eq("id", id)
+      .is("ended_at", null)
       .select()
       .single();
 
+    if (error?.code === "PGRST116") {
+      return NextResponse.json(
+        { error: "Cannot update completed session" },
+        { status: 400 }
+      );
+    }
     if (error) {
       console.error("[API /quiz-runs/[id] PATCH] Error:", error);
       throw error;

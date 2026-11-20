@@ -3,6 +3,78 @@
 Kontekst, antakelse, beslutning, begrunnelse og oppfølging for valg som ikke er
 åpenbare fra koden. Nyeste først.
 
+## 2026-11-20 — Turregelen er en innstilling, med «laget som svarte riktig» som standard
+
+- **Kontekst:** Verten opplevde at markeringen av hvem som hadde turen «sto
+  feil». Koden fulgte en regel som ikke sto noe sted: riktig svar gir turen,
+  og når ingen klarer kortet, går turen videre i den rekkefølgen lagene ble
+  laget i, mens stillingen er sortert på poeng.
+- **Beslutning:** `turnRule` i malen, med to valg: `winner` (som før) og
+  `rotation` (lagene velger etter tur uansett hvem som svarer). Standard er
+  `winner`, fordi det var et bevisst valg i september (se «Laget som tar
+  kortet beholder turen»). Regelen vises i turpanelet, og under rotasjon står neste lag.
+- **Følgefeil rettet samtidig:** et kort ingen vant uten valgt startlag
+  startet en tilfeldig trekning midt i spillet; to trekninger innen 3 s ga to
+  bytter; turen var nesten usynlig under selve runden.
+- **Oppfølging:** spør Kasper hvilken regel bordet faktisk bruker, og endre
+  standarden hvis det er rotasjon.
+
+## 2026-11-20 — Jokertid 10 leses som «bruk quizens standard»
+
+- **Kontekst:** «Standard joker-tid» hadde ingen virkning, fordi hvert kort fikk
+  sin egen jokertid på 10 sekunder da det ble laget, og kortets tid vinner.
+- **Beslutning:** `jokerTimer` kan være `null` (= quizens standard). Ved lasting
+  leses en lagret 10 som `null`, fordi 10 var standardverdien alle kort fikk.
+- **Risiko:** et kort der noen bevisst valgte 10 sekunder, får quizens standard
+  hvis den er noe annet enn 10. Det er usannsynlig og lett å sette tilbake.
+
+## 2026-11-20 — Stillingen viser ikke plassnummer
+
+- **Kontekst:** Hurtigtastene 1–9 i poengsteget følger lagenes rekkefølge, mens
+  stillingen viste plass 1, 2, 3 sortert på poeng. Trykket verten tallet laget
+  hadde i stillingen, fikk et annet lag poengene og dermed turen.
+- **Beslutning:** plassnummeret er fjernet fra stillingen. Rekkefølgen viser
+  plassen, og kronen viser lederen. Poengsteget beholder tallene, i fast
+  rekkefølge, så de ikke flytter seg mellom rundene.
+- **Samtidig:** i kolonnen står navnet på egen linje over poengsummen. Ved siden
+  av et tall på 55–70 px ble lederens navn kuttet til én bokstav.
+
+## 2026-11-20 — Bunnraden på 128 px er bare der når den brukes
+
+- **Kontekst:** Del 1 i redesign-specen reserverte en bunnrad på 128 px alltid,
+  også når stillingen står ved siden av brettet og raden er tom. Raden var der
+  opprinnelig for runden, som siden har flyttet til en egen skjerm.
+- **Beslutning:** raden finnes bare i smal layout. Med stillingen ved siden av
+  får brettet høyden. Akseptansetabellen i `board-geometry.test.ts` er oppdatert
+  for 1920×1080 og 2560×1440 og avviker nå fra tabellen i specen.
+
+## 2026-11-20 — Gjest blir konto ved å få e-post og passord, ikke ved signUp
+
+- **Kontekst:** `signUp()` mens man var gjest laget en ny bruker. Ruta som
+  skulle flytte gjestens quizer, kjørte som den nye brukeren, og databasen lar
+  bare en bruker røre sine egne rader. Ingenting ble flyttet, og ruta svarte
+  likevel «success». Ruta ga i tillegg en samarbeidspartner en måte å ta over
+  eierens quizer på.
+- **Beslutning:** gjesten får e-post og passord med
+  `updateUser({ email, password })`. Bruker-id-en er den samme, så quizene
+  aldri flyttes. Prøvd mot lokal Supabase både med og uten e-postbekreftelse:
+  uten blir gjesten en vanlig konto med en gang, med blir passordet satt og
+  e-posten venter på bekreftelse. Migrate-ruta er slettet.
+- **Oppfølging:** gjester som allerede har opprettet konto på den gamle måten,
+  har quizene sine hos den gamle gjestebrukeren. De kan bare flyttes med SQL
+  som service-rolle.
+
+## 2026-11-20 — Migrasjon 08 og 09 må kjøres i produksjon
+
+- **08:** en trigger stopper alle andre enn eieren fra å endre `user_id`,
+  `share_token` og `is_public`. Prøvd lokalt: overtakelse og publisering blir
+  avvist, mens samarbeidspartneren fortsatt kan redigere brettet.
+- **09:** én aktiv økt per bruker og quiz (eldre duplikater lukkes, nyeste blir
+  stående), og `quiz_runs.quiz_id` blir `ON DELETE SET NULL`, så historikken
+  overlever at quizen slettes.
+- **Appen virker uten dem**, men uten beskyttelsen. Begge kan kjøres flere
+  ganger.
+
 ## 2026-09-18 — Collaborator kunne ikke lese sin egen rad
 
 - **Kontekst:** Kasper delte en lenke, vennen logget inn og fikk «Fikk ikke

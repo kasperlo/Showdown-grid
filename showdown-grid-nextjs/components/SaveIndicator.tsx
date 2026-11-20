@@ -1,7 +1,7 @@
 "use client";
 
 import { useGameStore } from "@/utils/store";
-import { AlertTriangle, Check, Cloud, Loader2, Lock } from "lucide-react";
+import { AlertTriangle, Check, Cloud, Loader2, Lock, RefreshCw } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 /**
@@ -27,8 +27,30 @@ export function SaveIndicator({
   const saveStatus = useGameStore((s) => s.saveStatus);
   const saveError = useGameStore((s) => s.saveError);
   const lastSavedAt = useGameStore((s) => s.lastSavedAt);
+  const saveConflict = useGameStore((s) => s.saveConflict);
 
   const base = "inline-flex items-center gap-1.5 text-xs";
+
+  if (saveConflict) {
+    return (
+      <span
+        className={cn(base, "text-destructive", className)}
+        role="alert"
+        title={saveError ?? undefined}
+      >
+        <AlertTriangle className="h-3.5 w-3.5" aria-hidden />
+        Endret et annet sted
+        <button
+          type="button"
+          onClick={() => window.location.reload()}
+          className="inline-flex items-center gap-1 rounded border border-destructive/60 px-1.5 py-0.5 font-semibold hover:bg-destructive/10"
+        >
+          <RefreshCw className="h-3 w-3" aria-hidden />
+          Last inn på nytt
+        </button>
+      </span>
+    );
+  }
 
   if (saveStatus === "readonly") {
     return (
@@ -57,6 +79,15 @@ export function SaveIndicator({
       >
         <AlertTriangle className="h-3.5 w-3.5" aria-hidden />
         Ikke lagret{saveError ? `: ${saveError}` : ""}
+      </span>
+    );
+  }
+
+  if (saveStatus === "pending") {
+    return (
+      <span className={cn(base, "text-muted-foreground", className)}>
+        <Cloud className="h-3.5 w-3.5" aria-hidden />
+        Ikke lagret ennå
       </span>
     );
   }

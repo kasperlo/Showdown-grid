@@ -145,8 +145,7 @@ export default function EmojiBurst({
     return () => {
       if (rafRef.current) cancelAnimationFrame(rafRef.current);
       window.removeEventListener("resize", resize);
-      const c = canvasRef.current;
-      if (c) c.getContext("2d")?.clearRect(0, 0, c.width, c.height);
+      canvas.getContext("2d")?.clearRect(0, 0, canvas.width, canvas.height);
     };
   }, [show, emojis, duration, intensity]);
 

@@ -79,13 +79,13 @@ export default function Confetti({
     );
 
     for (let i = 0; i < count; i++) {
-      const angle = Math.random() * Math.PI - Math.PI / 2;
+      const angle = Math.PI / 6 + Math.random() * ((2 * Math.PI) / 3);
       const speed = 4 + Math.random() * 6;
       particles.push({
         x: window.innerWidth / 2,
         y: 0,
         vx: Math.cos(angle) * speed,
-        vy: Math.sin(angle) * speed + 4,
+        vy: Math.sin(angle) * speed,
         size: 4 + Math.random() * 6,
         rot: Math.random() * Math.PI * 2,
         vr: (Math.random() - 0.5) * 0.2,
@@ -136,8 +136,7 @@ export default function Confetti({
     return () => {
       if (rafRef.current) cancelAnimationFrame(rafRef.current);
       window.removeEventListener("resize", resize);
-      const c = canvasRef.current;
-      if (c) c.getContext("2d")?.clearRect(0, 0, c.width, c.height);
+      canvas.getContext("2d")?.clearRect(0, 0, canvas.width, canvas.height);
     };
   }, [show, duration]);
 

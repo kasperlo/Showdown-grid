@@ -21,12 +21,33 @@ export interface Question {
   answered: boolean;
   isJoker?: boolean;
   jokerTask?: string;
-  jokerTimer?: number; // Timer in seconds for this joker question
+  /** Seconds for this joker card. Null means the quiz's own joker default. */
+  jokerTimer?: number | null;
 }
 
 export interface Category {
+  /**
+   * What answered cards are keyed on. Names can repeat and the server rewrites
+   * empty or overlong ones, so keying on the name let two columns share one
+   * "used" state and made cards playable again after a reload.
+   */
+  id?: string;
   name: string;
   questions: Question[];
+}
+
+/**
+ * Who picks the next card. "winner": the team that answered correctly, with
+ * the next team in order when nobody did. "rotation": the teams take turns in
+ * order, whoever answers.
+ */
+export type TurnRule = "winner" | "rotation";
+
+/** A team as one playthrough knows it: the roster, without the score. */
+export interface LiveTeam {
+  id: string;
+  name: string;
+  players: string[];
 }
 
 export interface Team {
@@ -37,6 +58,7 @@ export interface Team {
 }
 
 export interface LastQuestion {
+  categoryId: string;
   categoryName: string;
   questionIndex: number;
   points: number;
@@ -48,13 +70,26 @@ export interface LastQuestion {
   answered?: boolean;
   isJoker?: boolean;
   jokerTask?: string;
-  jokerTimer?: number;
+  jokerTimer?: number | null;
 }
 
 export interface RoundProgress {
   active: boolean;
   positiveTeamId: string | null;
   negativeAwardedTo: string[];
+  /** Log entries created in this round, so cancelling can take them back. */
+  entryIds: string[];
+  positiveEntryId: string | null;
+}
+
+/** The last card that was played to the end, kept so it can be undone. */
+export interface CompletedRound {
+  categoryId: string;
+  categoryName: string;
+  questionIndex: number;
+  points: number;
+  entryIds: string[];
+  turnBefore: string | null;
 }
 
 /**
@@ -85,20 +120,39 @@ export interface QuizTemplate {
   jokerTimeLimit: number | null;
   quizTheme: QuizTheme;
   quizIsPublic: boolean;
+  turnRule: TurnRule;
 }
 
 /** What happened during one playthrough. Stored in quiz_runs.final_state. */
 export interface LiveGameState {
-  /** `categoryName|questionIndex` for every answered question. */
+  /**
+   * One key per answered question: `id:<categoryId>|<index>`. Runs written
+   * before categories had ids use `<categoryName>|<index>`; both are read.
+   */
   answeredKeys: string[];
   scores: Record<string, number>;
   adjustmentLog: AdjustmentEntry[];
   currentTurnTeamId: string | null;
+  /**
+   * The teams this playthrough was played with. Absent in older runs, where
+   * the quiz's own teams apply. A public quiz cannot save teams to the quiz,
+   * so without this a team added at the table was gone after a reload.
+   */
+  teams?: LiveTeam[];
+  /** When something last happened on the board, so history shows when the
+   * game was played rather than when it was archived. */
+  lastActionAt?: number | null;
   /** 1 = the old shape that stored whole categories/teams arrays. */
   version: 1 | 2;
 }
 
-export type SaveStatus = "idle" | "saving" | "saved" | "error" | "readonly";
+export type SaveStatus =
+  | "idle"
+  | "pending"
+  | "saving"
+  | "saved"
+  | "error"
+  | "readonly";
 
 /**
  * The review queue behind the side panel. `active` is what separates the two
@@ -136,6 +190,7 @@ export interface TeamResult {
   teamName: string;
   finalScore: number;
   rank: number;
+  players?: string[];
 }
 
 /**
@@ -152,7 +207,8 @@ export type QuizRunFinalState =
 
 export interface QuizRun {
   id: string;
-  quiz_id: string;
+  /** Null once the quiz itself has been deleted; the run stays in history. */
+  quiz_id: string | null;
   user_id: string;
   started_at: string;
   ended_at: string | null; // NULL for live sessions
@@ -184,7 +240,7 @@ export interface ActiveSessionSummary {
 
 export interface QuizRunSummary {
   id: string;
-  quiz_id?: string;
+  quiz_id?: string | null;
   quiz_title: string;
   started_at?: string;
   /** NULL while a session is still live. */
@@ -223,7 +279,8 @@ export interface GameState {
   setLastQuestion: (question: LastQuestion | null) => void;
   /** question -> answer -> award (joker cards skip answer). */
   advanceRoundStep: () => void;
-  /** Escape from the question step: no points, the card stays unplayed. */
+  /** Closes the round as if it never happened: points given in it are taken
+   * back and the card stays playable. */
   cancelRound: () => void;
 
   addTeam: (name?: string) => void;
@@ -234,35 +291,54 @@ export interface GameState {
   setCategories: (categories: Category[]) => void;
   addCategory: () => void;
   removeCategory: (index: number) => void;
-  markQuestionAsAnswered: (categoryName: string, questionIndex: number) => void;
+  markQuestionAsAnswered: (categoryId: string, questionIndex: number) => void;
 
-  resetGame: () => void;
+  /** Archives the running session first. Resolves false, with the board
+   * untouched, when that fails. */
+  resetGame: () => Promise<boolean>;
 
   awardPositive: (teamId: string, customPoints?: number) => void;
   awardNegative: (teamId: string, customPoints?: number) => void;
   endRound: () => void;
-  toggleQuestionAnswered: (categoryName: string, questionIndex: number, answered: boolean) => void;
+  toggleQuestionAnswered: (categoryId: string, questionIndex: number, answered: boolean) => void;
 
   // Turn management
+  turnRule: TurnRule;
+  setTurnRule: (rule: TurnRule) => void;
   setCurrentTurn: (teamId: string | null) => void;
   initializeTurn: () => void;
   nextTurn: () => void;
 
   manualAdjustScore: (teamId: string, delta: number, reason?: string) => void;
-  undoLastAdjustment: () => void;
   /** Reverses the award that took the round to "awarded", from there only. */
   undoLastAward: () => void;
+  lastCompletedRound: CompletedRound | null;
+  /** Takes back the last finished card: its points, the card and the turn. */
+  undoLastCard: () => void;
+  lastActionAt: number | null;
 
   // Database sync
-  hasUnsavedChanges: boolean;
   isLoading: boolean;
   isSaving: boolean;
   saveStatus: SaveStatus;
   saveError: string | null;
   lastSavedAt: number | null;
+  /** Fingerprint of the template as last loaded or saved for the active quiz. */
+  templateBaseline: string | null;
+  /** The quiz row's updated_at as last seen, sent with every save. */
+  quizUpdatedAt: string | null;
+  /** Someone else saved the quiz since it was loaded; saving stops. */
+  saveConflict: boolean;
+  /** The last write of the live game failed. */
+  sessionSaveFailed: boolean;
   /** True once a quiz (or the decision that there is none) has been loaded. */
   isHydrated: boolean;
-  saveQuizToDB: () => Promise<void>;
+  /** Saves the template if it differs from the last saved one. Resolves to
+   * whether nothing is left unsaved. Calls are queued, never overlapping. */
+  saveTemplate: (options?: SaveTemplateOptions) => Promise<boolean>;
+  /** Resolves when every queued template save has finished, so a load that
+   * follows a switch reads what was just saved. */
+  waitForTemplateSaves: () => Promise<void>;
   setHydrated: (hydrated: boolean) => void;
   /** Replaces the whole board from a stored template + optional live state. */
   loadQuiz: (input: LoadQuizInput) => void;
@@ -306,6 +382,8 @@ export interface GameState {
    * and logout: navigation is client-side, so the store outlives the session.
    */
   resetForNewUser: () => void;
+  /** Drops the active quiz from memory, for when it has been deleted. */
+  unloadQuiz: () => void;
   addQuestionToCategory: (categoryIndex: number) => void;
   removeQuestionFromCategory: (
     categoryIndex: number,
@@ -346,10 +424,27 @@ export interface GameState {
   /** Writes any pending live state immediately, ignoring the rate limit. */
   flushSession: () => Promise<void>;
   restoreActiveSession: (quizId: string) => Promise<void>;
+  /** Applies this browser's copy of a game that never reached the server,
+   * for a quiz with no session there. */
+  applySnapshotWithoutRun: (quizId: string) => void;
   /** Looks at the active session without applying it — see completeSession
-   * for the terminal state and restoreActiveSession for actually applying it. */
+   * for the terminal state and restoreActiveSession for actually applying it.
+   * Resolves null when there is none and throws when it could not be checked:
+   * treating a failed check as "none" let the next card overwrite the game. */
   peekActiveSession: (quizId: string) => Promise<ActiveSessionSummary | null>;
   completeSession: (runId: string, quizId?: string) => Promise<QuizRun | null>;
+}
+
+export interface SaveTemplateOptions {
+  /** For page unload: lets the request outlive the page. */
+  keepalive?: boolean;
+  /** Saves another quiz's template instead of the active one: the quiz being
+   * left when the library switches to a new one. */
+  target?: {
+    quizId: string;
+    template: QuizTemplate;
+    expectedUpdatedAt: string | null;
+  };
 }
 
 export interface LoadQuizInput {
@@ -357,6 +452,8 @@ export interface LoadQuizInput {
   live?: LiveGameState | null;
   quizId: string | null;
   quizOwnerId: string | null;
+  /** The quiz row's updated_at, so a save can tell whether it is stale. */
+  updatedAt?: string | null;
   runId?: string | null;
   runStartedAt?: number | null;
   isPublicPlay?: boolean;

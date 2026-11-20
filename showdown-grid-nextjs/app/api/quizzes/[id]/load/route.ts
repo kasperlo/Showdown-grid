@@ -47,6 +47,7 @@ export async function GET(
         quizTimeLimit: data.time_limit,
         quizTheme: data.theme,
         quizIsPublic: data.is_public,
+        quizUpdatedAt: data.updated_at,
       }
     });
   } catch (error) {

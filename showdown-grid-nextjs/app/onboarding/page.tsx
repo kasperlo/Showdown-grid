@@ -99,7 +99,7 @@ export default function OnboardingPage() {
                 </li>
                 <li className="flex items-start gap-2">
                   <span className="text-accent mt-0.5">✓</span>
-                  <span>Lag og spill quizzer umiddelbart</span>
+                  <span>Lag og spill quizer med én gang</span>
                 </li>
                 <li className="flex items-start gap-2">
                   <span className="text-accent mt-0.5">✓</span>
@@ -150,11 +150,11 @@ export default function OnboardingPage() {
                 </li>
                 <li className="flex items-start gap-2">
                   <span className="text-primary mt-0.5">✓</span>
-                  <span>Permanent lagring av quizzer og historikk</span>
+                  <span>Permanent lagring av quizer og historikk</span>
                 </li>
                 <li className="flex items-start gap-2">
                   <span className="text-primary mt-0.5">✓</span>
-                  <span>Mulighet til å dele quizzer</span>
+                  <span>Mulighet til å dele quizer</span>
                 </li>
               </ul>
               <Button

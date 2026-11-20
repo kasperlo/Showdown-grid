@@ -2,7 +2,10 @@ import { describe, expect, it } from "vitest";
 import { computeBoardGeometry } from "../board-geometry";
 
 describe("computeBoardGeometry", () => {
-  it("matches the acceptance table: 5 categories x 5 rows @ 1920x1080, panel beside", () => {
+  // Del 1's table reserved the 128px dock row even with the standings beside
+  // the board; the board now gets that height, so these two rows differ from
+  // the table in the spec.
+  it("5 categories x 5 rows @ 1920x1080, panel beside, no dock row", () => {
     const g = computeBoardGeometry({
       viewportWidth: 1920,
       viewportHeight: 1080,
@@ -11,14 +14,15 @@ describe("computeBoardGeometry", () => {
     });
 
     expect(g.panelBeside).toBe(true);
-    expect(g.columnWidth).toBe(271);
-    expect(g.tileHeight).toBe(143);
-    expect(g.boardWidth).toBe(1403);
+    expect(g.boardHeight).toBe(1005);
+    expect(g.columnWidth).toBe(287);
+    expect(g.tileHeight).toBe(166);
+    expect(g.boardWidth).toBe(1483);
     expect(g.panelWidth).toBe(365);
-    expect(g.marginPerSide).toBe(42);
+    expect(g.marginPerSide).toBe(2);
   });
 
-  it("matches the acceptance table: 4 categories x 5 rows @ 2560x1440, panel beside", () => {
+  it("4 categories x 5 rows @ 2560x1440, panel beside, no dock row", () => {
     const g = computeBoardGeometry({
       viewportWidth: 2560,
       viewportHeight: 1440,
@@ -27,11 +31,11 @@ describe("computeBoardGeometry", () => {
     });
 
     expect(g.panelBeside).toBe(true);
-    expect(g.columnWidth).toBe(393);
-    expect(g.tileHeight).toBe(207);
-    expect(g.boardWidth).toBe(1608);
+    expect(g.columnWidth).toBe(437);
+    expect(g.tileHeight).toBe(230);
+    expect(g.boardWidth).toBe(1784);
     expect(g.panelWidth).toBe(432);
-    expect(g.marginPerSide).toBe(226);
+    expect(g.marginPerSide).toBe(138);
   });
 
   it("matches the acceptance table: 7 categories x 5 rows @ 1366x768, panel in the bottom row", () => {
@@ -119,6 +123,6 @@ describe("computeBoardGeometry", () => {
     });
 
     expect(g.panelWidth).toBe(365);
-    expect(g.columnWidth).toBe(271);
+    expect(g.columnWidth).toBe(287);
   });
 });

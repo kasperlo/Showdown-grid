@@ -41,7 +41,7 @@ const devSupabase = createClient(DEV_URL, DEV_SERVICE_ROLE_KEY, {
   auth: { persistSession: false }
 });
 
-async function copyTable(tableName: string, columns: string[]) {
+async function copyTable(tableName: string) {
   console.log(`\n📋 Copying ${tableName}...`);
 
   // Fetch from prod
@@ -144,24 +144,13 @@ async function main() {
     await copyAuthUsers();
 
     // 1. quizzes (referenced by users.active_quiz_id and quiz_runs.quiz_id)
-    await copyTable('quizzes', [
-      'id', 'user_id', 'title', 'description', 'quiz_data',
-      'is_public', 'theme', 'time_limit', 'created_at', 'updated_at'
-    ]);
+    await copyTable('quizzes');
 
     // 2. users (references quizzes.id)
-    await copyTable('users', [
-      'user_id', 'active_quiz_id', 'created_at', 'updated_at'
-    ]);
+    await copyTable('users');
 
     // 3. quiz_runs (references quizzes.id and users.user_id)
-    await copyTable('quiz_runs', [
-      'id', 'quiz_id', 'user_id', 'started_at', 'ended_at',
-      'duration_seconds', 'quiz_title', 'quiz_description',
-      'quiz_theme', 'quiz_time_limit', 'final_state',
-      'total_questions', 'answered_questions', 'team_results',
-      'winning_team_name', 'winning_score', 'created_at'
-    ]);
+    await copyTable('quiz_runs');
 
     console.log('\n✅ Data copy completed successfully!');
   } catch (error) {

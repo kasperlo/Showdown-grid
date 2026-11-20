@@ -19,9 +19,16 @@ export function useSessionAutoSave() {
   const teams = useGameStore((s) => s.teams);
   const adjustmentLog = useGameStore((s) => s.adjustmentLog);
   const currentTurnTeamId = useGameStore((s) => s.currentTurnTeamId);
+  const lastActionAt = useGameStore((s) => s.lastActionAt);
 
   const liveFingerprint = JSON.stringify(
-    extractLiveState({ categories, teams, adjustmentLog, currentTurnTeamId })
+    extractLiveState({
+      categories,
+      teams,
+      adjustmentLog,
+      currentTurnTeamId,
+      lastActionAt,
+    })
   );
   const debounced = useDebounce(liveFingerprint, 600);
   const lastQueued = useRef<string | null>(null);

@@ -38,6 +38,7 @@ export function UserMenu({ className }: { className?: string }) {
   const isAnonymous = useGameStore((s) => s.isAnonymousUser);
   const resetForNewUser = useGameStore((s) => s.resetForNewUser);
   const [showLogoutDialog, setShowLogoutDialog] = useState(false);
+  const [showGuestLoginDialog, setShowGuestLoginDialog] = useState(false);
   const [isLoggingOut, setIsLoggingOut] = useState(false);
 
   const displayName = isAnonymous ? "Gjest" : email || "Bruker";
@@ -99,7 +100,7 @@ export function UserMenu({ className }: { className?: string }) {
               </DropdownMenuItem>
               {/* A guest who already has an account had no way in: the only
                   options were "opprett konto" and "logg ut". */}
-              <DropdownMenuItem onClick={() => void leaveSession("/login")}>
+              <DropdownMenuItem onClick={() => setShowGuestLoginDialog(true)}>
                 <LogIn className="mr-2 h-4 w-4" />
                 Logg inn på konto
               </DropdownMenuItem>
@@ -113,13 +114,44 @@ export function UserMenu({ className }: { className?: string }) {
         </DropdownMenuContent>
       </DropdownMenu>
 
+      {/* Logging in to an existing account leaves the guest behind, quizzes
+          and all; only "Opprett konto" turns the guest itself into an
+          account. */}
+      <AlertDialog
+        open={showGuestLoginDialog}
+        onOpenChange={setShowGuestLoginDialog}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Logge inn på en annen konto?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Du er gjest. Quizene du har laget her, blir ikke med til kontoen du
+              logger inn på. Vil du beholde dem, velg «Opprett konto» i stedet –
+              da blir gjesten selve kontoen.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Avbryt</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-transparent text-foreground hover:bg-muted"
+              onClick={() => router.push("/signup")}
+            >
+              Opprett konto i stedet
+            </AlertDialogAction>
+            <AlertDialogAction onClick={() => void leaveSession("/login")}>
+              Logg inn likevel
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
       <AlertDialog open={showLogoutDialog} onOpenChange={setShowLogoutDialog}>
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>Logge ut?</AlertDialogTitle>
             <AlertDialogDescription>
               {isAnonymous
-                ? "Du er gjest. Quizzene du har laget er knyttet til denne gjestebrukeren, og du kommer ikke tilbake til dem etter utlogging. Vil du beholde dem, opprett en konto først."
+                ? "Du er gjest. Quizene du har laget, er knyttet til denne gjestebrukeren, og du kommer ikke tilbake til dem etter utlogging. Vil du beholde dem, opprett en konto først."
                 : "Du kan logge inn igjen når som helst med e-post og passord."}
             </AlertDialogDescription>
           </AlertDialogHeader>

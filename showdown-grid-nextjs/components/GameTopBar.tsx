@@ -2,7 +2,14 @@
 
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
-import { History, Library, Minimize2, Tv, Trophy } from "lucide-react";
+import {
+  AlertTriangle,
+  History,
+  Library,
+  Minimize2,
+  Tv,
+  Trophy,
+} from "lucide-react";
 import { useGameStore } from "@/utils/store";
 import { UserMenu } from "@/components/UserMenu";
 import { SaveIndicator } from "@/components/SaveIndicator";
@@ -29,6 +36,7 @@ export function GameTopBar({
   const quizTitle = useGameStore((s) => s.quizTitle);
   const quizDescription = useGameStore((s) => s.quizDescription);
   const isPublicPlay = useGameStore((s) => s.isPlayingPublicQuiz);
+  const sessionSaveFailed = useGameStore((s) => s.sessionSaveFailed);
 
   const total = countQuestions(categories);
   const answered = categories.reduce(
@@ -83,6 +91,16 @@ export function GameTopBar({
         </div>
 
         <div className="flex shrink-0 items-center gap-1">
+          {sessionSaveFailed && (
+            <span
+              role="alert"
+              title="Spillet lagres i denne nettleseren og sendes når nettet er tilbake. Ikke lukk fanen."
+              className="inline-flex items-center gap-1.5 rounded-full border border-destructive/60 bg-destructive/10 px-2.5 py-1 text-xs font-semibold text-destructive"
+            >
+              <AlertTriangle className="h-3.5 w-3.5" aria-hidden />
+              Ikke lagret på serveren
+            </span>
+          )}
           {presentation.active ? (
             <Button
               variant="ghost"
