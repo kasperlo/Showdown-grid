@@ -62,7 +62,7 @@ supabase db push
 
 4. Test å laste opp et bilde:
    - Velg "Last opp"-fanen
-   - Velg en bildefil (JPEG, PNG, GIF eller WebP, maks 5MB)
+   - Velg en bildefil (JPEG, PNG, GIF eller WebP, maks 4 MB etter komprimering)
    - Bildet skal lastes opp automatisk og vises i forhåndsvisning
 
 5. Test at bildet vises i quizen:
@@ -79,7 +79,8 @@ supabase db push
 - WebP (.webp)
 
 ### Begrensninger
-- Maksimal filstørrelse: **5MB**
+- Maksimal filstørrelse: **4 MB**, etter komprimering. Vercel avviser forespørsler over 4,5 MB før API-et kjører, så grensen må ligge under det.
+- JPEG, PNG og WebP skaleres ned i nettleseren til maks 2000 px på den lengste siden før opplasting. JPEG lagres som JPEG, PNG og WebP som WebP, som beholder gjennomsiktighet. GIF-er sendes som de er, siden en ny tegning bare ville beholdt første bilde i animasjonen.
 - Kun autentiserte brukere kan laste opp
 - Bilder lagres i brukerspesifikke mapper for sikkerhet
 
@@ -87,7 +88,7 @@ supabase db push
 - **RLS Policies**: Kun autentiserte brukere kan laste opp
 - **Brukerisolasjon**: Hver bruker har sin egen mappe (`{user_id}/`)
 - **Public read**: Alle kan se bilder (nødvendig for quizvisning)
-- **Validering**: Filtype og størrelse valideres både på klient og server
+- **Validering**: Filtype og størrelse valideres både på klient (før opplasting) og server
 
 ### Hybrid-tilnærming
 Løsningen støtter **både**:
@@ -111,8 +112,8 @@ Dette gir maksimal fleksibilitet!
 - Sjekk at bucketen er satt til "public"
 - Åpne nettleserens console for feilmeldinger
 
-### "Kunne ikke laste opp filen"
-- Sjekk at filen er under 5MB
+### "Kunne ikke laste opp filen" eller "Bildet er for stort"
+- Sjekk at bildet er under 4 MB etter komprimering (GIF-er komprimeres ikke)
 - Sjekk at filformatet er støttet (JPEG, PNG, GIF, WebP)
 - Sjekk nettverks-fanen i browser dev tools for detaljert feilmelding
 
