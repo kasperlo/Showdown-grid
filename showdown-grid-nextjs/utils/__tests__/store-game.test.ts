@@ -113,6 +113,18 @@ describe("undoing the last card", () => {
   });
 });
 
+describe("undoing the first card", () => {
+  it("leaves the turn empty again when nobody had it before the card", () => {
+    playTo("geo", 0);
+    s().awardPositive("b");
+    s().endRound();
+    expect(s().currentTurnTeamId).toBe("b");
+
+    s().undoLastCard();
+    expect(s().currentTurnTeamId).toBeNull();
+  });
+});
+
 describe("who picks next", () => {
   it("winner rule: the team that answered picks, a card nobody won passes it on in order", () => {
     s().setCurrentTurn("d");

@@ -742,7 +742,8 @@ export const useGameStore = create<GameState>()((set, get) => {
       set((state) => ({
         ...withoutEntries(state, record.entryIds),
         currentTurnTeamId:
-          record.turnBefore && state.teams.some((t) => t.id === record.turnBefore)
+          record.turnBefore === null ||
+          state.teams.some((t) => t.id === record.turnBefore)
             ? record.turnBefore
             : state.currentTurnTeamId,
         lastCompletedRound: null,
