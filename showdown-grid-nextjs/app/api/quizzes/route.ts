@@ -115,8 +115,8 @@ export async function POST(request: NextRequest) {
     let seedTimeLimit: number | null = null;
 
     if (copyFromQuizId) {
-      // A copy may be made from any quiz the caller can read, which RLS limits
-      // to their own quizzes plus public ones.
+      // A copy may be made from any quiz the caller can read: their own,
+      // public ones, and the ones shared with them.
       const { data: source, error: sourceError } = await supabase
         .from("quizzes")
         .select("quiz_data, theme, time_limit, is_public, user_id")
@@ -130,8 +130,23 @@ export async function POST(request: NextRequest) {
           { status: 404 }
         );
       }
-      if (!source.is_public && source.user_id !== user.id) {
-        return NextResponse.json({ error: "Unauthorized" }, { status: 403 });
+
+      let canRead = source.is_public || source.user_id === user.id;
+      if (!canRead) {
+        const { data: collaborator, error: collaboratorError } = await supabase
+          .from("quiz_collaborators")
+          .select("quiz_id")
+          .eq("quiz_id", copyFromQuizId)
+          .eq("user_id", user.id)
+          .maybeSingle();
+        if (collaboratorError) throw collaboratorError;
+        canRead = Boolean(collaborator);
+      }
+      if (!canRead) {
+        return NextResponse.json(
+          { error: "Du har ikke tilgang til denne quizen" },
+          { status: 403 }
+        );
       }
 
       seedData = source.quiz_data;
