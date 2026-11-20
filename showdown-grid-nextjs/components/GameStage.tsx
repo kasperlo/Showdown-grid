@@ -37,10 +37,14 @@ export function GameStage() {
       {/* Out of the flow on purpose: the row heights above are tuned to the
           exact viewport (see the file docstring), so this cannot take part
           in that budget. Stays up in presentation mode too — that is the
-          screen the room is actually looking at. */}
-      <div className="pointer-events-none absolute bottom-2 right-3 z-10 rounded-full border border-border/60 bg-background/80 px-2.5 py-1 shadow-sm backdrop-blur-sm">
-        <Brand size="sm" />
-      </div>
+          screen the room is actually looking at. With the standings beside
+          the board there is no bottom row for it to sit over, so it moves
+          under the standings instead. */}
+      {!geometry.panelBeside && (
+        <div className="pointer-events-none absolute bottom-2 right-3 z-10 rounded-full border border-border/60 bg-background/80 px-2.5 py-1 shadow-sm backdrop-blur-sm">
+          <Brand size="sm" />
+        </div>
+      )}
 
       <GameTopBar presentation={presentation} />
 
@@ -53,8 +57,15 @@ export function GameStage() {
         </section>
 
         {geometry.panelBeside && (
-          <div className="flex-[0_0_var(--panel-w)]">
-            <Standings layout="column" />
+          <div className="flex flex-[0_0_var(--panel-w)] flex-col gap-2">
+            <div className="min-h-0 flex-1">
+              <Standings layout="column" />
+            </div>
+            <div className="flex shrink-0 justify-end">
+              <div className="rounded-full border border-border/60 bg-background/80 px-2.5 py-1 shadow-sm backdrop-blur-sm">
+                <Brand size="sm" />
+              </div>
+            </div>
           </div>
         )}
       </div>
