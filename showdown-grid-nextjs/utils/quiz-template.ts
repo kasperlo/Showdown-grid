@@ -3,10 +3,12 @@ import type {
   AdjustmentEntry,
   Category,
   LiveGameState,
+  LiveTeam,
   Question,
   QuizTemplate,
   QuizTheme,
   Team,
+  TurnRule,
 } from "./types";
 
 /**
@@ -18,6 +20,7 @@ import type {
  */
 
 export const DEFAULT_POINTS = [100, 200, 300, 400, 500];
+export const DEFAULT_TURN_RULE: TurnRule = "winner";
 
 export function emptyQuestion(points: number): Question {
   return {
@@ -29,7 +32,7 @@ export function emptyQuestion(points: number): Question {
     imageUrl: "",
     isJoker: false,
     jokerTask: "",
-    jokerTimer: 10,
+    jokerTimer: null,
     answered: false,
   };
 }
@@ -38,8 +41,12 @@ export function defaultQuestions(): Question[] {
   return DEFAULT_POINTS.map(emptyQuestion);
 }
 
+export function newCategoryId(): string {
+  return `cat-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
+}
+
 export function emptyCategory(name: string): Category {
-  return { name, questions: defaultQuestions() };
+  return { id: newCategoryId(), name, questions: defaultQuestions() };
 }
 
 /** A blank-but-playable board, used for new quizzes. */
@@ -57,6 +64,38 @@ export function defaultTeams(): Team[] {
   ];
 }
 
+/**
+ * Gives every category a unique id. A category without one gets either a fresh
+ * random id (anything new, like an import) or one derived from its position
+ * (a quiz stored before categories had ids). The positional ids have to come
+ * out the same on every load and on the server, or a game played before the
+ * quiz is next saved would lose its answered cards on reload.
+ */
+export function withCategoryIds(
+  categories: Category[],
+  fallback: "positional" | "random"
+): Category[] {
+  const seen = new Set<string>();
+  return categories.map((category, index) => {
+    const stored =
+      typeof category.id === "string" ? category.id.trim().slice(0, 64) : "";
+    let id = stored || (fallback === "random" ? newCategoryId() : `c${index}`);
+    while (seen.has(id)) id = `${id}-${index}`;
+    seen.add(id);
+    return category.id === id ? category : { ...category, id };
+  });
+}
+
+function validTurnRule(value: unknown): TurnRule {
+  return value === "rotation" ? "rotation" : DEFAULT_TURN_RULE;
+}
+
+function positiveSecondsOrNull(value: unknown): number | null {
+  return typeof value === "number" && Number.isFinite(value) && value > 0
+    ? Math.round(value)
+    : null;
+}
+
 interface TemplateSource {
   categories: Category[];
   teams: Team[];
@@ -66,6 +105,7 @@ interface TemplateSource {
   jokerTimeLimit: number | null;
   quizTheme: QuizTheme;
   quizIsPublic: boolean;
+  turnRule?: TurnRule;
 }
 
 /**
@@ -76,6 +116,7 @@ interface TemplateSource {
 export function extractTemplate(state: TemplateSource): QuizTemplate {
   return {
     categories: state.categories.map((category) => ({
+      id: category.id,
       name: category.name,
       questions: category.questions.map((q) => ({
         points: q.points,
@@ -86,7 +127,7 @@ export function extractTemplate(state: TemplateSource): QuizTemplate {
         imageUrl: q.imageUrl ?? "",
         isJoker: Boolean(q.isJoker),
         jokerTask: q.jokerTask ?? "",
-        jokerTimer: q.jokerTimer ?? 10,
+        jokerTimer: positiveSecondsOrNull(q.jokerTimer),
         answered: false,
       })),
     })),
@@ -102,6 +143,7 @@ export function extractTemplate(state: TemplateSource): QuizTemplate {
     jokerTimeLimit: state.jokerTimeLimit,
     quizTheme: state.quizTheme,
     quizIsPublic: state.quizIsPublic,
+    turnRule: validTurnRule(state.turnRule),
   };
 }
 
@@ -110,18 +152,19 @@ interface LiveSource {
   teams: Team[];
   adjustmentLog: AdjustmentEntry[];
   currentTurnTeamId: string | null;
+  lastActionAt?: number | null;
 }
 
 /**
- * The per-playthrough delta. Answered questions are addressed by
- * `category|index` rather than by position so that editing the board between
+ * The per-playthrough delta. Answered questions are addressed by category id
+ * and index rather than by position, so that editing the board between
  * sessions cannot silently shift which questions look used.
  */
 export function extractLiveState(state: LiveSource): LiveGameState {
   const answeredKeys: string[] = [];
   state.categories.forEach((category) => {
     category.questions.forEach((question, index) => {
-      if (question.answered) answeredKeys.push(answeredKey(category.name, index));
+      if (question.answered) answeredKeys.push(answeredKey(category, index));
     });
   });
 
@@ -130,12 +173,40 @@ export function extractLiveState(state: LiveSource): LiveGameState {
     scores: Object.fromEntries(state.teams.map((t) => [t.id, t.score])),
     adjustmentLog: state.adjustmentLog,
     currentTurnTeamId: state.currentTurnTeamId,
+    teams: state.teams.map((team) => ({
+      id: team.id,
+      name: team.name,
+      players: [...team.players],
+    })),
+    lastActionAt: state.lastActionAt ?? null,
     version: 2,
   };
 }
 
-export function answeredKey(categoryName: string, questionIndex: number): string {
+export function answeredKey(
+  category: Pick<Category, "id" | "name">,
+  questionIndex: number
+): string {
+  return category.id
+    ? `id:${category.id}|${questionIndex}`
+    : legacyAnsweredKey(category.name, questionIndex);
+}
+
+/** The key runs used before categories had ids. */
+export function legacyAnsweredKey(categoryName: string, questionIndex: number): string {
   return `${categoryName}|${questionIndex}`;
+}
+
+/** Whether a set of answered keys, in either format, marks this card used. */
+export function isAnsweredIn(
+  answered: Set<string>,
+  category: Pick<Category, "id" | "name">,
+  questionIndex: number
+): boolean {
+  return (
+    answered.has(answeredKey(category, questionIndex)) ||
+    answered.has(legacyAnsweredKey(category.name, questionIndex))
+  );
 }
 
 export interface MergedState {
@@ -143,12 +214,15 @@ export interface MergedState {
   teams: Team[];
   adjustmentLog: AdjustmentEntry[];
   currentTurnTeamId: string | null;
+  lastActionAt: number | null;
 }
 
 /**
- * Lays a live state back over a template. Unknown teams and answered keys that
- * no longer exist are dropped silently — the template is the authority on what
- * the board looks like.
+ * Lays a live state back over a template. Answered keys that no longer exist
+ * are dropped silently — the template is the authority on what the board looks
+ * like. The teams come from the live state when it has them: they are the
+ * teams this game was played with, which on a public quiz the template cannot
+ * hold.
  */
 export function mergeLiveIntoTemplate(
   template: QuizTemplate,
@@ -156,26 +230,53 @@ export function mergeLiveIntoTemplate(
 ): MergedState {
   const answered = new Set(live?.answeredKeys ?? []);
   const scores = live?.scores ?? {};
+  const roster: Omit<Team, "score">[] =
+    live?.teams && live.teams.length > 0 ? live.teams : template.teams;
+
+  const teams = roster.map((team) => ({
+    id: team.id,
+    name: team.name,
+    players: [...(team.players ?? [])],
+    score: Number.isFinite(scores[team.id]) ? scores[team.id] : 0,
+  }));
 
   return {
     categories: template.categories.map((category) => ({
-      name: category.name,
+      ...category,
       questions: category.questions.map((question, index) => ({
         ...question,
-        answered: answered.has(answeredKey(category.name, index)),
+        answered: isAnsweredIn(answered, category, index),
       })),
     })),
-    teams: template.teams.map((team) => ({
-      ...team,
-      score: Number.isFinite(scores[team.id]) ? scores[team.id] : 0,
-    })),
+    teams,
     adjustmentLog: live?.adjustmentLog ?? [],
     currentTurnTeamId:
       live?.currentTurnTeamId &&
-      template.teams.some((t) => t.id === live.currentTurnTeamId)
+      teams.some((t) => t.id === live.currentTurnTeamId)
         ? live.currentTurnTeamId
         : null,
+    lastActionAt:
+      typeof live?.lastActionAt === "number" ? live.lastActionAt : null,
   };
+}
+
+function readLiveTeams(value: unknown): LiveTeam[] | undefined {
+  if (!Array.isArray(value)) return undefined;
+  const teams = value.flatMap((raw): LiveTeam[] => {
+    if (!raw || typeof raw !== "object") return [];
+    const team = raw as Record<string, unknown>;
+    if (typeof team.id !== "string" || !team.id) return [];
+    return [
+      {
+        id: team.id,
+        name: typeof team.name === "string" && team.name ? team.name : "Lag",
+        players: Array.isArray(team.players)
+          ? team.players.filter((p): p is string => typeof p === "string")
+          : [],
+      },
+    ];
+  });
+  return teams.length > 0 ? teams : undefined;
 }
 
 /**
@@ -197,6 +298,9 @@ export function liveStateFromRunState(finalState: unknown): LiveGameState | null
         : [],
       currentTurnTeamId:
         typeof raw.currentTurnTeamId === "string" ? raw.currentTurnTeamId : null,
+      teams: readLiveTeams(raw.teams),
+      lastActionAt:
+        typeof raw.lastActionAt === "number" ? raw.lastActionAt : null,
       version: 2,
     };
   }
@@ -210,13 +314,14 @@ export function liveStateFromRunState(finalState: unknown): LiveGameState | null
 
   return {
     ...extractLiveState({
-      categories,
+      categories: categories.map((category) => ({ ...category, id: undefined })),
       teams,
       adjustmentLog: Array.isArray(raw.adjustmentLog)
         ? (raw.adjustmentLog as AdjustmentEntry[])
         : [],
       currentTurnTeamId: null,
     }),
+    teams: undefined,
     version: 1,
   };
 }
@@ -233,6 +338,10 @@ function isRecordOfNumbers(value: unknown): value is Record<string, number> {
 /**
  * Reads `quizzes.quiz_data`. Old rows kept played state here, so `answered` and
  * `score` are deliberately thrown away on the way in.
+ *
+ * A joker timer of exactly 10 is read as "use the quiz default": every card got
+ * 10 when it was made, so the quiz-wide joker setting never applied to any
+ * card. A deliberate 10 differs from that only when the default is not 10.
  */
 export function templateFromQuizData(
   quizData: unknown,
@@ -249,7 +358,15 @@ export function templateFromQuizData(
     unknown
   >;
   const categories = Array.isArray(raw.categories)
-    ? (raw.categories as Category[])
+    ? withCategoryIds(raw.categories as Category[], "positional").map(
+        (category) => ({
+          ...category,
+          questions: (category.questions ?? []).map((question) => ({
+            ...question,
+            jokerTimer: question.jokerTimer === 10 ? null : question.jokerTimer,
+          })),
+        })
+      )
     : [];
   const teams = Array.isArray(raw.teams) && raw.teams.length
     ? (raw.teams as Team[])
@@ -265,6 +382,7 @@ export function templateFromQuizData(
       typeof raw.jokerTimeLimit === "number" ? raw.jokerTimeLimit : 10,
     quizTheme: meta.quizTheme,
     quizIsPublic: meta.quizIsPublic,
+    turnRule: validTurnRule(raw.turnRule),
   });
 }
 

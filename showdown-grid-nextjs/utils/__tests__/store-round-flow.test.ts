@@ -5,6 +5,7 @@ import type { Category, Team } from "../types";
 function fixtureCategories(): Category[] {
   return [
     {
+      id: "mat",
       name: "Mat",
       questions: [
         {
@@ -31,15 +32,25 @@ beforeEach(() => {
     teams: fixtureTeams(),
     lastQuestion: null,
     roundStep: null,
-    round: { active: false, positiveTeamId: null, negativeAwardedTo: [] },
+    round: {
+      active: false,
+      positiveTeamId: null,
+      negativeAwardedTo: [],
+      entryIds: [],
+      positiveEntryId: null,
+    },
     adjustmentLog: [],
     currentTurnTeamId: null,
     isInitialTurnSelection: false,
+    turnRule: "winner",
+    lastCompletedRound: null,
+    lastActionAt: null,
   });
 });
 
 function openFirstQuestion() {
   useGameStore.getState().setLastQuestion({
+    categoryId: "mat",
     categoryName: "Mat",
     questionIndex: 0,
     points: 100,
@@ -64,6 +75,7 @@ describe("round flow", () => {
 
   it("skips the answer step for a joker card", () => {
     useGameStore.getState().setLastQuestion({
+      categoryId: "mat",
       categoryName: "Mat",
       questionIndex: 0,
       points: 100,

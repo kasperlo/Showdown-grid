@@ -172,6 +172,37 @@ export function ladderFor(previous: number[], count: number): number[] {
   return ladder;
 }
 
+/**
+ * The value a card added to the bottom of a column should have: one step above
+ * the top of the ladder. Adding it at the lowest value instead made the sorted
+ * ladder hand every existing card the value of the one above it.
+ */
+export function nextRung(previous: number[]): number {
+  const usable = previous
+    .filter((value) => Number.isFinite(value) && value > 0)
+    .sort((a, b) => a - b);
+  if (usable.length === 0) return 100;
+  const last = usable[usable.length - 1];
+  const step =
+    usable.length >= 2 ? last - usable[usable.length - 2] : usable[0];
+  return last + (step > 0 ? step : 100);
+}
+
+/**
+ * The ladder left after removing a card. An evenly spaced column closes the gap
+ * (100-200-400-500 becomes 100-200-300-400); any other column keeps its values,
+ * since its spacing was chosen by hand.
+ */
+export function ladderAfterRemoval(previous: number[], count: number): number[] | null {
+  const sorted = [...previous].sort((a, b) => a - b);
+  if (sorted.length < 2 || count <= 0) return null;
+  const step = sorted[1] - sorted[0];
+  const even =
+    step > 0 && sorted.every((value, i) => i === 0 || value - sorted[i - 1] === step);
+  if (!even) return null;
+  return Array.from({ length: count }, (_, i) => sorted[0] + i * step);
+}
+
 /** Re-applies each category's ladder by position. */
 export function normalizePoints(categories: Category[]): Category[] {
   return categories.map((category) => {

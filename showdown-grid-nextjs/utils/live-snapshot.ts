@@ -67,14 +67,24 @@ export function isSnapshotUsable(snapshot: StoredSnapshot | null): boolean {
  * Which copy to trust. The snapshot only wins when it holds strictly more
  * progress than the server, which is what an interrupted PATCH looks like.
  * Equal or lesser progress means the server already has it.
+ *
+ * A snapshot from another session never wins: it would lay a finished night's
+ * scores over a new game.
  */
 export function snapshotIsAhead(
   snapshot: StoredSnapshot | null,
-  serverLive: LiveGameState | null
+  serverLive: LiveGameState | null,
+  serverRunId: string | null = null
 ): boolean {
   if (!isSnapshotUsable(snapshot)) return false;
-  if (!serverLive) return true;
   const local = snapshot as StoredSnapshot;
+  if (local.runId && serverRunId && local.runId !== serverRunId) return false;
+  if (!serverLive) return true;
+  const localAt = local.live.lastActionAt;
+  const serverAt = serverLive.lastActionAt;
+  if (typeof localAt === "number" && typeof serverAt === "number") {
+    return localAt > serverAt;
+  }
   if (local.live.answeredKeys.length > serverLive.answeredKeys.length) return true;
   if (local.live.adjustmentLog.length > serverLive.adjustmentLog.length) return true;
   const localTotal = sumScores(local.live.scores);
