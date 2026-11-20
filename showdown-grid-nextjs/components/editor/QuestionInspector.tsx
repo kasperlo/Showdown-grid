@@ -8,6 +8,7 @@ import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
 import { ImageUpload } from "@/components/ImageUpload";
 import { clampedInteger, DraftInput } from "./DraftInput";
+import { indentCode } from "./indent-code";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -374,22 +375,29 @@ function InspectorBody() {
                   onKeyDown={(e) => {
                     // Tab indents instead of leaving the field. Without this you
                     // cannot type indented code at all, only paste it.
-                    if (e.key !== "Tab" || e.shiftKey) return;
+                    if (e.key !== "Tab") return;
                     e.preventDefault();
                     const el = e.currentTarget;
-                    const { selectionStart: from, selectionEnd: to, value } = el;
-                    patch({
-                      code: `${value.slice(0, from)}  ${value.slice(to)}`,
-                    });
+                    const edit = indentCode(
+                      el.value,
+                      el.selectionStart,
+                      el.selectionEnd,
+                      e.shiftKey
+                    );
+                    patch({ code: edit.value });
                     requestAnimationFrame(() => {
-                      el.selectionStart = el.selectionEnd = from + 2;
+                      el.setSelectionRange(edit.selectionStart, edit.selectionEnd);
                     });
                   }}
                   rows={6}
                   spellCheck={false}
                   placeholder="console.log(typeof null)"
+                  aria-describedby="code-field-keys"
                   className="font-mono text-sm leading-relaxed"
                 />
+                <p id="code-field-keys" className="text-xs text-muted-foreground">
+                  Tab rykker inn, Shift+Tab rykker ut. Esc går ut av feltet.
+                </p>
               </Field>
             ) : null}
 
