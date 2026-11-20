@@ -214,7 +214,7 @@ function starterQuizData() {
         imageUrl: "",
         isJoker: false,
         jokerTask: "",
-        jokerTimer: 10,
+        jokerTimer: null,
         answered: false,
       })),
     })),
