@@ -512,8 +512,8 @@ export default function QuizzesPage() {
               Slette «{quizToDelete?.title}»?
             </AlertDialogTitle>
             <AlertDialogDescription>
-              Quizen og historikken fra øktene som er spilt på den blir borte.
-              Kan ikke angres.
+              Quizen blir borte. Historikken fra øktene som er spilt på den,
+              blir liggende. Kan ikke angres.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
