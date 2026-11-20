@@ -52,6 +52,9 @@ export function QuizSettings() {
   const isOwner = useGameStore((s) => s.isOwnerOfActiveQuiz());
   const activeQuizId = useGameStore((s) => s.activeQuizId) ?? "";
 
+  // The timer switch is derived from the store, not synced into local state.
+  // The quiz loads asynchronously, and a local copy taken once on mount
+  // showed the wrong toggle state on a fresh page load.
   const toggleTimer = (on: boolean) => {
     if (!on && quizTimeLimit !== null) {
       secondsBeforeOff.set(activeQuizId, quizTimeLimit);
