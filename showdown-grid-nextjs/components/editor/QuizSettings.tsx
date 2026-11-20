@@ -220,9 +220,15 @@ export function QuizSettings() {
           <Switch
             checked={quizIsPublic}
             onCheckedChange={setQuizIsPublic}
+            disabled={!isOwner}
             aria-label="Gjør quizen offentlig"
           />
         </div>
+        {!isOwner && (
+          <p className="mt-1 text-xs text-muted-foreground">
+            Bare eieren kan endre dette.
+          </p>
+        )}
       </div>
 
       {isOwner && (
