@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, useSyncExternalStore } from "react";
 import { useRouter } from "next/navigation";
 import { Brand } from "@/components/Brand";
 import { useGameStore } from "@/utils/store";
@@ -29,7 +29,19 @@ import { countQuestions } from "@/utils/quiz-template";
 import { formatDuration } from "@/utils/format";
 import { useQuizBootstrap } from "@/hooks/useQuizBootstrap";
 import { usePresentationMode } from "@/hooks/usePresentationMode";
+import { useQuizRun } from "@/hooks/queries/useQuizRuns";
 import type { QuizRun } from "@/utils/types";
+
+const noSubscription = () => () => {};
+
+/** The saved run this page shows, from ?run= — read once, on the client. */
+function useRunParam(): string | null {
+  return useSyncExternalStore(
+    noSubscription,
+    () => new URLSearchParams(window.location.search).get("run"),
+    () => null
+  );
+}
 
 /** Names printed on one podium step before it collapses to a count. */
 const PODIUM_NAMES = 3;
@@ -50,7 +62,9 @@ interface DisplayTeam {
  * clean, but it means this page can't keep reading `teams`/`categories`
  * afterward. The server's response to the complete call (duration,
  * per-team results, answered count) is kept in savedRun instead, and every
- * number on screen prefers it once it exists.
+ * number on screen prefers it once it exists. Its id also goes into the
+ * address, so a reload or a trip back from history shows the saved result
+ * instead of a board of zeros.
  */
 export default function Results() {
   const router = useRouter();
@@ -59,12 +73,17 @@ export default function Results() {
   const teams = useGameStore((s) => s.teams);
   const categories = useGameStore((s) => s.categories);
   const activeRunId = useGameStore((s) => s.activeRunId);
+  const activeQuizId = useGameStore((s) => s.activeQuizId);
   const completeSession = useGameStore((s) => s.completeSession);
   const quizTitle = useGameStore((s) => s.quizTitle);
 
   const [isCompleting, setIsCompleting] = useState(false);
   const [confirmOpen, setConfirmOpen] = useState(false);
-  const [savedRun, setSavedRun] = useState<QuizRun | null>(null);
+  const [justSaved, setJustSaved] = useState<QuizRun | null>(null);
+  const runParam = useRunParam();
+  const storedRun = useQuizRun(justSaved ? null : runParam);
+  const savedRun =
+    justSaved ?? (storedRun.data?.ended_at ? storedRun.data : null);
 
   // A results page's only job is the live numbers — never make the host
   // choose here, just apply whatever session is waiting.
@@ -80,7 +99,7 @@ export default function Results() {
         name: r.teamName,
         score: r.finalScore,
         rank: r.rank,
-        players: [],
+        players: r.players ?? [],
       }))
     : liveRanked;
 
@@ -110,7 +129,8 @@ export default function Results() {
     setIsCompleting(true);
     try {
       const run = await completeSession(activeRunId);
-      setSavedRun(run);
+      setJustSaved(run);
+      if (run) router.replace(`/results?run=${run.id}`);
       toast({
         title: "Økten er lagret",
         description: "Du finner den under Historikk.",
@@ -165,7 +185,24 @@ export default function Results() {
     return rank === 1 ? "order-2" : rank === 2 ? "order-1" : "order-3";
   };
 
-  if (bootstrap.status === "loading" || bootstrap.status === "resumable") {
+  if (runParam && !savedRun && storedRun.isError) {
+    return (
+      <div className="stage flex min-h-dvh flex-col items-center justify-center gap-4 p-8 text-center">
+        <h1 className="text-2xl font-bold">Fant ikke økten</h1>
+        <p className="text-muted-foreground">
+          Den kan være slettet fra historikken.
+        </p>
+        <Button onClick={() => router.push("/history")}>Til historikken</Button>
+      </div>
+    );
+  }
+
+  const waitingForSavedRun = Boolean(runParam) && !savedRun && storedRun.isLoading;
+
+  if (
+    waitingForSavedRun ||
+    (!savedRun && (bootstrap.status === "loading" || bootstrap.status === "resumable"))
+  ) {
     return (
       <div className="stage min-h-dvh p-8">
         <div className="mx-auto max-w-3xl space-y-4">
@@ -176,7 +213,7 @@ export default function Results() {
     );
   }
 
-  if (bootstrap.status === "error") {
+  if (!savedRun && bootstrap.status === "error") {
     return (
       <div className="stage flex min-h-dvh flex-col items-center justify-center gap-4 p-8 text-center">
         <h1 className="text-2xl font-bold">Kunne ikke laste resultatene</h1>
@@ -191,7 +228,7 @@ export default function Results() {
     );
   }
 
-  if (bootstrap.status === "empty") {
+  if (!savedRun && bootstrap.status === "empty") {
     return (
       <div className="stage flex min-h-dvh flex-col items-center justify-center gap-4 p-8 text-center">
         <h1 className="text-2xl font-bold">Ingen quiz å vise resultater for</h1>
@@ -240,7 +277,7 @@ export default function Results() {
 
       <header className="mb-6 text-center">
         <p className="text-xs uppercase tracking-widest text-muted-foreground sm:text-sm">
-          {quizTitle || "Uten navn"}
+          {savedRun?.quiz_title || quizTitle || "Uten navn"}
         </p>
         <h1 className="text-[clamp(2rem,7vh,4.5rem)] font-extrabold tracking-tight text-accent drop-shadow-sm">
           RESULTATER
@@ -415,10 +452,15 @@ export default function Results() {
         <div className="flex flex-wrap justify-center gap-2">
           {savedRun ? (
             <>
-              <Button onClick={() => router.push("/")}>
-                Spill denne quizen igjen
-              </Button>
-              <Button variant="outline" onClick={() => router.push("/history")}>
+              {savedRun.quiz_id && savedRun.quiz_id === activeQuizId && (
+                <Button onClick={() => router.push("/")}>
+                  Spill denne quizen igjen
+                </Button>
+              )}
+              <Button
+                variant="outline"
+                onClick={() => router.push(`/history/${savedRun.id}`)}
+              >
                 Se økten i historikken
               </Button>
               <Button variant="ghost" onClick={() => router.push("/quizzes")}>

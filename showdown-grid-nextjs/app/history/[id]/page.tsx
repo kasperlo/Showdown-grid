@@ -142,7 +142,7 @@ export default function RunDetailPage() {
                       {category.name}
                     </h3>
                     <div className="flex justify-between text-sm">
-                      <span className="text-muted-foreground">Besvart</span>
+                      <span className="text-muted-foreground">Spilt</span>
                       <span className="font-semibold tabular-nums">
                         {category.answered}/{category.total}
                       </span>
@@ -172,7 +172,16 @@ export default function RunDetailPage() {
                   className="tile flex flex-wrap items-center justify-between gap-2 p-3 text-sm"
                 >
                   <span className="text-muted-foreground">
-                    {entry.teamNameSnapshot}
+                    <span className="mr-2 tabular-nums">
+                      {new Date(entry.createdAt).toLocaleTimeString("nb-NO", {
+                        hour: "2-digit",
+                        minute: "2-digit",
+                      })}
+                    </span>
+                    {/* The name the team ended the night with, so the log
+                        matches the results above after a rename. */}
+                    {teams.find((t) => t.teamId === entry.teamId)?.teamName ??
+                      entry.teamNameSnapshot}
                   </span>
                   <div className="flex items-center gap-4">
                     {entry.reason && (
@@ -255,7 +264,7 @@ function readAdjustments(finalState: unknown): AdjustmentEntry[] {
   if (!finalState || typeof finalState !== "object") return [];
   const raw = finalState as Record<string, unknown>;
   if (!Array.isArray(raw.adjustmentLog)) return [];
-  return (raw.adjustmentLog as AdjustmentEntry[]).filter(
-    (entry) => entry.type === "manual" || entry.type === "custom_scoring"
-  );
+  return (raw.adjustmentLog as AdjustmentEntry[])
+    .filter((entry) => entry.type === "manual" || entry.type === "custom_scoring")
+    .sort((a, b) => a.createdAt - b.createdAt);
 }

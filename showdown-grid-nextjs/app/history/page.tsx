@@ -39,8 +39,9 @@ export default function HistoryPage() {
           </Button>
           <h1 className="display-xl text-accent">Historikk</h1>
           <p className="mt-2 text-muted-foreground">
-            Fullførte økter. En økt havner her når du trykker «Fullfør» på
-            resultatsiden.
+            Fullførte økter. En økt havner her når du fullfører den på
+            resultatsiden, nullstiller spillet eller starter en ny økt med
+            samme quiz.
           </p>
         </header>
 
@@ -63,7 +64,7 @@ export default function HistoryPage() {
           <div className="glass rounded-2xl p-12 text-center">
             <Trophy className="mx-auto mb-4 h-14 w-14 text-muted-foreground" />
             <p className="text-lg text-muted-foreground">
-              Ingen fullførte økter enda
+              Ingen fullførte økter ennå
             </p>
             <Button className="mt-4" onClick={() => router.push("/")}>
               Spill en runde

@@ -67,6 +67,9 @@ export function useQuizRuns(quizId?: string, limit: number = 50) {
   return useQuery({
     queryKey: quizRunKeys.list({ quizId, limit }),
     queryFn: () => fetchQuizRuns(quizId, limit),
+    // Runs are completed from the store, outside react-query, so a list
+    // cached a few minutes ago would be missing the night just saved.
+    refetchOnMount: "always",
     retry: (failureCount: number, error: unknown) => {
       // Don't retry on 401
       if (error instanceof Error && error.message === "Unauthorized") {
