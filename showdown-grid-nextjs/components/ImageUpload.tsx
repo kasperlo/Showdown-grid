@@ -112,6 +112,9 @@ export function ImageUpload({ value, onChange, label = "Bilde" }: ImageUploadPro
               Kunne ikke laste bildet. Sjekk lenken.
             </p>
           ) : (
+            // Any URL can be pasted here, and next/image only loads hosts
+            // listed in next.config.
+            // eslint-disable-next-line @next/next/no-img-element
             <img
               key={value}
               src={value}

@@ -87,6 +87,9 @@ let templateSaveChain: Promise<unknown> = Promise.resolve();
 let templateRetryTimer: ReturnType<typeof setTimeout> | null = null;
 let templateRetryCount = 0;
 const TEMPLATE_RETRY_LIMIT = 3;
+/** A quiz dropped from memory (deleted, or the user signed out): an edit
+ * still pending for it is not saved on the way out. */
+let unloadedQuizId: string | null = null;
 
 export const SAVE_CONFLICT_MESSAGE =
   "Quizen er endret et annet sted. Det du har endret her siden sist, er ikke lagret.";
@@ -1027,6 +1030,7 @@ export const useGameStore = create<GameState>()((set, get) => {
 
     unloadQuiz: () => {
       const { activeQuizId } = get();
+      unloadedQuizId = activeQuizId;
       if (activeQuizId) clearSnapshot(activeQuizId);
       if (drawTimer) {
         clearTimeout(drawTimer);
@@ -1106,6 +1110,7 @@ export const useGameStore = create<GameState>()((set, get) => {
         categories: withCategoryIds(template.categories, "positional"),
       };
       const merged = mergeLiveIntoTemplate(normalized, live ?? null);
+      unloadedQuizId = null;
       if (drawTimer) {
         clearTimeout(drawTimer);
         drawTimer = null;
@@ -1156,6 +1161,7 @@ export const useGameStore = create<GameState>()((set, get) => {
         const state = get();
         const quizId = options.target?.quizId ?? state.activeQuizId;
         if (!quizId) return true;
+        if (options.target && quizId === unloadedQuizId) return true;
         const isActive = quizId === state.activeQuizId;
 
         if (isActive && !state.canEditActiveQuiz()) return true;
