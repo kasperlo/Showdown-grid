@@ -17,6 +17,7 @@ import {
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
 import { Plus, RotateCcw, Trash2, Users } from "lucide-react";
+import { DraftInput } from "./DraftInput";
 
 export function TeamsEditor() {
   const teams = useGameStore((s) => s.teams);
@@ -91,13 +92,13 @@ export function TeamsEditor() {
                 >
                   Spillere
                 </Label>
-                <Input
+                <DraftInput
                   id={`team-players-${team.id}`}
                   value={team.players.join(", ")}
-                  onChange={(e) =>
+                  onCommit={(raw) =>
                     updateTeamPlayers(
                       team.id,
-                      e.target.value
+                      raw
                         .split(",")
                         .map((p) => p.trim())
                         .filter(Boolean)

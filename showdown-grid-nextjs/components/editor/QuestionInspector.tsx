@@ -8,6 +8,7 @@ import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
 import { ImageUpload } from "@/components/ImageUpload";
+import { DraftInput } from "./DraftInput";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -238,14 +239,14 @@ function InspectorBody() {
         )}
 
         <Field label="Poeng">
-          <Input
+          <DraftInput
             type="number"
             min={50}
             step={50}
-            value={question.points}
-            onChange={(e) => {
-              const parsed = parseInt(e.target.value, 10);
-              patch({ points: Number.isFinite(parsed) ? Math.max(50, parsed) : 50 });
+            value={String(question.points)}
+            onCommit={(raw) => {
+              const parsed = parseInt(raw, 10);
+              if (Number.isFinite(parsed)) patch({ points: Math.max(50, parsed) });
             }}
             className="w-28"
             aria-label="Poeng"
