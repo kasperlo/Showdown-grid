@@ -71,7 +71,7 @@ export default function JoinPage() {
           title: "Du har fått redigeringstilgang",
           description: "Endringer du gjør blir lagret sammen med eieren.",
         });
-        router.replace("/setup");
+        router.replace("/?mode=edit");
       } catch {
         setState({
           status: "error",

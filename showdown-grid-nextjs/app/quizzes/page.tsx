@@ -2,13 +2,8 @@
 
 import { useCallback, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
-import { useQueryClient } from "@tanstack/react-query";
 import { useGameStore } from "@/utils/store";
-import {
-  usePublicQuizzes,
-  useQuizzesList,
-  quizKeys,
-} from "@/hooks/queries/useQuizzes";
+import { usePublicQuizzes, useQuizzesList } from "@/hooks/queries/useQuizzes";
 import {
   useCreateQuiz,
   useActivateQuiz,
@@ -62,7 +57,6 @@ import type { QuizMetadata } from "@/utils/types";
 
 export default function QuizzesPage() {
   const router = useRouter();
-  const queryClient = useQueryClient();
   const activeQuizId = useGameStore((s) => s.activeQuizId);
 
   const [createOpen, setCreateOpen] = useState(false);
@@ -77,6 +71,10 @@ export default function QuizzesPage() {
   const createQuiz = useCreateQuiz();
   const activateQuiz = useActivateQuiz();
   const deleteQuiz = useDeleteQuiz();
+  // Two quick clicks used to start two switches, and the board that won the
+  // race could be one that never saved.
+  const [switching, setSwitching] = useState(false);
+  const busy = switching || activateQuiz.isPending || createQuiz.isPending;
 
   const filter = useCallback(
     (quizzes: QuizMetadata[]) => {
@@ -98,16 +96,32 @@ export default function QuizzesPage() {
     [filter, publicQuizzes]
   );
 
+  /** Saves the quiz being left before another one is loaded, and asks before
+   * leaving changes that could not be saved. False when the switch is off. */
+  const beginSwitch = async (): Promise<boolean> => {
+    setSwitching(true);
+    const saved = await useGameStore.getState().saveTemplate();
+    if (
+      saved ||
+      window.confirm("Endringene i quizen du forlater, er ikke lagret. Bytte likevel?")
+    ) {
+      return true;
+    }
+    setSwitching(false);
+    return false;
+  };
+
   const handleCreate = async () => {
     if (!newTitle.trim()) {
       toast({
         title: "Tittel mangler",
-        description: "Quizzen må ha et navn.",
+        description: "Quizen må ha et navn.",
         variant: "destructive",
       });
       return;
     }
 
+    if (!(await beginSwitch())) return;
     try {
       // Straight into the editor: a new quiz is empty, and the only useful next
       // step is filling it in. It used to land you back on this list.
@@ -118,13 +132,13 @@ export default function QuizzesPage() {
       });
       rememberPublicPlay(null);
       useGameStore.setState({ isHydrated: false, activeQuizId: null });
-      queryClient.invalidateQueries({ queryKey: quizKeys.active() });
       setCreateOpen(false);
       setNewTitle("");
       setNewDescription("");
       toast({ title: "Quiz opprettet", description: quiz.title });
-      router.push("/setup");
+      router.push("/?mode=edit");
     } catch (error) {
+      setSwitching(false);
       toast({
         title: "Kunne ikke opprette quiz",
         description: error instanceof Error ? error.message : undefined,
@@ -133,7 +147,8 @@ export default function QuizzesPage() {
     }
   };
 
-  const openOwnQuiz = async (quizId: string, destination: "/" | "/setup") => {
+  const openOwnQuiz = async (quizId: string, mode: "play" | "edit") => {
+    if (!(await beginSwitch())) return;
     try {
       rememberPublicPlay(null);
       await activateQuiz.mutateAsync(quizId);
@@ -144,23 +159,25 @@ export default function QuizzesPage() {
         activeQuizId: null,
         isPlayingPublicQuiz: false,
       });
-      router.push(destination);
+      router.push(`/?mode=${mode}`);
     } catch {
+      setSwitching(false);
       toast({
-        title: "Kunne ikke åpne quizzen",
+        title: "Kunne ikke åpne quizen",
         variant: "destructive",
       });
     }
   };
 
-  const playPublicQuiz = (quizId: string) => {
+  const playPublicQuiz = async (quizId: string) => {
+    if (!(await beginSwitch())) return;
     rememberPublicPlay(quizId);
     useGameStore.setState({
       isHydrated: false,
       activeQuizId: null,
       isPlayingPublicQuiz: true,
     });
-    router.push("/");
+    router.push("/?mode=play");
   };
 
   const copyQuiz = async (quiz: QuizMetadata) => {
@@ -172,7 +189,7 @@ export default function QuizzesPage() {
       });
       toast({
         title: "Kopi laget",
-        description: "Du finner den under Mine quizzer.",
+        description: "Du finner den under Mine quizer.",
       });
     } catch (error) {
       toast({
@@ -188,7 +205,7 @@ export default function QuizzesPage() {
     // so the store does not know which one is active on a fresh visit.
     const isActive = quiz.is_active ?? quiz.id === activeQuizId;
     const isMine = !isPublicList || quiz.isOwnedByCurrentUser;
-    // On "Mine quizzer", a quiz you were given edit access to is not one you
+    // On "Mine quizer", a quiz you were given edit access to is not one you
     // own: same board access, but no delete button and no share management.
     const isOwned = quiz.isOwnedByCurrentUser ?? true;
 
@@ -240,8 +257,9 @@ export default function QuizzesPage() {
             onClick={() =>
               isPublicList && !isMine
                 ? playPublicQuiz(quiz.id)
-                : openOwnQuiz(quiz.id, "/")
+                : openOwnQuiz(quiz.id, "play")
             }
+            disabled={busy}
           >
             <Play className="h-4 w-4" />
             Spill
@@ -252,7 +270,8 @@ export default function QuizzesPage() {
               size="sm"
               variant="outline"
               className="gap-1"
-              onClick={() => openOwnQuiz(quiz.id, "/setup")}
+              onClick={() => openOwnQuiz(quiz.id, "edit")}
+              disabled={busy}
             >
               <Pencil className="h-4 w-4" />
               Rediger
@@ -263,7 +282,7 @@ export default function QuizzesPage() {
               variant="outline"
               className="gap-1"
               onClick={() => copyQuiz(quiz)}
-              disabled={createQuiz.isPending}
+              disabled={busy}
             >
               <Copy className="h-4 w-4" />
               Kopier
@@ -277,7 +296,7 @@ export default function QuizzesPage() {
                 variant="ghost"
                 className="gap-1"
                 onClick={() => copyQuiz(quiz)}
-                disabled={createQuiz.isPending}
+                disabled={busy}
                 title="Lag en kopi"
               >
                 <Copy className="h-4 w-4" />
@@ -288,6 +307,7 @@ export default function QuizzesPage() {
                   variant="ghost"
                   className="ml-auto text-destructive hover:text-destructive"
                   onClick={() => setQuizToDelete(quiz)}
+                  disabled={busy}
                   title={`Slett ${quiz.title}`}
                   aria-label={`Slett ${quiz.title}`}
                 >
@@ -336,7 +356,11 @@ export default function QuizzesPage() {
           </div>
 
           <div className="flex items-center gap-2">
-            <Button className="gap-2" onClick={() => setCreateOpen(true)}>
+            <Button
+              className="gap-2"
+              onClick={() => setCreateOpen(true)}
+              disabled={busy}
+            >
               <Plus className="h-4 w-4" />
               Ny quiz
             </Button>
@@ -351,16 +375,16 @@ export default function QuizzesPage() {
           <Input
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            placeholder="Søk i quizzer"
+            placeholder="Søk i quizer"
             className="pl-9"
-            aria-label="Søk i quizzer"
+            aria-label="Søk i quizer"
           />
         </div>
 
         <Tabs defaultValue="mine" className="w-full">
           <TabsList className="mb-6 grid w-full grid-cols-2 bg-popover">
             <TabsTrigger value="mine">
-              Mine quizzer
+              Mine quizer
               {myQuizzes.length > 0 && ` (${myQuizzes.length})`}
             </TabsTrigger>
             <TabsTrigger value="public">
@@ -382,11 +406,11 @@ export default function QuizzesPage() {
                 <CardContent className="space-y-4">
                   <p className="text-muted-foreground">
                     {myQuizzes.length === 0
-                      ? "Du har ingen quizzer enda."
+                      ? "Du har ingen quizer ennå."
                       : "Ingen treff på søket."}
                   </p>
                   {myQuizzes.length === 0 && (
-                    <Button onClick={() => setCreateOpen(true)}>
+                    <Button onClick={() => setCreateOpen(true)} disabled={busy}>
                       <Plus className="mr-2 h-4 w-4" />
                       Lag din første quiz
                     </Button>
@@ -409,7 +433,7 @@ export default function QuizzesPage() {
                   <Globe className="mx-auto mb-4 h-10 w-10 text-muted-foreground" />
                   <p className="text-muted-foreground">
                     {publicQuizzes.length === 0
-                      ? "Ingen offentlige quizzer enda."
+                      ? "Ingen offentlige quizer ennå."
                       : "Ingen treff på søket."}
                   </p>
                 </CardContent>
@@ -470,7 +494,7 @@ export default function QuizzesPage() {
               >
                 Avbryt
               </Button>
-              <Button type="submit" disabled={createQuiz.isPending}>
+              <Button type="submit" disabled={busy}>
                 {createQuiz.isPending ? "Oppretter…" : "Opprett og rediger"}
               </Button>
             </DialogFooter>
@@ -488,7 +512,7 @@ export default function QuizzesPage() {
               Slette «{quizToDelete?.title}»?
             </AlertDialogTitle>
             <AlertDialogDescription>
-              Quizzen og historikken fra øktene som er spilt på den blir borte.
+              Quizen og historikken fra øktene som er spilt på den blir borte.
               Kan ikke angres.
             </AlertDialogDescription>
           </AlertDialogHeader>
@@ -502,6 +526,9 @@ export default function QuizzesPage() {
                 if (!target) return;
                 try {
                   await deleteQuiz.mutateAsync(target.id);
+                  if (useGameStore.getState().activeQuizId === target.id) {
+                    useGameStore.getState().unloadQuiz();
+                  }
                   toast({ title: "Slettet", description: target.title });
                 } catch {
                   toast({

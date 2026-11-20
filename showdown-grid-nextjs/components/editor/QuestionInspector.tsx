@@ -1,13 +1,14 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useGameStore } from "@/utils/store";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
 import { ImageUpload } from "@/components/ImageUpload";
+import { clampedInteger, DraftInput } from "./DraftInput";
+import { indentCode } from "./indent-code";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -42,6 +43,31 @@ import {
 
 const JOKER_PRESETS = [5, 10, 15, 20];
 
+/** Widgets that use the arrow keys and Escape themselves. */
+const OWN_KEYS = 'input, textarea, select, [role="menu"], [role="listbox"], [role="tablist"]';
+
+/**
+ * Whether a key is meant for something other than the panel's shortcuts: a
+ * field, a widget with keys of its own, or a dialog the panel is not part of.
+ */
+function keyBelongsElsewhere(
+  target: EventTarget | null,
+  panel: HTMLElement | null
+): boolean {
+  if (!(target instanceof Element)) return false;
+  if (isTextField(target) || target.closest(OWN_KEYS)) return true;
+  const dialog = target.closest('[role="dialog"], [role="alertdialog"]');
+  return dialog !== null && !(panel && dialog.contains(panel));
+}
+
+export function isTextField(target: EventTarget | null): boolean {
+  return (
+    target instanceof HTMLInputElement ||
+    target instanceof HTMLTextAreaElement ||
+    (target instanceof HTMLElement && target.isContentEditable)
+  );
+}
+
 /**
  * The side panel: one card at a time, plus the queue that decides what "next"
  * means. Two ways in — clicking a card (silent queue over the whole board) or
@@ -74,6 +100,7 @@ function InspectorBody() {
     (s) => s.removeQuestionFromCategory
   );
   const moveQuestion = useGameStore((s) => s.moveQuestion);
+  const jokerTimeLimit = useGameStore((s) => s.jokerTimeLimit);
 
   const question = cardAt(categories, selectedCard);
   const counts = readiness(categories);
@@ -81,27 +108,26 @@ function InspectorBody() {
   const [codeOpen, setCodeOpen] = useState(false);
   const [explanationOpen, setExplanationOpen] = useState(false);
   const [confirmingDelete, setConfirmingDelete] = useState(false);
+  // Only a card that was just made a joker sends focus to its task. A card
+  // that already was one took the arrow keys away from a Jokere review.
+  const [focusTask, setFocusTask] = useState(false);
+  const panelRef = useRef<HTMLElement>(null);
 
-  // Keyboard flow. Skipped while typing, so the shortcuts never eat text.
+  // Keyboard flow. It listens on the whole window, so it leaves alone the keys
+  // meant for a field, a menu, a list, tabs, another dialog or the browser.
   useEffect(() => {
     if (!selectedCard) return;
 
     const onKeyDown = (event: KeyboardEvent) => {
-      const target = event.target as HTMLElement | null;
-      const typing =
-        !!target &&
-        (target.tagName === "INPUT" ||
-          target.tagName === "TEXTAREA" ||
-          target.isContentEditable);
+      if (event.defaultPrevented || event.altKey || event.ctrlKey || event.metaKey) {
+        return;
+      }
+      if (keyBelongsElsewhere(event.target, panelRef.current)) return;
 
       if (event.key === "Escape") {
         event.preventDefault();
         selectCard(null);
-        return;
-      }
-      if (typing) return;
-
-      if (event.key === "ArrowRight") {
+      } else if (event.key === "ArrowRight") {
         event.preventDefault();
         queueNext();
       } else if (event.key === "ArrowLeft") {
@@ -111,13 +137,10 @@ function InspectorBody() {
         event.preventDefault();
         const current = cardAt(useGameStore.getState().categories, selectedCard);
         if (!current) return;
-        updateQuestion(
-          selectedCard.categoryIndex,
-          selectedCard.questionIndex,
-          current.isJoker
-            ? { isJoker: false, jokerTask: "" }
-            : { isJoker: true, jokerTimer: current.jokerTimer || 10 }
-        );
+        if (!current.isJoker) setFocusTask(true);
+        updateQuestion(selectedCard.categoryIndex, selectedCard.questionIndex, {
+          isJoker: !current.isJoker,
+        });
       }
     };
 
@@ -128,6 +151,8 @@ function InspectorBody() {
   if (!selectedCard || !question) return null;
 
   const category = categories[selectedCard.categoryIndex];
+  // The same fallback RoundScreen uses when the quiz has no default either.
+  const defaultJokerSeconds = jokerTimeLimit || 10;
   const status = cardStatus(question);
   const warning = statusLabel(status);
   const patch = (changes: Parameters<typeof updateQuestion>[2]) =>
@@ -144,7 +169,16 @@ function InspectorBody() {
   const remaining = queue?.ids.slice(queue.position, queue.position + 5) ?? [];
 
   return (
-    <aside className="flex h-full min-h-0 flex-col bg-card/80">
+    <aside
+      ref={panelRef}
+      className="flex h-full min-h-0 flex-col bg-card/80"
+      onKeyDown={(event) => {
+        // Esc leaves the field first and closes the panel the second time.
+        // The code field keeps Tab for indenting, so this is the way out of it.
+        if (event.key !== "Escape" || event.nativeEvent.isComposing) return;
+        if (isTextField(event.target)) (event.target as HTMLElement).blur();
+      }}
+    >
       {queue?.active && (
         <div className="space-y-3 border-b border-border px-4 py-3">
           <div className="flex items-center gap-2">
@@ -238,14 +272,14 @@ function InspectorBody() {
         )}
 
         <Field label="Poeng">
-          <Input
+          <DraftInput
             type="number"
             min={50}
             step={50}
-            value={question.points}
-            onChange={(e) => {
-              const parsed = parseInt(e.target.value, 10);
-              patch({ points: Number.isFinite(parsed) ? Math.max(50, parsed) : 50 });
+            value={String(question.points)}
+            onCommit={(raw) => {
+              const points = clampedInteger(raw, 50, Infinity);
+              if (points !== null) patch({ points });
             }}
             className="w-28"
             aria-label="Poeng"
@@ -259,25 +293,39 @@ function InspectorBody() {
                 value={question.jokerTask ?? ""}
                 onChange={(e) => patch({ jokerTask: e.target.value })}
                 rows={4}
-                autoFocus
+                autoFocus={focusTask}
                 className="text-base font-semibold leading-snug"
               />
             </Field>
 
             <Field label="Sekunder">
               <div className="flex flex-wrap items-center gap-1.5">
-                <Input
+                <DraftInput
                   type="number"
-                  min={3}
+                  min={1}
                   max={300}
-                  value={question.jokerTimer ?? 10}
-                  onChange={(e) => {
-                    const parsed = parseInt(e.target.value, 10);
-                    patch({ jokerTimer: Number.isFinite(parsed) ? parsed : 10 });
+                  value={question.jokerTimer == null ? "" : String(question.jokerTimer)}
+                  placeholder={String(defaultJokerSeconds)}
+                  onCommit={(raw) => {
+                    if (!raw.trim()) {
+                      patch({ jokerTimer: null });
+                      return;
+                    }
+                    const seconds = clampedInteger(raw, 1, 300);
+                    if (seconds !== null) patch({ jokerTimer: seconds });
                   }}
                   className="w-20"
                   aria-label="Sekunder"
                 />
+                <Button
+                  type="button"
+                  size="sm"
+                  variant={question.jokerTimer == null ? "default" : "outline"}
+                  onClick={() => patch({ jokerTimer: null })}
+                  title="Bruk standard joker-tid fra Regler"
+                >
+                  Standard: {defaultJokerSeconds} s
+                </Button>
                 {JOKER_PRESETS.map((seconds) => (
                   <Button
                     key={seconds}
@@ -327,22 +375,29 @@ function InspectorBody() {
                   onKeyDown={(e) => {
                     // Tab indents instead of leaving the field. Without this you
                     // cannot type indented code at all, only paste it.
-                    if (e.key !== "Tab" || e.shiftKey) return;
+                    if (e.key !== "Tab") return;
                     e.preventDefault();
                     const el = e.currentTarget;
-                    const { selectionStart: from, selectionEnd: to, value } = el;
-                    patch({
-                      code: `${value.slice(0, from)}  ${value.slice(to)}`,
-                    });
+                    const edit = indentCode(
+                      el.value,
+                      el.selectionStart,
+                      el.selectionEnd,
+                      e.shiftKey
+                    );
+                    patch({ code: edit.value });
                     requestAnimationFrame(() => {
-                      el.selectionStart = el.selectionEnd = from + 2;
+                      el.setSelectionRange(edit.selectionStart, edit.selectionEnd);
                     });
                   }}
                   rows={6}
                   spellCheck={false}
                   placeholder="console.log(typeof null)"
+                  aria-describedby="code-field-keys"
                   className="font-mono text-sm leading-relaxed"
                 />
+                <p id="code-field-keys" className="text-xs text-muted-foreground">
+                  Tab rykker inn, Shift+Tab rykker ut. Esc går ut av feltet.
+                </p>
               </Field>
             ) : null}
 
@@ -414,13 +469,10 @@ function InspectorBody() {
           <Switch
             id="inspector-joker"
             checked={Boolean(question.isJoker)}
-            onCheckedChange={(checked) =>
-              patch(
-                checked
-                  ? { isJoker: true, jokerTimer: question.jokerTimer || 10 }
-                  : { isJoker: false, jokerTask: "" }
-              )
-            }
+            onCheckedChange={(checked) => {
+              if (checked) setFocusTask(true);
+              patch({ isJoker: checked });
+            }}
           />
         </div>
 

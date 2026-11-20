@@ -1,7 +1,9 @@
 import { createClient } from '@/lib/supabase-server';
 import { NextRequest, NextResponse } from 'next/server';
 
-const MAX_FILE_SIZE = 20 * 1024 * 1024; // 5MB
+// Under Vercel's 4.5 MB request limit, which turns bigger bodies away before
+// this route runs. The client compresses photos to fit.
+const MAX_FILE_SIZE = 4 * 1024 * 1024;
 const ALLOWED_TYPES = ['image/jpeg', 'image/png', 'image/gif', 'image/webp'];
 
 export async function POST(request: NextRequest) {
@@ -42,8 +44,8 @@ export async function POST(request: NextRequest) {
     // Validate file size
     if (file.size > MAX_FILE_SIZE) {
       return NextResponse.json(
-        { error: `Filen er for stor. Maksimal størrelse er ${MAX_FILE_SIZE / (1024**2)}MB.` },
-        { status: 400 }
+        { error: `Bildet er for stort. Maks ${MAX_FILE_SIZE / 1024 ** 2} MB.` },
+        { status: 413 }
       );
     }
 

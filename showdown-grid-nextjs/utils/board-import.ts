@@ -1,4 +1,4 @@
-import type { Category } from "./types";
+import type { Category, QuizTheme, TurnRule } from "./types";
 import { emptyQuestion } from "./quiz-template";
 
 /**
@@ -148,48 +148,119 @@ function splitLine(line: string, separator: string): string[] {
   return cells;
 }
 
+/** A team in an exported file: who plays, not how they scored. */
+export interface ExportedTeam {
+  name: string;
+  players: string[];
+}
+
 export interface ExportedBoard {
   version: 1;
   title: string;
   description: string;
   timeLimit: number | null;
   jokerTimeLimit: number | null;
+  theme: QuizTheme;
+  turnRule: TurnRule;
+  teams: ExportedTeam[];
   categories: Category[];
 }
+
+/**
+ * What a file brought with it. A setting the file lacks, or holds in a shape
+ * that makes no sense, is left out, so an import changes only what the file
+ * actually says.
+ */
+export type ImportedBoard = Pick<ExportedBoard, "categories"> &
+  Partial<Omit<ExportedBoard, "version" | "categories">>;
 
 export function serializeBoard(board: ExportedBoard): string {
   return JSON.stringify(board, null, 2);
 }
 
-export function parseExportedBoard(json: string): ExportedBoard {
-  const parsed = JSON.parse(json) as Partial<ExportedBoard>;
-  if (!Array.isArray(parsed.categories)) {
+export function parseExportedBoard(json: string): ImportedBoard {
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(json);
+  } catch {
+    throw new Error("Fila er ikke gyldig JSON.");
+  }
+  const raw = (parsed && typeof parsed === "object" ? parsed : {}) as Record<
+    string,
+    unknown
+  >;
+  if (!Array.isArray(raw.categories)) {
     throw new Error("Fila mangler «categories».");
   }
-  return {
-    version: 1,
-    title: typeof parsed.title === "string" ? parsed.title : "",
-    description:
-      typeof parsed.description === "string" ? parsed.description : "",
-    timeLimit:
-      typeof parsed.timeLimit === "number" ? parsed.timeLimit : null,
-    jokerTimeLimit:
-      typeof parsed.jokerTimeLimit === "number" ? parsed.jokerTimeLimit : 10,
-    categories: parsed.categories.map((category) => ({
-      name: String(category?.name ?? "Uten navn"),
-      questions: Array.isArray(category?.questions)
-        ? category.questions.map((question) => ({
-            ...emptyQuestion(Number(question?.points) || 100),
-            question: String(question?.question ?? ""),
-            answer: String(question?.answer ?? ""),
-            code: String(question?.code ?? ""),
-            explanation: String(question?.explanation ?? ""),
-            imageUrl: String(question?.imageUrl ?? ""),
-            isJoker: question?.isJoker === true,
-            jokerTask: String(question?.jokerTask ?? ""),
-            jokerTimer: Number(question?.jokerTimer) || 10,
-          }))
-        : [],
-    })),
+
+  const board: ImportedBoard = {
+    categories: (raw.categories as Category[]).map(readCategory),
   };
+
+  if (typeof raw.title === "string" && raw.title.trim()) {
+    board.title = raw.title.trim().slice(0, 200);
+  }
+  if (typeof raw.description === "string") {
+    board.description = raw.description.slice(0, 1000);
+  }
+  const timeLimit = readSeconds(raw.timeLimit, 5, 600);
+  if (timeLimit !== undefined) board.timeLimit = timeLimit;
+  const jokerTimeLimit = readSeconds(raw.jokerTimeLimit, 1, 300);
+  if (jokerTimeLimit !== undefined) board.jokerTimeLimit = jokerTimeLimit;
+  if (raw.theme === "classic" || raw.theme === "modern" || raw.theme === "christmas") {
+    board.theme = raw.theme;
+  }
+  if (raw.turnRule === "winner" || raw.turnRule === "rotation") {
+    board.turnRule = raw.turnRule;
+  }
+  const teams = Array.isArray(raw.teams)
+    ? raw.teams.flatMap((team, index) => readTeam(team, index))
+    : [];
+  if (teams.length) board.teams = teams;
+
+  return board;
+}
+
+function readCategory(category: Category): Category {
+  return {
+    name: String(category?.name ?? "Uten navn"),
+    questions: Array.isArray(category?.questions)
+      ? category.questions.map((question) => ({
+          ...emptyQuestion(Number(question?.points) || 100),
+          question: String(question?.question ?? ""),
+          answer: String(question?.answer ?? ""),
+          code: String(question?.code ?? ""),
+          explanation: String(question?.explanation ?? ""),
+          imageUrl: String(question?.imageUrl ?? ""),
+          isJoker: question?.isJoker === true,
+          jokerTask: String(question?.jokerTask ?? ""),
+          jokerTimer: readSeconds(question?.jokerTimer, 1, 300) ?? null,
+        }))
+      : [],
+  };
+}
+
+function readTeam(raw: unknown, index: number): ExportedTeam[] {
+  if (!raw || typeof raw !== "object") return [];
+  const team = raw as Record<string, unknown>;
+  const name = typeof team.name === "string" ? team.name.trim().slice(0, 80) : "";
+  const players = Array.isArray(team.players)
+    ? team.players
+        .filter((player): player is string => typeof player === "string")
+        .map((player) => player.trim().slice(0, 80))
+        .filter(Boolean)
+        .slice(0, 20)
+    : [];
+  return [{ name: name || `Lag ${index + 1}`, players }];
+}
+
+/**
+ * Seconds from a file: a positive number is rounded and kept within
+ * [min, max], null stays null (no timer, or the quiz default), and anything
+ * else is treated as missing.
+ */
+function readSeconds(value: unknown, min: number, max: number): number | null | undefined {
+  if (value === null) return null;
+  if (typeof value !== "number" || !Number.isFinite(value) || value <= 0) return undefined;
+  return Math.min(max, Math.max(min, Math.round(value)));
 }

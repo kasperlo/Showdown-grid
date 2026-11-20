@@ -30,11 +30,16 @@ import {
   parseBoardText,
   parseExportedBoard,
   serializeBoard,
+  type ExportedTeam,
+  type ImportedBoard,
+  type ImportResult,
 } from "@/utils/board-import";
+import { countQuestions, extractTemplate } from "@/utils/quiz-template";
+import type { Category } from "@/utils/types";
 
 const PASTE_EXAMPLE = `Norsk historie\t100\tHvem var Norges første statsminister?\tFrederik Stang
 Mat\t100\tHva heter Norges nasjonalrett?\tFårikål
-Kode\t100\tHva printes?\t"object"\tconsole.log(typeof null)`;
+Kode\t100\tHva printes?\t"object"\tconsole.log(typeof null)\tEn gammel feil i JavaScript`;
 
 /**
  * Bulk in and out. Filling a 25-cell board by hand is the slowest part of
@@ -43,48 +48,46 @@ Kode\t100\tHva printes?\t"object"\tconsole.log(typeof null)`;
 export function BoardTransfer() {
   const categories = useGameStore((s) => s.categories);
   const setCategories = useGameStore((s) => s.setCategories);
-  const quizTitle = useGameStore((s) => s.quizTitle);
-  const quizDescription = useGameStore((s) => s.quizDescription);
-  const quizTimeLimit = useGameStore((s) => s.quizTimeLimit);
-  const jokerTimeLimit = useGameStore((s) => s.jokerTimeLimit);
 
   const [pasteOpen, setPasteOpen] = useState(false);
   const [pasteText, setPasteText] = useState("");
   const [replaceMode, setReplaceMode] = useState<"replace" | "append">("replace");
-  const [confirmPasteOpen, setConfirmPasteOpen] = useState(false);
-  const [confirmFile, setConfirmFile] = useState<File | null>(null);
+  const [pendingPaste, setPendingPaste] = useState<ImportResult | null>(null);
+  const [pendingFile, setPendingFile] = useState<{
+    name: string;
+    board: ImportedBoard;
+  } | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const handleExport = () => {
+    const template = extractTemplate(useGameStore.getState());
     const json = serializeBoard({
       version: 1,
-      title: quizTitle,
-      description: quizDescription,
-      timeLimit: quizTimeLimit,
-      jokerTimeLimit,
-      categories,
+      title: template.quizTitle,
+      description: template.quizDescription,
+      timeLimit: template.quizTimeLimit,
+      jokerTimeLimit: template.jokerTimeLimit,
+      theme: template.quizTheme,
+      turnRule: template.turnRule,
+      teams: template.teams.map(({ name, players }) => ({ name, players })),
+      categories: template.categories,
     });
     const blob = new Blob([json], { type: "application/json" });
     const url = URL.createObjectURL(blob);
     const link = document.createElement("a");
     link.href = url;
-    link.download = `${slugify(quizTitle || "quiz")}.json`;
+    link.download = `${slugify(template.quizTitle || "quiz")}.json`;
     link.click();
     URL.revokeObjectURL(url);
   };
 
-  const handleFile = async (file: File) => {
+  const readFile = async (file: File) => {
     try {
-      const text = await file.text();
-      const board = parseExportedBoard(text);
+      const board = parseExportedBoard(await file.text());
       if (!board.categories.length) {
         throw new Error("Fila inneholder ingen kategorier.");
       }
-      setCategories(board.categories);
-      toast({
-        title: "Brett importert",
-        description: `${board.categories.length} kategorier lastet inn.`,
-      });
+      setPendingFile({ name: file.name, board });
     } catch (error) {
       toast({
         title: "Kunne ikke lese fila",
@@ -97,23 +100,25 @@ export function BoardTransfer() {
     }
   };
 
-  const requestFile = (file: File) => {
-    if (categories.length > 0) {
-      setConfirmFile(file);
-      return;
+  const applyFile = (board: ImportedBoard) => {
+    const store = useGameStore.getState();
+    store.setCategories(board.categories);
+    if (board.title !== undefined) store.setQuizTitle(board.title);
+    if (board.description !== undefined) store.setQuizDescription(board.description);
+    if (board.timeLimit !== undefined) store.setQuizTimeLimit(board.timeLimit);
+    if (board.jokerTimeLimit !== undefined) {
+      store.setJokerTimeLimit(board.jokerTimeLimit);
     }
-    void handleFile(file);
+    if (board.theme !== undefined) store.setQuizTheme(board.theme);
+    if (board.turnRule !== undefined) store.setTurnRule(board.turnRule);
+    if (board.teams !== undefined) replaceTeams(board.teams);
+    toast({
+      title: "Brett importert",
+      description: `${count(board.categories.length, "kategori", "kategorier")} og ${countQuestions(board.categories)} kort lastet inn.`,
+    });
   };
 
-  const requestPaste = () => {
-    if (replaceMode === "replace" && categories.length > 0) {
-      setConfirmPasteOpen(true);
-      return;
-    }
-    handlePaste();
-  };
-
-  const handlePaste = () => {
+  const readPaste = () => {
     const result = parseBoardText(pasteText);
     if (!result.categories.length) {
       toast({
@@ -123,7 +128,14 @@ export function BoardTransfer() {
       });
       return;
     }
+    if (replaceMode === "replace" && categories.length > 0) {
+      setPendingPaste(result);
+      return;
+    }
+    applyPaste(result);
+  };
 
+  const applyPaste = (result: ImportResult) => {
     setCategories(
       replaceMode === "replace"
         ? result.categories
@@ -134,10 +146,12 @@ export function BoardTransfer() {
     toast({
       title: `${result.rowCount} spørsmål lagt inn`,
       description: result.errors.length
-        ? `${result.errors.length} rader ble hoppet over.`
-        : `${result.categories.length} kategorier.`,
+        ? `${count(result.errors.length, "rad", "rader")} ble hoppet over.`
+        : `${count(result.categories.length, "kategori", "kategorier")}.`,
     });
   };
+
+  const fileSettings = pendingFile ? importedSettings(pendingFile.board) : [];
 
   return (
     <div className="space-y-3">
@@ -160,9 +174,11 @@ export function BoardTransfer() {
             <DialogHeader>
               <DialogTitle>Lim inn spørsmål</DialogTitle>
               <DialogDescription>
-                Én rad per spørsmål: kategori, poeng, spørsmål, svar og
-                eventuelt kode. Tabulator, semikolon eller komma mellom
-                kolonnene. Skriv \n i kodekolonnen der du vil ha linjeskift.
+                Én rad per spørsmål med kolonnene kategori, poeng, spørsmål,
+                svar, kode og «Tilleggsinfo». Kode og tilleggsinfo kan utelates;
+                tilleggsinfo vises under svaret. Tabulator, semikolon eller komma
+                mellom kolonnene. Skriv \n der du vil ha linjeskift i kode eller
+                tilleggsinfo.
               </DialogDescription>
             </DialogHeader>
 
@@ -197,7 +213,7 @@ export function BoardTransfer() {
               <Button variant="outline" onClick={() => setPasteOpen(false)}>
                 Avbryt
               </Button>
-              <Button onClick={requestPaste} disabled={!pasteText.trim()}>
+              <Button onClick={readPaste} disabled={!pasteText.trim()}>
                 Les inn
               </Button>
             </DialogFooter>
@@ -220,7 +236,7 @@ export function BoardTransfer() {
           className="hidden"
           onChange={(e) => {
             const file = e.target.files?.[0];
-            if (file) requestFile(file);
+            if (file) void readFile(file);
           }}
         />
 
@@ -236,14 +252,21 @@ export function BoardTransfer() {
         </Button>
       </div>
 
-      <AlertDialog open={confirmPasteOpen} onOpenChange={setConfirmPasteOpen}>
+      <AlertDialog
+        open={!!pendingPaste}
+        onOpenChange={(open) => !open && setPendingPaste(null)}
+      >
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>Erstatte hele brettet?</AlertDialogTitle>
             <AlertDialogDescription>
-              {categories.length}{" "}
-              {categories.length === 1 ? "eksisterende kategori" : "eksisterende kategorier"}{" "}
-              forsvinner og erstattes av det du limte inn. Kan ikke angres.
+              {pendingPaste &&
+                replacementSummary(
+                  categories.length,
+                  pendingPaste.categories,
+                  "det du limte inn"
+                )}{" "}
+              Kan ikke angres.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
@@ -251,8 +274,9 @@ export function BoardTransfer() {
             <AlertDialogAction
               className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
               onClick={() => {
-                setConfirmPasteOpen(false);
-                handlePaste();
+                const result = pendingPaste;
+                setPendingPaste(null);
+                if (result) applyPaste(result);
               }}
             >
               Erstatt
@@ -262,21 +286,21 @@ export function BoardTransfer() {
       </AlertDialog>
 
       <AlertDialog
-        open={!!confirmFile}
-        onOpenChange={(open) => {
-          if (!open) {
-            setConfirmFile(null);
-            if (fileInputRef.current) fileInputRef.current.value = "";
-          }
-        }}
+        open={!!pendingFile}
+        onOpenChange={(open) => !open && setPendingFile(null)}
       >
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>Erstatte hele brettet?</AlertDialogTitle>
             <AlertDialogDescription>
-              {categories.length}{" "}
-              {categories.length === 1 ? "eksisterende kategori" : "eksisterende kategorier"}{" "}
-              forsvinner og erstattes av innholdet i «{confirmFile?.name}».
+              {pendingFile &&
+                replacementSummary(
+                  categories.length,
+                  pendingFile.board.categories,
+                  `«${pendingFile.name}»`
+                )}{" "}
+              {fileSettings.length > 0 &&
+                `Fila endrer også ${joinNorwegian(fileSettings)}. `}
               Kan ikke angres.
             </AlertDialogDescription>
           </AlertDialogHeader>
@@ -285,9 +309,9 @@ export function BoardTransfer() {
             <AlertDialogAction
               className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
               onClick={() => {
-                const file = confirmFile;
-                setConfirmFile(null);
-                if (file) void handleFile(file);
+                const file = pendingFile;
+                setPendingFile(null);
+                if (file) applyFile(file.board);
               }}
             >
               Erstatt
@@ -297,6 +321,62 @@ export function BoardTransfer() {
       </AlertDialog>
     </div>
   );
+}
+
+/**
+ * Gives the board the file's teams through the store's own team actions, so
+ * the saved game state follows along. Teams already on the board are renamed
+ * in place and keep their ids and scores.
+ */
+function replaceTeams(teams: ExportedTeam[]) {
+  const store = useGameStore.getState();
+  const current = store.teams;
+  teams.forEach((team, index) => {
+    const existing = current[index];
+    if (existing) {
+      store.updateTeamName(existing.id, team.name);
+      store.updateTeamPlayers(existing.id, team.players);
+      return;
+    }
+    store.addTeam(team.name);
+    const now = useGameStore.getState().teams;
+    store.updateTeamPlayers(now[now.length - 1].id, team.players);
+  });
+  current.slice(teams.length).forEach((team) => store.removeTeam(team.id));
+}
+
+/** The quiz settings a file will change, in words. */
+function importedSettings(board: ImportedBoard): string[] {
+  const settings: string[] = [];
+  if (board.title !== undefined) settings.push("tittel");
+  if (board.description !== undefined) settings.push("beskrivelse");
+  if (board.timeLimit !== undefined) settings.push("tid per spørsmål");
+  if (board.jokerTimeLimit !== undefined) settings.push("standard joker-tid");
+  if (board.turnRule !== undefined) settings.push("hvem som velger neste kort");
+  if (board.theme !== undefined) settings.push("tema");
+  if (board.teams !== undefined) settings.push("lagene");
+  return settings;
+}
+
+function replacementSummary(
+  current: number,
+  incoming: Category[],
+  source: string
+): string {
+  const what = `${count(incoming.length, "kategori", "kategorier")}, ${countQuestions(incoming)} kort fra ${source}`;
+  return current > 0
+    ? `${count(current, "eksisterende kategori", "eksisterende kategorier")} forsvinner og erstattes av ${what}.`
+    : `Brettet får ${what}.`;
+}
+
+function count(n: number, one: string, many: string): string {
+  return `${n} ${n === 1 ? one : many}`;
+}
+
+function joinNorwegian(items: string[]): string {
+  return items.length > 1
+    ? `${items.slice(0, -1).join(", ")} og ${items[items.length - 1]}`
+    : items.join("");
 }
 
 function slugify(value: string): string {
