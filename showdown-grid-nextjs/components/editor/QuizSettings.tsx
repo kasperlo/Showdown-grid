@@ -9,14 +9,14 @@ import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
 import { ThemeSelector } from "@/components/ThemeSelector";
 import { BoardTransfer } from "./BoardTransfer";
+import { useQuizTitleField } from "./EditableQuizTitle";
 import { ShareAccess } from "./ShareAccess";
 
 const TIMER_PRESETS = [30, 60, 90, 120];
 const JOKER_PRESETS = [5, 10, 15, 20];
 
 export function QuizSettings() {
-  const quizTitle = useGameStore((s) => s.quizTitle);
-  const setQuizTitle = useGameStore((s) => s.setQuizTitle);
+  const titleField = useQuizTitleField();
   const quizDescription = useGameStore((s) => s.quizDescription);
   const setQuizDescription = useGameStore((s) => s.setQuizDescription);
   const quizTimeLimit = useGameStore((s) => s.quizTimeLimit);
@@ -48,12 +48,11 @@ export function QuizSettings() {
           </Label>
           <Input
             id="quiz-title"
-            value={quizTitle}
-            onChange={(e) => setQuizTitle(e.target.value)}
+            {...titleField}
             placeholder="Navnet på quizen"
             className="mt-1"
           />
-          {!quizTitle.trim() && (
+          {!titleField.value.trim() && (
             <p className="mt-1 text-xs text-destructive">Tittelen mangler</p>
           )}
         </div>
