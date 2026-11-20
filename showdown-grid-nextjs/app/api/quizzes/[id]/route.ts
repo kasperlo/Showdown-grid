@@ -71,15 +71,15 @@ export async function PATCH(
       const allowed = ['classic', 'modern', 'christmas'];
       updateData.theme = allowed.includes(theme) ? theme : 'classic';
     }
-    if (isPublic !== undefined && Boolean(isPublic) !== current.is_public) {
-      // Publishing someone else's quiz is the owner's call. The client sends
-      // the flag with every save, so an unchanged value is simply left out.
-      if (!isOwner) {
-        return NextResponse.json(
-          { error: 'Bare eieren kan gjøre quizen offentlig eller privat' },
-          { status: 403 }
-        );
-      }
+    // Publishing is the owner's call (migration 08 enforces it in the
+    // database too). The client sends the flag with every save, so for a
+    // collaborator it is dropped rather than rejected: a stale value from a
+    // tab opened before the owner changed it must not fail the whole save.
+    if (
+      isOwner &&
+      isPublic !== undefined &&
+      Boolean(isPublic) !== current.is_public
+    ) {
       updateData.is_public = Boolean(isPublic);
     }
     if (quizData !== undefined) {
