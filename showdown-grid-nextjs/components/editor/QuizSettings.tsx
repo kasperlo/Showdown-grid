@@ -4,9 +4,11 @@ import { useGameStore } from "@/utils/store";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
 import { ThemeSelector } from "@/components/ThemeSelector";
+import type { TurnRule } from "@/utils/types";
 import { BoardTransfer } from "./BoardTransfer";
 import { clampedInteger, DraftInput } from "./DraftInput";
 import { useQuizTitleField } from "./EditableQuizTitle";
@@ -15,6 +17,19 @@ import { ShareAccess } from "./ShareAccess";
 const TIMER_PRESETS = [30, 60, 90, 120];
 const JOKER_PRESETS = [5, 10, 15, 20];
 const DEFAULT_TIMER_SECONDS = 60;
+
+const TURN_RULES: { value: TurnRule; label: string; description: string }[] = [
+  {
+    value: "winner",
+    label: "Laget som svarte riktig",
+    description: "Velger neste kort selv. Svarer ingen riktig, går turen videre.",
+  },
+  {
+    value: "rotation",
+    label: "Lagene etter tur",
+    description: "Fast rekkefølge, uansett hvem som svarer.",
+  },
+];
 
 /**
  * What each quiz's timer was before it was switched off, so switching it back
@@ -32,6 +47,8 @@ export function QuizSettings() {
   const setJokerTimeLimit = useGameStore((s) => s.setJokerTimeLimit);
   const quizIsPublic = useGameStore((s) => s.quizIsPublic);
   const setQuizIsPublic = useGameStore((s) => s.setQuizIsPublic);
+  const turnRule = useGameStore((s) => s.turnRule);
+  const setTurnRule = useGameStore((s) => s.setTurnRule);
   const isOwner = useGameStore((s) => s.isOwnerOfActiveQuiz());
   const activeQuizId = useGameStore((s) => s.activeQuizId) ?? "";
 
@@ -154,6 +171,38 @@ export function QuizSettings() {
             </Button>
           ))}
         </div>
+      </div>
+
+      <div className="space-y-3 border-t border-border pt-6">
+        <Label id="turn-rule-label" className="text-base font-semibold">
+          Hvem velger neste kort?
+        </Label>
+        <RadioGroup
+          value={turnRule}
+          onValueChange={(value) =>
+            setTurnRule(value === "rotation" ? "rotation" : "winner")
+          }
+          aria-labelledby="turn-rule-label"
+        >
+          {TURN_RULES.map((rule) => (
+            <div key={rule.value} className="flex items-start gap-3">
+              <RadioGroupItem
+                value={rule.value}
+                id={`turn-rule-${rule.value}`}
+                className="mt-0.5"
+              />
+              <Label
+                htmlFor={`turn-rule-${rule.value}`}
+                className="space-y-1 font-normal leading-snug"
+              >
+                <span className="block font-semibold">{rule.label}</span>
+                <span className="block text-xs text-muted-foreground">
+                  {rule.description}
+                </span>
+              </Label>
+            </div>
+          ))}
+        </RadioGroup>
       </div>
 
       <div className="border-t border-border pt-6">
