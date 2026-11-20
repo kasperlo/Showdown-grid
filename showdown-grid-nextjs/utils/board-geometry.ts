@@ -13,7 +13,7 @@ export const BOARD_GEOMETRY = {
   PAD: 12,
   /** Horizontal padding on the content row, each side. */
   SIDE: 24,
-  /** Bottom dock row — always reserved, even when it holds nothing. */
+  /** Bottom dock row, holding the standings when they don't fit beside the board. */
   DOCK: 128,
   /** Gap between tiles, and between the board and the standings panel's row. */
   GAP: 12,
@@ -76,7 +76,8 @@ export function computeBoardGeometry({
 
   const avail = rowAvailable - (panelBeside ? panelWidth + PANELGAP : 0);
 
-  const boardHeight = boardHeightOverride ?? viewportHeight - BAR - 2 * PAD - DOCK;
+  const dock = panelBeside ? 0 : DOCK;
+  const boardHeight = boardHeightOverride ?? viewportHeight - BAR - 2 * PAD - dock;
   const tileHeight = Math.floor((boardHeight - (R + 1) * GAP) / (R + HEADF));
   const headerHeight = Math.round(tileHeight * HEADF);
   const columnWidth = Math.floor(

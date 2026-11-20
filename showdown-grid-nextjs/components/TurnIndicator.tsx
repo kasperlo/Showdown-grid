@@ -25,6 +25,7 @@ export function TurnIndicator({
   const isInitialTurnSelection = useGameStore(
     (state) => state.isInitialTurnSelection,
   );
+  const turnRule = useGameStore((state) => state.turnRule);
   const initializeTurn = useGameStore((state) => state.initializeTurn);
 
   const [showConfetti, setShowConfetti] = useState(false);
@@ -37,16 +38,24 @@ export function TurnIndicator({
       setSpinningTeamIndex((prev) => (prev + 1) % teams.length);
     }, 100);
 
-    const timeout = setTimeout(() => {
-      clearInterval(interval);
-      setShowConfetti(true);
-    }, 3000);
-
-    return () => {
-      clearInterval(interval);
-      clearTimeout(timeout);
-    };
+    return () => clearInterval(interval);
   }, [isInitialTurnSelection, teams.length]);
+
+  // Celebrate when the draw lands. A timer of its own here never fired: the
+  // store ends the draw at the same 3 s mark, and that unmounted the timer.
+  useEffect(
+    () =>
+      useGameStore.subscribe((state, previous) => {
+        if (
+          previous.isInitialTurnSelection &&
+          !state.isInitialTurnSelection &&
+          state.currentTurnTeamId
+        ) {
+          setShowConfetti(true);
+        }
+      }),
+    [],
+  );
 
   if (!teams.length) return null;
 
@@ -66,12 +75,17 @@ export function TurnIndicator({
     );
   }
 
-  const currentTeam = currentTurnTeamId
-    ? teams.find((t) => t.id === currentTurnTeamId)
-    : null;
+  const currentIndex = currentTurnTeamId
+    ? teams.findIndex((t) => t.id === currentTurnTeamId)
+    : -1;
+  const currentTeam = currentIndex >= 0 ? teams[currentIndex] : null;
+  const nextTeam =
+    currentIndex >= 0 && teams.length > 1
+      ? teams[(currentIndex + 1) % teams.length]
+      : null;
 
   const displayTeam = isInitialTurnSelection
-    ? teams[spinningTeamIndex]
+    ? teams[spinningTeamIndex % teams.length]
     : currentTeam;
 
   if (!displayTeam) return null;
@@ -91,11 +105,20 @@ export function TurnIndicator({
           )}
         >
           <p className="text-[11px] font-semibold uppercase tracking-widest text-muted-foreground">
-            Det er turen til
+            {isInitialTurnSelection ? "Trekker lag …" : "Det er turen til"}
           </p>
           <p className="truncate text-2xl font-extrabold text-accent">
             {displayTeam.name}
           </p>
+          {!isInitialTurnSelection && (
+            <p className="truncate text-[11px] text-muted-foreground">
+              {turnRule === "rotation"
+                ? nextTeam
+                  ? `Deretter: ${nextTeam.name}`
+                  : "Lagene velger etter tur"
+                : "Riktig svar gir turen"}
+            </p>
+          )}
           <span className="sr-only">
             {isInitialTurnSelection ? "velger lag" : "har turen"}
           </span>
@@ -114,6 +137,11 @@ export function TurnIndicator({
           "border border-accent bg-gradient-to-r from-accent/20 to-primary/20",
           !isInitialTurnSelection && currentTeam && "turn-highlight",
         )}
+        title={
+          turnRule === "rotation"
+            ? "Lagene velger etter tur"
+            : "Laget som svarer riktig, velger neste kort"
+        }
       >
         <span aria-hidden>👉</span>
         <span className="truncate text-[clamp(0.85rem,2.2vh,1.4rem)] font-bold text-accent">

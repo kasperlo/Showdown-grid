@@ -48,7 +48,7 @@ export function GameStage() {
         className="flex min-h-0 flex-1 justify-center gap-5 px-3 py-2 sm:px-6 sm:py-3"
         style={geometryVars}
       >
-        <section className="min-h-0 min-w-0 overflow-y-auto">
+        <section className="group/board min-h-0 min-w-0 overflow-y-auto">
           <GameBoard />
         </section>
 
@@ -59,13 +59,14 @@ export function GameStage() {
         )}
       </div>
 
-      {/* Always 128px, holding the standings row or nothing — a round no
-          longer lives down here, so the only remaining job of this row is
-          the narrow-layout standings. It stays constant height either way,
-          per Del 1. */}
-      <div className="h-32 shrink-0 overflow-y-auto border-t border-border/60 bg-background/40 px-3 py-2 backdrop-blur sm:px-6">
-        {!geometry.panelBeside && <Standings layout="row" />}
-      </div>
+      {/* Only for the narrow layout's standings. With the standings beside
+          the board it held nothing, and on a projector that was 128px of
+          board given to an empty band. */}
+      {!geometry.panelBeside && (
+        <div className="h-32 shrink-0 overflow-y-auto border-t border-border/60 bg-background/40 px-3 py-2 backdrop-blur sm:px-6">
+          <Standings layout="row" />
+        </div>
+      )}
     </main>
   );
 }
