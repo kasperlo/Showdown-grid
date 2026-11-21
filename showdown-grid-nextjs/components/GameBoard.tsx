@@ -2,7 +2,7 @@
 
 import { Fragment, useCallback, useState } from "react";
 import { useGameStore } from "@/utils/store";
-import { Image as ImageIcon, RotateCcw, Sparkles } from "lucide-react";
+import { Image as ImageIcon, RotateCcw } from "lucide-react";
 import { isQuestionComplete } from "@/utils/quiz-template";
 import type { Category, Question } from "@/utils/types";
 import {
@@ -148,18 +148,8 @@ export function GameBoard() {
                         is invalid HTML and the inner one was unreachable by
                         keyboard. */}
                     <div className="pointer-events-none absolute left-1 top-1 flex gap-1">
-                      {question.isJoker && (
-                        <span
-                          className="rounded-full bg-gradient-to-r from-yellow-400 via-red-500 to-purple-500 p-1"
-                          title="Joker"
-                        >
-                          <Sparkles
-                            className="h-3 w-3 text-white"
-                            aria-hidden
-                          />
-                          <span className="sr-only">Joker</span>
-                        </span>
-                      )}
+                      {/* Jokers are a surprise for the room, so the board never
+                          marks them; the host sees them in the editor. */}
                       {question.imageUrl && !question.isJoker && (
                         <span
                           className="rounded-full bg-background/70 p-1"
